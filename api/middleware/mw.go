@@ -6,8 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn" // Import for JWT claim parsing
-
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -44,6 +43,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Parse the token for JWT claims
 		claims, err := authn.ParseClaims(token)
+
 		if err != nil {
 			logger.Error().Err(err).Msg("invalid bearer jwt token")
 			http.Error(w, "invalid bearer jwt token", http.StatusUnauthorized)

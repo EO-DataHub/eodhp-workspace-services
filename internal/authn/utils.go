@@ -34,3 +34,13 @@ func ParseClaims(token string) (Claims, error) {
 	}
 	return claims, nil
 }
+
+func CreateJWTToken(claims Claims, secret string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	secretBytes := []byte(secret)
+	signedToken, err := token.SignedString(secretBytes)
+	if err != nil {
+		return "", err
+	}
+	return signedToken, nil
+}
