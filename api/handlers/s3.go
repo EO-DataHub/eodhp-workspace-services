@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/aws"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 )
@@ -19,8 +22,11 @@ func GetS3Credentials() http.HandlerFunc {
 		// TODO: replace username with the workspace name
 		// TODO: add Expiry to the credentials
 		// TODO: as project progresses, we will need to deal with these claims in a more sophisticated way
-		// 			claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 
+		if ok {
+			fmt.Println(claims.Username)
+		}
 		creds, err := aws.AssumeRoleWithWebIdentity()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
