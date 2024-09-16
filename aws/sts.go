@@ -15,30 +15,9 @@ type S3STSCredentialsResponse struct {
 	Expiration      string `json:"expiration"`
 }
 
-func AssumeRoleWithWebIdentity() (*S3STSCredentialsResponse, error) {
+func AssumeRoleWithWebIdentity(workspaceName string) (*S3STSCredentialsResponse, error) {
 
-	// sess, err := session.NewSession()
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Failed to create session")
-	// 	return nil, err
-
-	// }
-
-	// // Retrieve the current credentials from the default credentials chain
-	// creds, err := sess.Config.Credentials.Get()
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("cannot get credentials")
-	// 	return nil, err
-	// }
-
-	// credsResponse := S3STSCredentialsResponse{
-	// 	AccessKeyId:     creds.AccessKeyID,
-	// 	SecretAccessKey: creds.SecretAccessKey,
-	// 	SessionToken:    creds.SessionToken,
-	// }
-
-	// return &credsResponse, nil
-
+	// We are loading these from the service account
 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion("us-west-2"))
 	if err != nil {
 		return nil, err
@@ -49,7 +28,7 @@ func AssumeRoleWithWebIdentity() (*S3STSCredentialsResponse, error) {
 
 	// Assume role
 	input := &sts.AssumeRoleInput{
-		RoleArn:         aws.String("arn:aws:iam::312280911266:role/eodhp-dev-y4jFxoD4-jlangstone-tpzuk"),
+		RoleArn:         aws.String("arn:aws:iam::312280911266:role/eodhp-dev-y4jFxoD4-" + workspaceName),
 		RoleSessionName: aws.String("WorkspaceSession"),
 	}
 

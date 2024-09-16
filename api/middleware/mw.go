@@ -49,7 +49,6 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "invalid bearer jwt token", http.StatusUnauthorized)
 			return
 		}
-		logger.Debug().Str("user", claims.Username).Msg("token verified")
 
 		// Add the token and claims to the context
 		ctx := context.WithValue(r.Context(), TokenKey, token)

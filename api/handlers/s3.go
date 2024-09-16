@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
@@ -20,14 +19,18 @@ func GetS3Credentials() http.HandlerFunc {
 
 		// Get the username name from the claims
 		// TODO: replace username with the workspace name
-		// TODO: add Expiry to the credentials
-		// TODO: as project progresses, we will need to deal with these claims in a more sophisticated way
+
 		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 
-		if ok {
-			fmt.Println(claims.Username)
+		if !ok {
+			http.Error(w, "Invalid claims or missing authorization token", http.StatusUnauthorized)
+			logger.Error().Msg("Invalid claims or missing authorization")
+			return
 		}
-		creds, err := aws.AssumeRoleWithWebIdentity()
+
+		workspaceName := claims.Username
+
+		creds, err := aws.AssumeRoleWithWebIdentity(workspaceName)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
