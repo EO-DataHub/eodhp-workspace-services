@@ -2,6 +2,7 @@ package aws
 
 import (
 	"context"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -28,7 +29,7 @@ func AssumeRoleWithWebIdentity(workspaceName string) (*S3STSCredentialsResponse,
 
 	// Assume role
 	input := &sts.AssumeRoleInput{
-		RoleArn:         aws.String("arn:aws:iam::312280911266:role/eodhp-dev-y4jFxoD4-" + workspaceName),
+		RoleArn:         aws.String(os.Getenv("WS_ROLE_ARN_PREFIX") + workspaceName),
 		RoleSessionName: aws.String("WorkspaceSession"),
 	}
 
