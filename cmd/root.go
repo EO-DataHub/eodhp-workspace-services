@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	logLevel string
-	host     string
-	port     int
+	logLevel         string
+	host             string
+	port             int
+	tunnelConfigFile string
 )
 
 var rootCmd = &cobra.Command{
