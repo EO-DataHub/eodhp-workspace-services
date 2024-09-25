@@ -18,6 +18,7 @@ var (
 	host             string
 	port             int
 	tunnelConfigFile string
+	workspaceFile    string
 )
 
 var rootCmd = &cobra.Command{

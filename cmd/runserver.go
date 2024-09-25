@@ -66,8 +66,8 @@ func init() {
 	rootCmd.AddCommand(runServerCmd)
 	runServerCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
 	runServerCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
-	//runServerCmd.Flags().BoolVar(&tunnel, "tunnel", false, "tSSH tunnel to access the database locally")
 	runServerCmd.Flags().StringVar(&tunnelConfigFile, "tunnel-config-file", "", "Path to the SSH tunnel configuration JSON file")
+	runServerCmd.Flags().StringVar(&workspaceFile, "workspace-file", "", "Path to the workspace definition YAML file (testing)")
 
 }
 

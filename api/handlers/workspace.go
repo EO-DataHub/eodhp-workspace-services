@@ -15,10 +15,11 @@ type Workspace struct {
 	Name               string
 	Namespace          string
 	ServiceAccountName string
-	AWSRoleName        *string
+	AWSRoleName        string
 }
 
-type AWSEFS struct {
+type AWSEFSAccessPoint struct {
+	Name        string
 	FSID        string
 	RootDir     string
 	UID         int
@@ -26,34 +27,30 @@ type AWSEFS struct {
 	Permissions string
 }
 
-type AWSEFSAccessPoint struct {
-	Name string
-}
-
 type AWSS3Bucket struct {
 	BucketName      string
-	BucketPath      *string
-	AccessPointName *string
-	EnvVar          *string
+	BucketPath      string
+	AccessPointName string
+	EnvVar          string
 }
 
 type PersistentVolume struct {
 	PVName          string
-	StorageClass    *string
+	StorageClass    string
 	Size            string
-	Driver          *string
-	AccessPointName *string
+	Driver          string
+	AccessPointName string
 }
 
 type PersistentVolumeClaim struct {
 	PVCName      string
-	StorageClass *string
+	StorageClass string
 	Size         string
-	PVName       *string
+	PVName       string
 }
 
 // Function to insert a workspace into the database
-func insertWorkspaceWithRelatedData(db *sql.DB, ws Workspace, efs AWSEFS, efsAccessPoint AWSEFSAccessPoint, s3Bucket AWSS3Bucket, pv PersistentVolume, pvc PersistentVolumeClaim) {
+func insertWorkspaceWithRelatedData(db *sql.DB, ws Workspace, efsAccessPoint AWSEFSAccessPoint, s3Bucket AWSS3Bucket, pv PersistentVolume, pvc PersistentVolumeClaim) {
 	// Begin transaction
 	tx, err := db.Begin()
 	if err != nil {
@@ -71,7 +68,7 @@ func insertWorkspaceWithRelatedData(db *sql.DB, ws Workspace, efs AWSEFS, efsAcc
 	// 1. Insert into workspaces
 	var workspaceID int
 	sqlWorkspace := `
-    INSERT INTO dev.workspaces (name, namespace, service_account_name, aws_role_name)
+    INSERT INTO dev.workspaces (ws_name, ws_namespace, ws_service_account_name, ws_aws_role_name)
     VALUES ($1, $2, $3, $4) RETURNING id`
 	err = tx.QueryRow(sqlWorkspace, ws.Name, ws.Namespace, ws.ServiceAccountName, ws.AWSRoleName).Scan(&workspaceID)
 	if err != nil {
@@ -82,48 +79,38 @@ func insertWorkspaceWithRelatedData(db *sql.DB, ws Workspace, efs AWSEFS, efsAcc
 	// 2. Insert into aws_efs
 	var efsID int
 	sqlEFS := `
-    INSERT INTO dev.aws_efs (workspace_id, fs_id, root_directory, uid, gid, permissions)
-    VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`
-	err = tx.QueryRow(sqlEFS, workspaceID, efs.FSID, efs.RootDir, efs.UID, efs.GID, efs.Permissions).Scan(&efsID)
+	INSERT INTO dev.efs_access_points (workspace_id, efs_ap_name, efs_ap_fsid, efs_ap_root_directory, efs_ap_uid, efs_ap_gid, efs_ap_permissions)
+	VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
+	err = tx.QueryRow(sqlEFS, workspaceID, efsAccessPoint.Name, efsAccessPoint.FSID, efsAccessPoint.RootDir, efsAccessPoint.UID, efsAccessPoint.GID, efsAccessPoint.Permissions).Scan(&efsID)
 	if err != nil {
 		return
 	}
-	fmt.Printf("Inserted AWS EFS with ID: %d\n", efsID)
+	fmt.Printf("Inserted AWS EFS Access Point with ID: %d\n", efsID)
 
-	// 3. Insert into aws_efs_access_points
-	sqlEFSAccessPoint := `
-    INSERT INTO dev.aws_efs_access_points (efs_id, name)
-    VALUES ($1, $2)`
-	_, err = tx.Exec(sqlEFSAccessPoint, efsID, efsAccessPoint.Name)
-	if err != nil {
-		return
-	}
-	fmt.Println("Inserted AWS EFS Access Point")
-
-	// 4. Insert into aws_s3_buckets
+	// 3. Insert into aws_s3_buckets
 	sqlS3 := `
-    INSERT INTO dev.aws_s3_buckets (workspace_id, bucket_name, bucket_path, access_point_name, env_var)
-    VALUES ($1, $2, $3, $4, $5)`
+	INSERT INTO dev.s3_buckets (workspace_id, s3_bucket_name, s3_bucket_path, s3_ap_name, s3_env_var)
+	VALUES ($1, $2, $3, $4, $5)`
 	_, err = tx.Exec(sqlS3, workspaceID, s3Bucket.BucketName, s3Bucket.BucketPath, s3Bucket.AccessPointName, s3Bucket.EnvVar)
 	if err != nil {
 		return
 	}
 	fmt.Println("Inserted AWS S3 Bucket")
 
-	// 5. Insert into persistent_volumes
+	// 4. Insert into persistent_volumes
 	sqlPV := `
-    INSERT INTO dev.persistent_volumes (workspace_id, pv_name, storage_class, size, driver, access_point_name)
-    VALUES ($1, $2, $3, $4, $5, $6)`
+	INSERT INTO dev.persistent_volumes (workspace_id, pv_name, pv_sc, pv_size, pv_driver, pv_ap_name)
+	VALUES ($1, $2, $3, $4, $5, $6)`
 	_, err = tx.Exec(sqlPV, workspaceID, pv.PVName, pv.StorageClass, pv.Size, pv.Driver, pv.AccessPointName)
 	if err != nil {
 		return
 	}
 	fmt.Println("Inserted Persistent Volume")
 
-	// 6. Insert into persistent_volume_claims
+	// 5. Insert into persistent_volume_claims
 	sqlPVC := `
-    INSERT INTO dev.persistent_volume_claims (workspace_id, pvc_name, storage_class, size, pv_name)
-    VALUES ($1, $2, $3, $4, $5)`
+	INSERT INTO dev.persistent_volume_claims (workspace_id, pvc_name, pvc_sc, pvc_size, pv_name)
+	VALUES ($1, $2, $3, $4, $5)`
 	_, err = tx.Exec(sqlPVC, workspaceID, pvc.PVCName, pvc.StorageClass, pvc.Size, pvc.PVName)
 	if err != nil {
 		return
@@ -155,47 +142,44 @@ func CreateWorkspace() http.HandlerFunc {
 		defer db.Close()
 
 		workspace := Workspace{
-			Name:               "example-workspace2",
-			Namespace:          "default",
-			ServiceAccountName: "example-service-account",
-			AWSRoleName:        nil,
+			Name:               "dev-user",
+			Namespace:          "ws-dev-user",
+			ServiceAccountName: "default",
+			AWSRoleName:        "eodhp-dev-y4jFxoD4-dev-user",
 		}
 
-		awsEFS := AWSEFS{
-			FSID:        "fs-example",
-			RootDir:     "/root/dir",
+		efsAccessPoint := AWSEFSAccessPoint{
+			Name:        "eodhp-dev-y4jFxoD4-dev-user-pv",
+			FSID:        "fs-045e65dcd4e24f91d",
+			RootDir:     "/workspaces/dev-user",
 			UID:         1000,
 			GID:         1000,
 			Permissions: "0755",
 		}
 
-		efsAccessPoint := AWSEFSAccessPoint{
-			Name: "efs-access-point",
-		}
-
 		s3Bucket := AWSS3Bucket{
-			BucketName:      "example-bucket",
-			BucketPath:      nil,
-			AccessPointName: nil,
-			EnvVar:          nil,
+			BucketName:      "eodhp-dev-workspaces",
+			BucketPath:      "dev-user/",
+			AccessPointName: "eodhp-dev-y4jFxoD4-dev-user-s3",
+			EnvVar:          "S3_BUCKET_WORKSPACE",
 		}
 
 		persistentVolume := PersistentVolume{
-			PVName:          "example-pv",
-			StorageClass:    nil,
+			PVName:          "pv-dev-user-workspace",
+			StorageClass:    "file-storage",
 			Size:            "10Gi",
-			Driver:          nil,
-			AccessPointName: nil,
+			Driver:          "efs.csi.aws.com",
+			AccessPointName: "eodhp-dev-y4jFxoD4-dev-user-pv",
 		}
 
 		persistentVolumeClaim := PersistentVolumeClaim{
-			PVCName:      "example-pvc",
-			StorageClass: nil,
+			PVCName:      "pvc-workspace",
+			StorageClass: "file-storage",
 			Size:         "10Gi",
-			PVName:       nil,
+			PVName:       "pv-dev-user-workspace",
 		}
 
-		insertWorkspaceWithRelatedData(db, workspace, awsEFS, efsAccessPoint, s3Bucket, persistentVolume, persistentVolumeClaim)
+		insertWorkspaceWithRelatedData(db, workspace, efsAccessPoint, s3Bucket, persistentVolume, persistentVolumeClaim)
 
 		logger.Info().Msg("Workspace created...")
 
