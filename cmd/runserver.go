@@ -49,7 +49,7 @@ var runServerCmd = &cobra.Command{
 
 		// Register the routes
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/workspace/create", middleware(handlers.CreateWorkspace())).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/workspace/create", middleware(handlers.CreateWorkspace())).Methods(http.MethodPost)
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
 			r); err != nil {
