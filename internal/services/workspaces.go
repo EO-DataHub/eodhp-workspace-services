@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 )
 
@@ -37,7 +38,7 @@ func CreateWorkspaceService(w http.ResponseWriter, r *http.Request) {
 	defer dbConn.Close()
 
 	// Insert the workspace and related data into the database
-	err = db.InsertWorkspaceWithRelatedData(
+	workspaceID, err := db.InsertWorkspaceWithRelatedData(
 		dbConn,
 		workspace,
 		workspaceRequest.EFSAccessPoint,
@@ -45,11 +46,18 @@ func CreateWorkspaceService(w http.ResponseWriter, r *http.Request) {
 		workspaceRequest.PersistentVolumes,
 		workspaceRequest.PersistentVolumeClaims,
 	)
+
 	if err != nil {
 		// Respond with error
 		http.Error(w, "Failed to create workspace", http.StatusInternalServerError)
 		log.Println("Error inserting workspace:", err)
 		return
+	}
+
+	// Use the workspaceID in the Pulsar message
+	err = events.PublishEvent(workspaceID, "create")
+	if err != nil {
+		log.Printf("Failed to publish create event: %v", err)
 	}
 
 	// Respond with success

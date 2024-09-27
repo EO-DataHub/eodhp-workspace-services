@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/services"
@@ -125,7 +124,6 @@ import (
 
 func CreateWorkspace() http.HandlerFunc {
 
-	fmt.Println("Received message")
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Call service logic to create workspace
 		services.CreateWorkspaceService(w, r)
