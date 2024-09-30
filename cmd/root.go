@@ -32,6 +32,7 @@ var (
 type Config struct {
 	Database      databaseConfig `yaml:"database"`
 	DatabaseProxy databaseProxy  `yaml:"databaseProxy"`
+	Pulsar        pulsarConfig   `yaml:"pulsar"`
 }
 
 type databaseConfig struct {
@@ -47,6 +48,10 @@ type databaseProxy struct {
 	RemotePort     string `yaml:"reportPort"`
 	LocalPort      string `yaml:"localPort"`
 	PrivateKeyPath string `yaml:"privateKeyPath"`
+}
+
+type pulsarConfig struct {
+	URL string `yaml:"url"`
 }
 
 var rootCmd = &cobra.Command{
@@ -72,16 +77,16 @@ func init() {
 func setUp() {
 	setLogging(logLevel)
 
-	// Initialize Pulsar connection
-	if err := setupPulsar(); err != nil {
-		fmt.Println("Failed to initialize Pulsar")
-	}
-
 	// Load the config file
 	var err error
 	config, err = loadConfig(configPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
+	}
+
+	// Initialize Pulsar connection
+	if err := setupPulsar(&config.Pulsar); err != nil {
+		fmt.Println("Failed to initialize Pulsar")
 	}
 
 	// If you want to connect to the db from development VM
@@ -117,12 +122,12 @@ func setUp() {
 
 }
 
-func setupPulsar() error {
-	pulsarURL := "pulsar://localhost:6650" // Example Pulsar URL, can also be configurable
+func setupPulsar(config *pulsarConfig) error {
+
 	topic := "persistent://public/default/workspaces-services"
 
 	// Initialize Pulsar event publisher
-	err := events.InitEventPublisher(pulsarURL, topic)
+	err := events.InitEventPublisher(config.URL, topic)
 	if err != nil {
 		return fmt.Errorf("failed to initialize Pulsar: %w", err)
 	}
