@@ -14,9 +14,32 @@ cd eodhp-workspace-services
 
 ## Usage
 
-## Running the Server
+## Running the Server Locally
 
-```go run main.go runserver --help ```
+### Configuration File
+- The repository connects to the workspaces database. In the cluster it will get it's connection string from env vars already setup.
+- You can connect to the database when working on the VM via SSH tunnelling, connecting to an AWS ec2 instance which acts as the proxy gateway.
+- To do this, you must get the appropriate private key file - `.pem`. Speak to either Jonny Langstone or Steven Gillies who will provide you with it.
+
+- The config file looks like so:
+```
+database:
+  driver: pgx
+  source: postgres://{{.SQL_USER}}:{{.SQL_PASSWORD}}@{{.SQL_HOST}}:{{.SQL_PORT}}/{{.SQL_DATABASE}}?search_path={{.SQL_SCHEMA}}
+
+databaseProxy:
+  sshUser: ec2-user
+  sshHost: <<EC2 INSTANCE HOST>>
+  sshPort: 22
+  remoteHost: <<AURORA HOST>>
+  reportPort: 5432
+  localPort: 8443
+  privateKeyPath: /path/to/file/eodhp-db-proxy.pem
+
+```
+
+
+```go run main.go runserver --config /path/to/config.yaml```
 
 
 ## Deployment

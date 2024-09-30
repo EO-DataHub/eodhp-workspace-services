@@ -49,7 +49,7 @@ var runServerCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(runServerCmd)
-	runServerCmd.Flags().StringVar(&host, "hos	t", "0.0.0.0", "host to run the server on")
+	runServerCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
 	runServerCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
 	runServerCmd.Flags().StringVar(&configPath, "config", "", "Path to the configuration YAML file")
 
