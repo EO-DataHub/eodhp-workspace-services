@@ -11,6 +11,8 @@ COPY cmd/ cmd/
 COPY api/ api/
 COPY aws/ aws/
 COPY internal/ internal/
+COPY db/ db/
+COPY models/ models/
 
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
     -o app main.go
