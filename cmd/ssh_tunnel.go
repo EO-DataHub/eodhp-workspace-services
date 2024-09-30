@@ -10,18 +10,18 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-type TunnelConfig struct {
-	SSHUser        string `json:"SSHUser"`
-	SSHHost        string `json:"SSHHost"`
-	SSHPort        string `json:"SSHPort"`
-	RemoteHost     string `json:"RemoteHost"`
-	RemotePort     string `json:"RemotePort"`
-	LocalPort      string `json:"LocalPort"`
-	PrivateKeyPath string `json:"PrivateKeyPath"`
-}
+// type TunnelConfig struct {
+// 	SSHUser        string `json:"SSHUser"`
+// 	SSHHost        string `json:"SSHHost"`
+// 	SSHPort        string `json:"SSHPort"`
+// 	RemoteHost     string `json:"RemoteHost"`
+// 	RemotePort     string `json:"RemotePort"`
+// 	LocalPort      string `json:"LocalPort"`
+// 	PrivateKeyPath string `json:"PrivateKeyPath"`
+// }
 
 // SSHClient creates a new SSH client
-func SSHClient(config TunnelConfig) (*ssh.Client, error) {
+func SSHClient(config databaseProxy) (*ssh.Client, error) {
 	key, err := os.ReadFile(config.PrivateKeyPath)
 	if err != nil {
 		log.Fatalf("unable to read private key: %v", err)
@@ -52,7 +52,7 @@ func SSHClient(config TunnelConfig) (*ssh.Client, error) {
 }
 
 // ForwardTraffic forwards traffic from local to remote host
-func ForwardTraffic(localListener net.Listener, client *ssh.Client, config TunnelConfig) {
+func ForwardTraffic(localListener net.Listener, client *ssh.Client, config databaseProxy) {
 	for {
 		localConn, err := localListener.Accept() // Accept local connection
 		if err != nil {
@@ -82,7 +82,7 @@ func ForwardTraffic(localListener net.Listener, client *ssh.Client, config Tunne
 }
 
 // StartSSHTunnel initializes the SSH tunnel and forwards traffic
-func StartSSHTunnel(config *TunnelConfig) error {
+func StartSSHTunnel(config *databaseProxy) error {
 	// Create an SSH client
 	client, err := SSHClient(*config)
 	if err != nil {

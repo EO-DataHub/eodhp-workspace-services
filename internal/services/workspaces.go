@@ -54,7 +54,7 @@ func CreateWorkspaceService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Use the workspaceID in the Pulsar message
+	// Use the workspaceID in the Pulsar message - will be picked up by the workspace operator
 	err = events.PublishEvent(workspaceID, "create")
 	if err != nil {
 		log.Printf("Failed to publish create event: %v", err)

@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -26,17 +26,27 @@ var (
 	host             string
 	port             int
 	configPath       string
-	tunnelConfigFile string
 	config           *Config
 )
 
 type Config struct {
-	Database databaseConfig `yaml:"database"`
+	Database      databaseConfig `yaml:"database"`
+	DatabaseProxy databaseProxy  `yaml:"databaseProxy"`
 }
 
 type databaseConfig struct {
 	Driver string `yaml:"driver"`
 	Source string `yaml:"source"`
+}
+
+type databaseProxy struct {
+	SSHUser        string `yaml:"sshUser"`
+	SSHHost        string `yaml:"sshHost"`
+	SSHPort        string `yaml:"sshPort"`
+	RemoteHost     string `yaml:"remoteHost"`
+	RemotePort     string `yaml:"reportPort"`
+	LocalPort      string `yaml:"localPort"`
+	PrivateKeyPath string `yaml:"privateKeyPath"`
 }
 
 var rootCmd = &cobra.Command{
@@ -67,31 +77,25 @@ func setUp() {
 		fmt.Println("Failed to initialize Pulsar")
 	}
 
-	// initialize the database, including tunneling if needed
-	if tunnelConfigFile != "" {
+	// Load the config file
+	var err error
+	config, err = loadConfig(configPath)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to load config")
+	}
 
-		// Load SSH configuration from the JSON file
-		tunnelConfig, err := loadTunnelConfig(tunnelConfigFile)
-		if err != nil {
-			log.Error().Err(err).Msgf("Failed to load SSH tunnel config: %v", err)
-		}
-
+	// If you want to connect to the db from development VM
+	if config.DatabaseProxy.RemoteHost != "" {
 		go func() {
-			err := StartSSHTunnel(tunnelConfig)
+			err := StartSSHTunnel(&config.DatabaseProxy)
 			if err != nil {
 				log.Error().Err(err).Msgf("Failed to start SSH tunnel: %v", err)
 				return
 			}
 			log.Info().Msg("SSH tunnel started successfully")
 		}()
-	}
-	time.Sleep(3 * time.Second)
 
-	// Load the config file
-	var err error
-	config, err = loadConfig(configPath)
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to load config")
+		time.Sleep(3 * time.Second)
 	}
 
 	// Set the DATABASE_URL environment variable
@@ -101,43 +105,11 @@ func setUp() {
 		return
 	}
 	fmt.Println("config loaded")
-	bla := os.Getenv("DATABASE_URL")
-	fmt.Println("ENV ", bla)
 	fmt.Printf("database driver: %s\n", config.Database.Driver)
 	fmt.Printf("database source: %s\n", config.Database.Source)
 	// Initialize database tables if they dont exist
 	db.InitTables()
 
-	// load the config file
-}
-
-// loadSSHConfig loads SSH configuration from a JSON file
-func loadTunnelConfig(filepath string) (*TunnelConfig, error) {
-	// Open the JSON file
-	file, err := os.Open(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("could not open file: %w", err)
-	}
-	defer file.Close()
-
-	// Decode the JSON file into the SSHConfig struct
-	var config TunnelConfig
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&config)
-	if err != nil {
-		return nil, fmt.Errorf("could not decode JSON: %w", err)
-	}
-
-	// Validate the required fields
-	if config.SSHUser == "" || config.SSHHost == "" || config.PrivateKeyPath == "" ||
-		config.RemoteHost == "" || config.RemotePort == "" || config.LocalPort == "" {
-		return nil, fmt.Errorf("incomplete SSH config: missing required fields")
-	}
-
-	// Print the SSHConfig to verify
-	fmt.Printf("Loaded SSH Config: %+v\n", config)
-
-	return &config, nil
 }
 
 func setupPulsar() error {

@@ -48,7 +48,7 @@ func InitEventPublisher(pulsarURL, topic string) error {
 	return nil
 }
 
-// PublishEvent publishes an event to Pulsar
+// Publishes an event to Pulsar
 func PublishEvent(workspaceID int, action string) error {
 	if publisher == nil {
 		return fmt.Errorf("event publisher is not initialized")
@@ -78,7 +78,7 @@ func PublishEvent(workspaceID int, action string) error {
 	return nil
 }
 
-// ClosePublisher closes the Pulsar client and producer
+// Closes the Pulsar client and producer
 func ClosePublisher() {
 	if publisher != nil {
 		publisher.producer.Close()

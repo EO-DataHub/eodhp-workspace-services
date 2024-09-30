@@ -14,10 +14,6 @@ import (
 func ConnectPostgres() (*sql.DB, error) {
 
 	connStr := os.Getenv("DATABASE_URL")
-	// connStr := "postgresql://workspaces-dev-ILzXv3:fXYCtshu8G5oFCy@localhost:8443/workspaces?search_path=dev"
-	// if connStr == "" {
-	// 	return nil, fmt.Errorf("DATABASE_URL environment variable not set")
-	// }
 
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -67,7 +63,7 @@ func InitTables() {
     		efs_ap_root_directory VARCHAR(255),
     		efs_ap_uid INT,
     		efs_ap_gid INT,
-    		permissions VARCHAR(10)
+    		efs_ap_permissions VARCHAR(10)
 		);
 		CREATE TABLE IF NOT EXISTS s3_buckets 
 		(
