@@ -22,11 +22,11 @@ import (
 )
 
 var (
-	logLevel         string
-	host             string
-	port             int
-	configPath       string
-	config           *Config
+	logLevel   string
+	host       string
+	port       int
+	configPath string
+	config     *Config
 )
 
 type Config struct {
@@ -107,8 +107,13 @@ func setUp() {
 	fmt.Println("config loaded")
 	fmt.Printf("database driver: %s\n", config.Database.Driver)
 	fmt.Printf("database source: %s\n", config.Database.Source)
+
 	// Initialize database tables if they dont exist
-	db.InitTables()
+	err = db.InitTables()
+
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize database tables")
+	}
 
 }
 

@@ -14,7 +14,6 @@ import (
 func ConnectPostgres() (*sql.DB, error) {
 
 	connStr := os.Getenv("DATABASE_URL")
-
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		return nil, fmt.Errorf("error opening connection to database: %w", err)
@@ -30,76 +29,116 @@ func ConnectPostgres() (*sql.DB, error) {
 	return db, nil
 }
 
-func InitTables() {
+func InitTables() error {
 	dbConn, err := ConnectPostgres()
 	if err != nil {
 		log.Println("Database connection error:", err)
-		return
+		return err
 	}
 	defer dbConn.Close()
 
+	// Start a transaction to create tables
 	tx, err := dbConn.Begin()
-
 	if err != nil {
-		fmt.Printf("error starting transaction: %s", err)
+		return fmt.Errorf("error starting transaction: %v", err)
 	}
 
-	execQuery(tx,
-		`
-		CREATE TABLE IF NOT EXISTS workspaces 
-		(
+	// Create the schema if it doesn't exist
+	_, err = tx.Exec(`CREATE SCHEMA IF NOT EXISTS dev;`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error creating schema: %v", err)
+	}
+
+	// Create the workspaces table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS workspaces (
 			id SERIAL PRIMARY KEY,
 			ws_name VARCHAR(255) UNIQUE NOT NULL,     
 			ws_namespace VARCHAR(255) NOT NULL,         
 			ws_service_account_name VARCHAR(255) NOT NULL,
 			ws_aws_role_name VARCHAR(255)
 		);
-		CREATE TABLE IF NOT EXISTS efs_access_points 
-		(
-    		id SERIAL PRIMARY KEY,
-    		workspace_id INT REFERENCES dev.workspaces(id) ON DELETE CASCADE,
-    		efs_ap_name VARCHAR(255) NOT NULL,
-    		efs_ap_fsid VARCHAR(255) NOT NULL,
-    		efs_ap_root_directory VARCHAR(255),
-    		efs_ap_uid INT,
-    		efs_ap_gid INT,
-    		efs_ap_permissions VARCHAR(10)
-		);
-		CREATE TABLE IF NOT EXISTS s3_buckets 
-		(
-    		id SERIAL PRIMARY KEY,
-    		workspace_id INTEGER REFERENCES dev.workspaces(id) ON DELETE CASCADE,
-    		s3_bucket_name VARCHAR(255) NOT NULL,  
-    		s3_bucket_path VARCHAR(255),        
-    		s3_ap_name VARCHAR(255), 
-    		s3_env_var VARCHAR(255)     
-		);
-		CREATE TABLE IF NOT EXISTS persistent_volumes 
-		(
+	`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error creating workspaces table: %v", err)
+	}
+
+	// Create the efs_access_points table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS efs_access_points (
 			id SERIAL PRIMARY KEY,
-			workspace_id INTEGER REFERENCES dev.workspaces(id) ON DELETE CASCADE, 
+			workspace_id INT REFERENCES workspaces(id) ON DELETE CASCADE,
+			efs_ap_name VARCHAR(255) NOT NULL,
+			efs_ap_fsid VARCHAR(255) NOT NULL,
+			efs_ap_root_directory VARCHAR(255),
+			efs_ap_uid INT,
+			efs_ap_gid INT,
+			efs_ap_permissions VARCHAR(10)
+		);
+	`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error creating efs_access_points table: %v", err)
+	}
+
+	// Create the s3_buckets table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS s3_buckets (
+			id SERIAL PRIMARY KEY,
+			workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE,
+			s3_bucket_name VARCHAR(255) NOT NULL,  
+			s3_bucket_path VARCHAR(255),        
+			s3_ap_name VARCHAR(255), 
+			s3_env_var VARCHAR(255)
+		);
+	`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error creating s3_buckets table: %v", err)
+	}
+
+	// Create the persistent_volumes table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS persistent_volumes (
+			id SERIAL PRIMARY KEY,
+			workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE, 
 			pv_name VARCHAR(255) NOT NULL,  
 			pv_sc VARCHAR(255),            
 			pv_size VARCHAR(10) NOT NULL,      
 			pv_driver VARCHAR(255),           
-			pv_ap_name VARCHAR(255)      
+			pv_ap_name VARCHAR(255)
 		);
-		CREATE TABLE IF NOT EXISTS persistent_volume_claims 
-		(
+	`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error creating persistent_volumes table: %v", err)
+	}
+
+	// Create the persistent_volume_claims table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS persistent_volume_claims (
 			id SERIAL PRIMARY KEY,
-			workspace_id INTEGER REFERENCES dev.workspaces(id) ON DELETE CASCADE, 
+			workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE, 
 			pvc_name VARCHAR(255) NOT NULL,       
 			pvc_sc VARCHAR(255),            
 			pvc_size VARCHAR(10) NOT NULL,        
-			pv_name VARCHAR(255)     
+			pv_name VARCHAR(255)
 		);
 	`)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error creating persistent_volume_claims table: %v", err)
+	}
 
 	// Commit the transaction to persist changes
 	if err := tx.Commit(); err != nil {
-		log.Printf("Error committing transaction: %v", err)
-		return
+		return fmt.Errorf("error committing transaction: %v", err)
 	}
+
+	log.Println("Tables initialized successfully")
+	return nil
 }
 
 // inserts a workspace and its related data into the database - will rollback if not all statements executed
@@ -121,7 +160,7 @@ func InsertWorkspaceWithRelatedData(db *sql.DB, ws models.Workspace,
 
 	// Insert workspace and get the workspace ID
 	workspaceID, err := insertAndReturnID(tx, `
-		INSERT INTO dev.workspaces (ws_name, ws_namespace, ws_service_account_name, ws_aws_role_name)
+		INSERT INTO workspaces (ws_name, ws_namespace, ws_service_account_name, ws_aws_role_name)
 		VALUES ($1, $2, $3, $4) RETURNING id`, ws.Name, ws.Namespace, ws.ServiceAccountName, ws.AWSRoleName)
 	if err != nil {
 		return 0, err
@@ -131,7 +170,7 @@ func InsertWorkspaceWithRelatedData(db *sql.DB, ws models.Workspace,
 	// Insert multiple AWS EFS Access Points
 	for _, efs := range efsAccessPoints {
 		_, err = insertAndReturnID(tx, `
-			INSERT INTO dev.efs_access_points (workspace_id, efs_ap_name, efs_ap_fsid, efs_ap_root_directory, efs_ap_uid, efs_ap_gid, efs_ap_permissions)
+			INSERT INTO efs_access_points (workspace_id, efs_ap_name, efs_ap_fsid, efs_ap_root_directory, efs_ap_uid, efs_ap_gid, efs_ap_permissions)
 			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
 			workspaceID, efs.Name, efs.FSID, efs.RootDir, efs.UID, efs.GID, efs.Permissions)
 		if err != nil {
@@ -143,7 +182,7 @@ func InsertWorkspaceWithRelatedData(db *sql.DB, ws models.Workspace,
 	// Insert multiple AWS S3 Buckets
 	for _, bucket := range s3Buckets {
 		if err := execQuery(tx, `
-			INSERT INTO dev.s3_buckets (workspace_id, s3_bucket_name, s3_bucket_path, s3_ap_name, s3_env_var)
+			INSERT INTO s3_buckets (workspace_id, s3_bucket_name, s3_bucket_path, s3_ap_name, s3_env_var)
 			VALUES ($1, $2, $3, $4, $5)`,
 			workspaceID, bucket.BucketName, bucket.BucketPath, bucket.AccessPointName, bucket.EnvVar); err != nil {
 			return 0, err
@@ -154,7 +193,7 @@ func InsertWorkspaceWithRelatedData(db *sql.DB, ws models.Workspace,
 	// Insert multiple Persistent Volumes
 	for _, pv := range pvs {
 		if err := execQuery(tx, `
-			INSERT INTO dev.persistent_volumes (workspace_id, pv_name, pv_sc, pv_size, pv_driver, pv_ap_name)
+			INSERT INTO persistent_volumes (workspace_id, pv_name, pv_sc, pv_size, pv_driver, pv_ap_name)
 			VALUES ($1, $2, $3, $4, $5, $6)`,
 			workspaceID, pv.PVName, pv.StorageClass, pv.Size, pv.Driver, pv.AccessPointName); err != nil {
 			return 0, err
@@ -165,7 +204,7 @@ func InsertWorkspaceWithRelatedData(db *sql.DB, ws models.Workspace,
 	// Insert multiple Persistent Volume Claims
 	for _, pvc := range pvcs {
 		if err := execQuery(tx, `
-			INSERT INTO dev.persistent_volume_claims (workspace_id, pvc_name, pvc_sc, pvc_size, pv_name)
+			INSERT INTO persistent_volume_claims (workspace_id, pvc_name, pvc_sc, pvc_size, pv_name)
 			VALUES ($1, $2, $3, $4, $5)`,
 			workspaceID, pvc.PVCName, pvc.StorageClass, pvc.Size, pvc.PVName); err != nil {
 			return 0, err
