@@ -6,7 +6,6 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/handlers"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -18,8 +17,19 @@ var runServerCmd = &cobra.Command{
 	Long:  `Run the workspace services server`,
 	Run: func(cmd *cobra.Command, args []string) {
 
-		// Init the logging
 		setUp()
+
+		// Ensure the database and notification connections close if gracefully program exits
+		defer func() {
+			if workspaceDB != nil {
+				err := workspaceDB.Close()
+				if err != nil {
+					log.Fatal().Err(err).Msg("Failed to close database connection")
+				}
+
+			}
+		}()
+
 		// Create routes
 		r := mux.NewRouter()
 
@@ -30,7 +40,7 @@ var runServerCmd = &cobra.Command{
 
 		// Register the routes
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/workspace/create", middleware(handlers.CreateWorkspace())).Methods(http.MethodPost)
+		r.HandleFunc("/api/workspaces/workspace/create", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
@@ -40,10 +50,6 @@ var runServerCmd = &cobra.Command{
 		}
 
 		log.Printf("Server is running on http://localhost:%d", port)
-
-		// Ensure Pulsar is closed on exit
-		defer events.ClosePublisher()
-
 	},
 }
 
@@ -51,6 +57,5 @@ func init() {
 	rootCmd.AddCommand(runServerCmd)
 	runServerCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
 	runServerCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
-	runServerCmd.Flags().StringVar(&configPath, "config", "", "Path to the configuration YAML file")
 
 }

@@ -1,6 +1,3 @@
-/*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -14,7 +11,6 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
-
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -22,32 +18,22 @@ import (
 )
 
 var (
-	logLevel   string
-	host       string
-	port       int
-	configPath string
-	config     *Config
+	logLevel    string
+	host        string
+	port        int
+	configPath  string
+	config      *Config
+	workspaceDB *db.WorkspaceDB
 )
 
 type Config struct {
-	Database      databaseConfig `yaml:"database"`
-	DatabaseProxy databaseProxy  `yaml:"databaseProxy"`
-	Pulsar        pulsarConfig   `yaml:"pulsar"`
+	Database databaseConfig `yaml:"database"`
+	Pulsar   pulsarConfig   `yaml:"pulsar"`
 }
 
 type databaseConfig struct {
 	Driver string `yaml:"driver"`
 	Source string `yaml:"source"`
-}
-
-type databaseProxy struct {
-	SSHUser        string `yaml:"sshUser"`
-	SSHHost        string `yaml:"sshHost"`
-	SSHPort        string `yaml:"sshPort"`
-	RemoteHost     string `yaml:"remoteHost"`
-	RemotePort     string `yaml:"reportPort"`
-	LocalPort      string `yaml:"localPort"`
-	PrivateKeyPath string `yaml:"privateKeyPath"`
 }
 
 type pulsarConfig struct {
@@ -68,13 +54,12 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log", "warn",
-		"sets the log level")
-	rootCmd.PersistentFlags().StringVar(&configPath, "config",
-		"/etc/workspace-services/config.yaml", "path to config file")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log", "warn", "sets the log level")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", "/etc/workspace-services/config.yaml", "path to config file")
 }
 
 func setUp() {
+
 	setLogging(logLevel)
 
 	// Load the config file
@@ -85,57 +70,56 @@ func setUp() {
 	}
 
 	// Initialize Pulsar connection
-	if err := setupPulsar(&config.Pulsar); err != nil {
-		fmt.Println("Failed to initialize Pulsar")
+	var eventPublisher *events.EventPublisher
+	if eventPublisher, err = initializeNotifications(&config.Pulsar); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize event notifier")
 	}
 
-	// If you want to connect to the db from development VM
-	if config.DatabaseProxy.RemoteHost != "" {
-		go func() {
-			err := StartSSHTunnel(&config.DatabaseProxy)
-			if err != nil {
-				log.Error().Err(err).Msgf("Failed to start SSH tunnel: %v", err)
-				return
-			}
-			log.Info().Msg("SSH tunnel started successfully")
-		}()
-
-		time.Sleep(3 * time.Second)
-	}
-
-	// Set the DATABASE_URL environment variable
-	err = os.Setenv("DATABASE_URL", config.Database.Source)
+	// Initialize WorkspaceDB
+	err = initializeDatabase(eventPublisher)
 	if err != nil {
-		fmt.Println("Error setting environment variable:", err)
+		fmt.Println("Failed to initialize database", err)
 		return
-	}
-	fmt.Println("config loaded")
-	fmt.Printf("database driver: %s\n", config.Database.Driver)
-	fmt.Printf("database source: %s\n", config.Database.Source)
-
-	// Initialize database tables if they dont exist
-	err = db.InitTables()
-
-	if err != nil {
-		log.Fatal().Err(err).Msg("failed to initialize database tables")
 	}
 
 }
 
-func setupPulsar(config *pulsarConfig) error {
+func initializeDatabase(eventPublisher *events.EventPublisher) error {
 
-	topic := "persistent://public/default/workspaces-services"
-
-	// Initialize Pulsar event publisher
-	err := events.InitEventPublisher(config.URL, topic)
+	err := os.Setenv("DATABASE_URL", config.Database.Source)
 	if err != nil {
-		return fmt.Errorf("failed to initialize Pulsar: %w", err)
+		fmt.Println("Error setting environment variable:", err)
+		return err
 	}
-	fmt.Println("Pulsar event publisher initialized successfully")
+
+	workspaceDB, err = db.NewWorkspaceDB(eventPublisher, &log.Logger)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize WorkspaceDB")
+		return err
+	}
+
+	// Create database tables if they don't exist
+	err = workspaceDB.InitTables()
+	if err != nil {
+		workspaceDB.Log.Fatal().Err(err).Msg("Failed to initialize database tables")
+	}
+
 	return nil
 }
 
-func setLogging(level string) {
+func initializeNotifications(config *pulsarConfig) (*events.EventPublisher, error) {
+
+	topic := "persistent://public/default/workspaces-services"
+	eventPublisher, err := events.NewEventPublisher(config.URL, topic)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize Pulsar event publisher")
+	}
+
+	return eventPublisher, nil
+
+}
+
+func setLogging(level string) zerolog.Logger {
 	zerolog.TimestampFunc = func() time.Time {
 		return time.Now().UTC()
 	}
@@ -156,6 +140,12 @@ func setLogging(level string) {
 	default:
 		zerolog.SetGlobalLevel(zerolog.WarnLevel)
 	}
+
+	// Initialize logger
+	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
+	logger := zerolog.New(consoleWriter).With().Timestamp().Logger()
+
+	return logger
 }
 
 func loadConfig(path string) (*Config, error) {

@@ -8,13 +8,13 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.33
 	github.com/aws/aws-sdk-go-v2/service/sts v1.30.7
 	github.com/golang-jwt/jwt v3.2.2+incompatible
+	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.1
 	github.com/lib/pq v1.10.9
 	github.com/rs/zerolog v1.33.0
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.32.0
-	golang.org/x/crypto v0.27.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -67,7 +67,6 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/hamba/avro/v2 v2.26.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -114,6 +113,7 @@ require (
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/otel/trace v1.24.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	golang.org/x/crypto v0.27.0 // indirect
 	golang.org/x/mod v0.21.0 // indirect
 	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect

@@ -1,25 +1,40 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"net/http/httptest"
+	"os"
 	"testing"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	_ "github.com/lib/pq"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-
-	"bytes"
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
-
-	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
 )
+
+// MockEventPublisher implements the Notifier interface for testing
+type MockEventPublisher struct{}
+
+// Mock the Notify function to avoid hitting real external dependencies
+func (m *MockEventPublisher) Notify(event events.EventPayload) error {
+	// Simulate successful notification
+	return nil
+}
+
+// Mock the Close function to avoid hitting real external dependencies
+func (m *MockEventPublisher) Close() {
+	// Simulate closing the publisher
+}
 
 // Helper function to setup PostgreSQL container using testcontainers
 func setupPostgresContainer(t *testing.T) (*sql.DB, string, func()) {
@@ -121,10 +136,6 @@ func TestCreateWorkspaceService(t *testing.T) {
 	dbConn, _, cleanup := setupPostgresContainer(t)
 	defer cleanup()
 
-	// Initialize the tables using the InitTables function (reading from the environment variable)
-	err := db.InitTables()
-	assert.NoError(t, err)
-
 	// Mock a WorkspaceRequest object with necessary fields
 	workspaceRequest := models.WorkspaceRequest{
 		Name:               "test-workspace",
@@ -157,8 +168,18 @@ func TestCreateWorkspaceService(t *testing.T) {
 	// Use httptest to record the response
 	rr := httptest.NewRecorder()
 
+	mockPublisher := &MockEventPublisher{} // Create a mock publisher or use a real one
+	mockLogger := zerolog.New(os.Stdout)   // Use a mock logger
+	mockDB, err := db.NewWorkspaceDB(mockPublisher, &mockLogger)
+
+	assert.NoError(t, err)
+
+	// Initialize the tables
+	err = mockDB.InitTables()
+	assert.NoError(t, err)
+
 	// Call the handler function directly, passing the request and response recorder
-	CreateWorkspaceService(rr, req)
+	CreateWorkspaceService(mockDB, rr, req)
 
 	// Check that the status code is 201 Created
 	assert.Equal(t, http.StatusCreated, rr.Code)
