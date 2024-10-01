@@ -39,8 +39,16 @@ var runServerCmd = &cobra.Command{
 		}
 
 		// Register the routes
+
+		// s3 routes
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/workspace/create", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
+
+		// workspace routes
+		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
+		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(workspaceDB))).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(workspaceDB))).Methods(http.MethodPut)
+		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(workspaceDB))).Methods(http.MethodPatch)
+
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
 		if err := http.ListenAndServe(fmt.Sprintf("%s:%d", host, port),
