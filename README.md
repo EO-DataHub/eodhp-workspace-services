@@ -14,9 +14,35 @@ cd eodhp-workspace-services
 
 ## Usage
 
-## Running the Server
+### Configuration File
 
-```go run main.go runserver --help ```
+The config is in the proposed format:
+```
+database:
+  driver: pgx
+  source: postgres://{{.SQL_USER}}:{{.SQL_PASSWORD}}@{{.SQL_HOST}}:{{.SQL_PORT}}/{{.SQL_DATABASE}}?search_path={{.SQL_SCHEMA}}
+pulsar:
+  url: pulsar://<<REPLACE>>
+```
+The repository connects to the workspaces database. In the cluster it will get it's connection string from env vars already setup. This config file is defined in the `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
+
+
+## Run with AWS DB Locally
+If you want to connect to the AWS instance, you should set up an SSH tunnel outside the go app in a separate terminal:
+
+`ssh -i <PATH-TO-PRIVATE-KEY> -L 8443:<REMOTE-HOST>:5432 <SSH-USER>@<SSH-HOST> -N`
+
+These details can be given upon request.
+
+
+
+## Run with Pulsar Locally
+Make sure pulsar is installed. If you run `./pulsar standalone` and amend the config file to your localhost, then the app will attach to it.
+
+## Run Server:
+```go run main.go runserver --config /path/to/config.yaml```
+
+
 
 
 ## Deployment
