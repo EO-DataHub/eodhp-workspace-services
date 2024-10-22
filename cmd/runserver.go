@@ -56,8 +56,8 @@ var runServerCmd = &cobra.Command{
 
 			log.Error().Err(err).Msg("could not start server")
 		}
-
-		log.Printf("Server is running on http://localhost:%d", port)
+		log.Info().Msg(fmt.Sprintf("Server running on http://localhost:%d", port))
+		//log.Printf("Server is running on http://localhost:%d", port)
 	},
 }
 

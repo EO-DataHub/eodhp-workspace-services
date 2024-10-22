@@ -11,27 +11,60 @@ import (
 	"github.com/google/uuid"
 )
 
-type Notifier interface {
-	Notify(event EventPayload) error
-	Close()
+type AWSEFSAccessPoint struct {
+	Name        string
+	FSID        string
+	RootDir     string
+	UID         int
+	GID         int
+	Permissions string
 }
 
-type EventPayload struct {
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-	Action      string    `json:"action"` // e.g., create, update, delete - currently only create is used
+type AWSS3Bucket struct {
+	BucketName      string
+	BucketPath      string
+	AccessPointName string
+	EnvVar          string
+}
+
+type Stores struct {
+	Object []AWSS3Bucket
+	Block  []AWSEFSAccessPoint
+}
+
+type MessagePayload struct {
+	Status       string    `json:"status"`
+	Name         string    `json:"name"`
+	Account      uuid.UUID `json:"account"`
+	AccountOwner string    `json:"accountOwner"`
+	MemberGroup  string    `json:"memberGroup"`
+	Timestamp    int64     `json:"timestamp"`
+	Stores       Stores    `json:"stores"`
+}
+
+type AckPayload struct {
+	WorkspaceID string `json:"workspace_id"`
+	Status      string `json:"status"` // The status returned after processing (e.g., "created", "failed")
+}
+
+type Notifier interface {
+	Publish(event MessagePayload) error
+	ReceiveAck(workspaceID string) (*AckPayload, error)
+	Close()
 }
 
 type EventPublisher struct {
 	client    pulsar.Client
 	producer  pulsar.Producer
-	eventChan chan EventPayload // Queue our messages in this Channel
-	quitChan  chan struct{}     // Channel to signal shutdown
+	consumer  pulsar.Consumer
+	eventChan chan MessagePayload // Queue our messages in this Channel
+	quitChan  chan struct{}       // Channel to signal shutdown
 }
 
 const maxRetries = 3 // Hardcoded and slightly random for now - can be made configurable
 
 // Initializes the Pulsar client and producer
-func NewEventPublisher(pulsarURL, topic string) (*EventPublisher, error) {
+func NewEventPublisher(pulsarURL, topic string, ackTopic string) (*EventPublisher, error) {
 	client, err := pulsar.NewClient(pulsar.ClientOptions{
 		URL: pulsarURL,
 	})
@@ -47,18 +80,30 @@ func NewEventPublisher(pulsarURL, topic string) (*EventPublisher, error) {
 		return nil, fmt.Errorf("could not create Pulsar producer: %w", err)
 	}
 
+	// Set up a consumer to receive ACKs
+	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
+		Topic:            ackTopic,
+		SubscriptionName: "workspace-subscription",
+		Type:             pulsar.Shared,
+	})
+	if err != nil {
+		client.Close()
+		return nil, fmt.Errorf("could not create Pulsar consumer: %w", err)
+	}
+
 	// Initialize the EventPublisher
 	publisher := &EventPublisher{
 		client:    client,
 		producer:  producer,
-		eventChan: make(chan EventPayload, 100), // Buffered channel for events - should be ok for now
+		consumer:  consumer,
+		eventChan: make(chan MessagePayload, 100), // Buffered channel for events - should be ok for now
 		quitChan:  make(chan struct{}),
 	}
 
 	// Start the goroutine that processes events - we want this as separate go routine to prevent blocking API calls
 	go publisher.run()
 
-	log.Println("Pulsar client and producer initialized successfully")
+	log.Println("Pulsar client and producer/consumer initialized successfully")
 	return publisher, nil
 }
 
@@ -76,7 +121,7 @@ func (p *EventPublisher) run() {
 }
 
 // Tries to publish an event, retrying if necessary
-func (p *EventPublisher) publishWithRetry(event EventPayload) {
+func (p *EventPublisher) publishWithRetry(event MessagePayload) {
 	message, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("Failed to serialize event: %v", err)
@@ -88,7 +133,6 @@ func (p *EventPublisher) publishWithRetry(event EventPayload) {
 			Payload: message,
 		})
 		if err == nil {
-			log.Printf("Event sent to Pulsar: %s", message)
 			return
 		}
 
@@ -103,8 +147,47 @@ func (p *EventPublisher) publishWithRetry(event EventPayload) {
 	}
 }
 
+// waits for an ACK related to the workspace creation
+func (p *EventPublisher) ReceiveAck(workspaceID string) (*AckPayload, error) {
+	ackChan := make(chan *AckPayload)
+	timeout := time.After(30 * time.Second) // Timeout after 30 seconds
+
+	// Listen for the ACK in a separate goroutine
+	go func() {
+		for {
+			msg, err := p.consumer.Receive(context.Background())
+			if err != nil {
+				log.Println("Error receiving Pulsar message:", err)
+				continue
+			}
+
+			fmt.Println("Received ACK:", string(msg.Payload()))
+
+			var ack AckPayload
+			err = json.Unmarshal(msg.Payload(), &ack)
+			if err != nil {
+				log.Println("Error unmarshalling ACK:", err)
+				continue
+			}
+
+			ackChan <- &ack
+			p.consumer.Ack(msg) // Acknowledge the message
+			return
+
+		}
+	}()
+
+	// Wait for ACK or timeout
+	select {
+	case ack := <-ackChan:
+		return ack, nil
+	case <-timeout:
+		return nil, fmt.Errorf("timeout waiting for ACK")
+	}
+}
+
 // Instead of publishing directly, it enqueues the event on the event channel
-func (p *EventPublisher) Notify(event EventPayload) error {
+func (p *EventPublisher) Publish(event MessagePayload) error {
 	select {
 	case p.eventChan <- event:
 		log.Printf("Event enqueued: %+v", event)
@@ -118,6 +201,7 @@ func (p *EventPublisher) Notify(event EventPayload) error {
 func (p *EventPublisher) Close() {
 	close(p.quitChan)
 	p.producer.Close()
+	p.consumer.Close()
 	p.client.Close()
 	close(p.eventChan)
 	log.Println("Pulsar client and producer closed successfully")

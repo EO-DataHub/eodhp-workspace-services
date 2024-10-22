@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		// Parse the token for JWT claims
 		claims, err := authn.ParseClaims(token)
-
+		fmt.Println("Claim username: ", claims.Username)
 		if err != nil {
 			logger.Error().Err(err).Msg("invalid bearer jwt token")
 			http.Error(w, "invalid bearer jwt token", http.StatusUnauthorized)
@@ -53,7 +54,9 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Add the token and claims to the context
 		ctx := context.WithValue(r.Context(), TokenKey, token)
 		ctx = context.WithValue(ctx, ClaimsKey, claims)
+		//ctx = context.WithValue(r.Context(), "test", "valueeeee")
 		next.ServeHTTP(w, r.WithContext(ctx))
+
 	}
 }
 
