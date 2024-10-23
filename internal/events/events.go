@@ -4,52 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+
 	"time"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
-type AWSEFSAccessPoint struct {
-	Name        string
-	FSID        string
-	RootDir     string
-	UID         int
-	GID         int
-	Permissions string
-}
-
-type AWSS3Bucket struct {
-	BucketName      string
-	BucketPath      string
-	AccessPointName string
-	EnvVar          string
-}
-
-type Stores struct {
-	Object []AWSS3Bucket
-	Block  []AWSEFSAccessPoint
-}
-
-type MessagePayload struct {
-	Status       string    `json:"status"`
-	Name         string    `json:"name"`
-	Account      uuid.UUID `json:"account"`
-	AccountOwner string    `json:"accountOwner"`
-	MemberGroup  string    `json:"memberGroup"`
-	Timestamp    int64     `json:"timestamp"`
-	Stores       Stores    `json:"stores"`
-}
-
-type AckPayload struct {
-	WorkspaceID string `json:"workspace_id"`
-	Status      string `json:"status"` // The status returned after processing (e.g., "created", "failed")
-}
-
 type Notifier interface {
-	Publish(event MessagePayload) error
-	ReceiveAck(workspaceID string) (*AckPayload, error)
+	Publish(event models.ReqMessagePayload) error
+	ReceiveAck(messagePayload models.ReqMessagePayload) (*models.AckPayload, error)
 	Close()
 }
 
@@ -57,8 +22,8 @@ type EventPublisher struct {
 	client    pulsar.Client
 	producer  pulsar.Producer
 	consumer  pulsar.Consumer
-	eventChan chan MessagePayload // Queue our messages in this Channel
-	quitChan  chan struct{}       // Channel to signal shutdown
+	eventChan chan models.ReqMessagePayload // Queue our messages in this Channel
+	quitChan  chan struct{}                 // Channel to signal shutdown
 }
 
 const maxRetries = 3 // Hardcoded and slightly random for now - can be made configurable
@@ -96,35 +61,34 @@ func NewEventPublisher(pulsarURL, topic string, ackTopic string) (*EventPublishe
 		client:    client,
 		producer:  producer,
 		consumer:  consumer,
-		eventChan: make(chan MessagePayload, 100), // Buffered channel for events - should be ok for now
+		eventChan: make(chan models.ReqMessagePayload, 100), // Buffered channel for events - should be ok for now
 		quitChan:  make(chan struct{}),
 	}
 
 	// Start the goroutine that processes events - we want this as separate go routine to prevent blocking API calls
 	go publisher.run()
-
-	log.Println("Pulsar client and producer/consumer initialized successfully")
+	log.Info().Msg("Pulsar client and producer/consumer initialized successfully")
 	return publisher, nil
 }
 
-// run listens on the event channel and sends events to Pulsar
+// Listens on the event channel and sends events to Pulsar
 func (p *EventPublisher) run() {
 	for {
 		select {
 		case event := <-p.eventChan:
 			p.publishWithRetry(event)
 		case <-p.quitChan:
-			log.Println("Stopping event publisher...")
+			log.Info().Msg("Stopping event publisher.")
 			return
 		}
 	}
 }
 
 // Tries to publish an event, retrying if necessary
-func (p *EventPublisher) publishWithRetry(event MessagePayload) {
+func (p *EventPublisher) publishWithRetry(event models.ReqMessagePayload) {
 	message, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("Failed to serialize event: %v", err)
+		log.Error().Err(err).Msg("Failed to serialize event")
 		return
 	}
 
@@ -135,21 +99,20 @@ func (p *EventPublisher) publishWithRetry(event MessagePayload) {
 		if err == nil {
 			return
 		}
-
-		log.Printf("Failed to send event to Pulsar (attempt %d): %v", attempt, err)
+		log.Error().Int("attempt", attempt).Err(err).Msg("Failed to send event to Pulsar")
 
 		// Reconnect or retry logic, wait before retrying
 		if attempt < maxRetries {
 			time.Sleep(2 * time.Second) // Simple backoff, adjust as needed
 		} else {
-			log.Printf("Giving up after %d attempts", maxRetries)
+			log.Error().Int("maxRetries", maxRetries).Msg("Giving up after maxRetries attempts")
 		}
 	}
 }
 
-// waits for an ACK related to the workspace creation
-func (p *EventPublisher) ReceiveAck(workspaceID string) (*AckPayload, error) {
-	ackChan := make(chan *AckPayload)
+// Waits for an ACK related to the original request
+func (p *EventPublisher) ReceiveAck(messagePayload models.ReqMessagePayload) (*models.AckPayload, error) {
+	ackChan := make(chan *models.AckPayload)
 	timeout := time.After(30 * time.Second) // Timeout after 30 seconds
 
 	// Listen for the ACK in a separate goroutine
@@ -157,23 +120,23 @@ func (p *EventPublisher) ReceiveAck(workspaceID string) (*AckPayload, error) {
 		for {
 			msg, err := p.consumer.Receive(context.Background())
 			if err != nil {
-				log.Println("Error receiving Pulsar message:", err)
+				log.Error().Err(err).Msg("Error receiving Pulsar message")
 				continue
 			}
 
-			fmt.Println("Received ACK:", string(msg.Payload()))
-
-			var ack AckPayload
+			var ack models.AckPayload
 			err = json.Unmarshal(msg.Payload(), &ack)
 			if err != nil {
-				log.Println("Error unmarshalling ACK:", err)
+				log.Error().Err(err).Msg("Error unmarshalling ACK")
 				continue
 			}
 
-			ackChan <- &ack
-			p.consumer.Ack(msg) // Acknowledge the message
-			return
-
+			// TODO: Add more checks here if needed
+			if ack.MessagePayload.Name == messagePayload.Name {
+				ackChan <- &ack
+				p.consumer.Ack(msg) 
+				return
+			}
 		}
 	}()
 
@@ -187,12 +150,12 @@ func (p *EventPublisher) ReceiveAck(workspaceID string) (*AckPayload, error) {
 }
 
 // Instead of publishing directly, it enqueues the event on the event channel
-func (p *EventPublisher) Publish(event MessagePayload) error {
+func (p *EventPublisher) Publish(event models.ReqMessagePayload) error {
 	select {
 	case p.eventChan <- event:
-		log.Printf("Event enqueued: %+v", event)
+		log.Info().Interface("event", event).Msg("Event enqueued")
 		return nil
-	case <-time.After(2 * time.Second): // Timeout in case the channel is full - adjust as needed
+	case <-time.After(2 * time.Second): // Timeout in case the channel is full - might need adjusting
 		return fmt.Errorf("failed to enqueue event: queue is full")
 	}
 }
@@ -204,5 +167,5 @@ func (p *EventPublisher) Close() {
 	p.consumer.Close()
 	p.client.Close()
 	close(p.eventChan)
-	log.Println("Pulsar client and producer closed successfully")
+	log.Info().Msg("Pulsar client and producer closed successfully")
 }

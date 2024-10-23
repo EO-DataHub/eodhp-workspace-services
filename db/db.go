@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 )
@@ -157,92 +159,100 @@ func (w *WorkspaceDB) InitTables() error {
 	return nil
 }
 
-// // inserts a workspace and its related data into the database - will rollback if not all statements executed
-// func (w *WorkspaceDB) InsertWorkspace(ws models.Workspace,
-// 	efsAccessPoints []models.AWSEFSAccessPoint,
-// 	s3Buckets []models.AWSS3Bucket,
-// 	pvs []models.PersistentVolume,
-// 	pvcs []models.PersistentVolumeClaim) (uuid.UUID, error) {
+func (w *WorkspaceDB) InsertWorkspace(ack *models.AckPayload) error {
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %v", err)
+	}
+	defer tx.Rollback() // rollback if anything fails
 
-// 	// Generate UUID for the workspace
-// 	workspaceID := uuid.New()
+	// Insert the workspace
+	workspaceID := uuid.New() // Generate a new workspace ID
+	err = w.execQuery(tx, `
+		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, roleName, roleArn)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		workspaceID, ack.MessagePayload.Name, ack.MessagePayload.Account, ack.MessagePayload.AccountOwner,
+		ack.MessagePayload.MemberGroup, ack.AWS.Role.Name, ack.AWS.Role.ARN)
+	if err != nil {
+		w.Log.Error().Err(err).Msg("error inserting workspace")
+		return fmt.Errorf("error inserting workspace: %v", err)
+	}
 
-// 	tx, err := w.DB.Begin()
-// 	if err != nil {
-// 		return uuid.Nil, fmt.Errorf("error starting transaction: %v", err)
-// 	}
+	// Insert object stores
+	for _, bucket := range ack.AWS.S3.Buckets {
+		storeID := uuid.New()
+		err = w.execQuery(tx, `
+			INSERT INTO workspace_stores (id, workspace_id, store_type, name)
+			VALUES ($1, $2, 'object', $3)`,
+			storeID, workspaceID, bucket.Name)
+		if err != nil {
+			w.Log.Error().Err(err).Msg("error inserting into workspace_stores")
+			return fmt.Errorf("error inserting into workspace_stores: %v", err)
+		}
 
-// 	defer func() {
-// 		if err != nil {
-// 			tx.Rollback()
-// 		}
-// 	}()
+		err = w.execQuery(tx, `
+			INSERT INTO object_stores (store_id, path, envVar, accessPointArn)
+			VALUES ($1, $2, $3, $4)`,
+			storeID, bucket.Path, bucket.EnvVar, bucket.AccessPointARN)
+		if err != nil {
+			w.Log.Error().Err(err).Msg("error inserting into object_stores")
+			return fmt.Errorf("error inserting into object_stores: %v", err)
+		}
+	}
 
-// 	// Insert workspace and get the workspace ID
-// 	err = w.execQuery(tx, `
-// 		INSERT INTO workspaces (id, ws_name, ws_namespace, ws_service_account_name, ws_aws_role_name)
-// 		VALUES ($1, $2, $3, $4, $5)`,
-// 		workspaceID, ws.Name, ws.Namespace, ws.ServiceAccountName, ws.AWSRoleName)
-// 	if err != nil {
-// 		return uuid.Nil, fmt.Errorf("error inserting workspace: %v", err)
-// 	}
-// 	fmt.Printf("Inserted workspace with ID: %s\n", workspaceID)
+	// Insert block stores
+	for _, accessPoint := range ack.AWS.EFS.AccessPoints {
+		storeID := uuid.New()
+		err = w.execQuery(tx, `
+			INSERT INTO workspace_stores (id, workspace_id, store_type, name)
+			VALUES ($1, $2, 'block', $3)`,
+			storeID, workspaceID, accessPoint.Name)
+		if err != nil {
+			w.Log.Error().Err(err).Msg("error inserting into workspace_stores")
+			return fmt.Errorf("error inserting into workspace_stores: %v", err)
+		}
 
-// 	// Insert multiple AWS EFS Access Points
-// 	for _, efs := range efsAccessPoints {
-// 		efsID := uuid.New()
-// 		err = w.execQuery(tx, `
-// 			INSERT INTO efs_access_points (id, workspace_id, efs_ap_name, efs_ap_fsid, efs_ap_root_directory, efs_ap_uid, efs_ap_gid, efs_ap_permissions)
-// 			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-// 			efsID, workspaceID, efs.Name, efs.FSID, efs.RootDir, efs.UID, efs.GID, efs.Permissions)
-// 		if err != nil {
-// 			return uuid.Nil, fmt.Errorf("error inserting AWS EFS Access Point: %v", err)
-// 		}
-// 	}
+		err = w.execQuery(tx, `
+			INSERT INTO block_stores (store_id, accessPointId, fsId)
+			VALUES ($1, $2, $3)`,
+			storeID, accessPoint.AccessPointID, accessPoint.FSID)
+		if err != nil {
+			w.Log.Error().Err(err).Msg("error inserting into block_stores")
+			return fmt.Errorf("error inserting into block_stores: %v", err)
+		}
+	}
 
-// 	// Insert multiple AWS S3 Buckets
-// 	for _, bucket := range s3Buckets {
-// 		s3BucketID := uuid.New()
-// 		err = w.execQuery(tx, `
-// 			INSERT INTO s3_buckets (id, workspace_id, s3_bucket_name, s3_bucket_path, s3_ap_name, s3_env_var)
-// 			VALUES ($1, $2, $3, $4, $5, $6)`,
-// 			s3BucketID, workspaceID, bucket.BucketName, bucket.BucketPath, bucket.AccessPointName, bucket.EnvVar)
-// 		if err != nil {
-// 			return uuid.Nil, fmt.Errorf("error inserting AWS S3 Bucket: %v", err)
-// 		}
-// 	}
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %v", err)
+	}
 
-// 	// Insert multiple Persistent Volumes
-// 	for _, pv := range pvs {
-// 		pvID := uuid.New()
-// 		err = w.execQuery(tx, `
-// 			INSERT INTO persistent_volumes (id, workspace_id, pv_name, pv_sc, pv_size, pv_driver, pv_ap_name)
-// 			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-// 			pvID, workspaceID, pv.PVName, pv.StorageClass, pv.Size, pv.Driver, pv.AccessPointName)
-// 		if err != nil {
-// 			return uuid.Nil, fmt.Errorf("error inserting Persistent Volume: %v", err)
-// 		}
-// 	}
+	w.Log.Info().Msg("Workspace and stores inserted successfully")
+	return nil
+}
 
-// 	// Insert multiple Persistent Volume Claims
-// 	for _, pvc := range pvcs {
-// 		pvcID := uuid.New()
-// 		err = w.execQuery(tx, `
-// 			INSERT INTO persistent_volume_claims (id, workspace_id, pvc_name, pvc_sc, pvc_size, pv_name)
-// 			VALUES ($1, $2, $3, $4, $5, $6)`,
-// 			pvcID, workspaceID, pvc.PVCName, pvc.StorageClass, pvc.Size, pvc.PVName)
-// 		if err != nil {
-// 			return uuid.Nil, fmt.Errorf("error inserting Persistent Volume Claim: %v", err)
-// 		}
-// 	}
+func (w *WorkspaceDB) DeleteWorkspace(workspaceID uuid.UUID) error {
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %v", err)
+	}
+	defer tx.Rollback()
 
-// 	// Commit the transaction
-// 	if err := tx.Commit(); err != nil {
-// 		return uuid.Nil, fmt.Errorf("error committing transaction: %v", err)
-// 	}
-// 	w.Log.Info().Msg("Transaction committed successfully for workspaceID: " + workspaceID.String())
-// 	return workspaceID, nil
-// }
+	// Delete the workspace (this will also delete the associated stores due to ON DELETE CASCADE)
+	err = w.execQuery(tx, `DELETE FROM workspaces WHERE id = $1`, workspaceID)
+	if err != nil {
+		w.Log.Error().Err(err).Msg("error deleting workspace")
+		return err
+	}
+
+	// Commit the transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %v", err)
+	}
+
+	w.Log.Info().Msg("Workspace deleted successfully")
+	return nil
+}
 
 func (w *WorkspaceDB) execQuery(tx *sql.Tx, query string, args ...interface{}) error {
 
