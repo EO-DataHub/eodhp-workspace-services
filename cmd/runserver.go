@@ -39,11 +39,9 @@ var runServerCmd = &cobra.Command{
 		}
 
 		// Register the routes
-
-		// s3 routes
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
 
-		// workspace routes
+		// Workspace provisioning routes
 		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
 		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(workspaceDB))).Methods(http.MethodGet)
 		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(workspaceDB))).Methods(http.MethodPut)
@@ -57,7 +55,6 @@ var runServerCmd = &cobra.Command{
 			log.Error().Err(err).Msg("could not start server")
 		}
 		log.Info().Msg(fmt.Sprintf("Server running on http://localhost:%d", port))
-		//log.Printf("Server is running on http://localhost:%d", port)
 	},
 }
 
