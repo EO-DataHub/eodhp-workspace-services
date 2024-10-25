@@ -109,8 +109,8 @@ func initializeDatabase(eventPublisher *events.EventPublisher) error {
 
 func initializeNotifications(config *pulsarConfig) (*events.EventPublisher, error) {
 
-	reqtopic := "persistent://public/default/workspace-services-req"
-	ackTopic := "persistent://public/default/workspace-services-ack"
+	reqtopic := "persistent://public/default/workspace-configuration"
+	ackTopic := "persistent://public/default/workspace-status"
 	eventPublisher, err := events.NewEventPublisher(config.URL, reqtopic, ackTopic)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize Pulsar event publisher")

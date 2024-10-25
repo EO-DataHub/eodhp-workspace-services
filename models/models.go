@@ -16,18 +16,19 @@ type ReqStores struct {
 }
 
 type ReqMessagePayload struct {
-	Status       string    `json:"status"`
-	Name         string    `json:"name"`
-	Account      uuid.UUID `json:"account"`
-	AccountOwner string    `json:"accountOwner"`
-	MemberGroup  string    `json:"memberGroup"`
-	Timestamp    int64     `json:"timestamp"`
-	Stores       ReqStores    `json:"stores"`
+	Status        string    `json:"status"`
+	CorrelationId string    `json:"correlationId"`
+	Name          string    `json:"name"`
+	Account       uuid.UUID `json:"account"`
+	AccountOwner  string    `json:"accountOwner"`
+	MemberGroup   string    `json:"memberGroup"`
+	Timestamp     int64     `json:"timestamp"`
+	Stores        ReqStores `json:"stores"`
 }
 
 type AckPayload struct {
 	MessagePayload ReqMessagePayload `json:"messagePayload"`
-	AWS            AckAWSStatus   `json:"aws"`
+	AWS            AckAWSStatus      `json:"aws"`
 }
 
 type AckAWSStatus struct {

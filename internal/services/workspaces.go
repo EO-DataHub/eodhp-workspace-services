@@ -52,6 +52,9 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 		return
 	}
 
+	// Generate a correlation ID for the message
+	messagePayload.CorrelationId = uuid.New().String()
+
 	// Add the claims to the message payload
 	messagePayload.AccountOwner = claims.Username
 	messagePayload.Account = uuid.New()        // TODO: will be replaced with the actual account ID from claim
