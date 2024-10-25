@@ -90,10 +90,11 @@ func (w *WorkspaceDB) InitTables() error {
 			id UUID PRIMARY KEY,
 			name VARCHAR(255) UNIQUE NOT NULL,
 			account UUID NOT NULL,
-			accountOwner VARCHAR(255) NOT NULL,
-			memberGroup VARCHAR(255) NOT NULL,
-			roleName VARCHAR(255) NOT NULL,
-			roleArn VARCHAR(255) NOT NULL
+			accountOwner TEXT NOT NULL,
+			memberGroup TEXT NOT NULL,
+			roleName TEXT NOT NULL,
+			roleArn TEXT NOT NULL,
+			status TEXT NOT NULL
 		);
 	`)
 	if err != nil {
@@ -169,10 +170,10 @@ func (w *WorkspaceDB) InsertWorkspace(ack *models.AckPayload) error {
 	// Insert the workspace
 	workspaceID := uuid.New() // Generate a new workspace ID
 	err = w.execQuery(tx, `
-		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, roleName, roleArn)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, roleName, roleArn, status)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		workspaceID, ack.MessagePayload.Name, ack.MessagePayload.Account, ack.MessagePayload.AccountOwner,
-		ack.MessagePayload.MemberGroup, ack.AWS.Role.Name, ack.AWS.Role.ARN)
+		ack.MessagePayload.MemberGroup, ack.AWS.Role.Name, ack.AWS.Role.ARN, ack.MessagePayload.Status)
 	if err != nil {
 		w.Log.Error().Err(err).Msg("error inserting workspace")
 		return fmt.Errorf("error inserting workspace: %v", err)
