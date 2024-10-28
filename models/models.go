@@ -17,7 +17,6 @@ type ReqStores struct {
 
 type ReqMessagePayload struct {
 	Status        string    `json:"status"`
-	CorrelationId string    `json:"correlationId"`
 	Name          string    `json:"name"`
 	Account       uuid.UUID `json:"account"`
 	AccountOwner  string    `json:"accountOwner"`

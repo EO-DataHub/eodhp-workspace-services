@@ -11,10 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runServerCmd = &cobra.Command{
-	Use:   "runserver",
-	Short: "Run the server",
-	Long:  `Run the workspace services server`,
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Run the HTTP server for handling API requests",
 	Run: func(cmd *cobra.Command, args []string) {
 
 		setUp()
@@ -59,8 +58,8 @@ var runServerCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.AddCommand(runServerCmd)
-	runServerCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
-	runServerCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
+	rootCmd.AddCommand(serveCmd)
+	serveCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
+	serveCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
 
 }

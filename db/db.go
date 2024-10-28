@@ -160,75 +160,32 @@ func (w *WorkspaceDB) InitTables() error {
 	return nil
 }
 
-func (w *WorkspaceDB) InsertWorkspace(ack *models.AckPayload) error {
+func (w *WorkspaceDB) InsertWorkspace(req *models.ReqMessagePayload) (*sql.Tx, error) {
 	tx, err := w.DB.Begin()
 	if err != nil {
-		return fmt.Errorf("error starting transaction: %v", err)
+		return nil, fmt.Errorf("error starting transaction: %v", err)
 	}
-	defer tx.Rollback() // rollback if anything fails
 
 	// Insert the workspace
 	workspaceID := uuid.New() // Generate a new workspace ID
 	err = w.execQuery(tx, `
-		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, roleName, roleArn, status)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		workspaceID, ack.MessagePayload.Name, ack.MessagePayload.Account, ack.MessagePayload.AccountOwner,
-		ack.MessagePayload.MemberGroup, ack.AWS.Role.Name, ack.AWS.Role.ARN, ack.MessagePayload.Status)
+		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, status)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		workspaceID, req.Name, req.Account, req.AccountOwner,
+		req.MemberGroup, req.Status)
 	if err != nil {
 		w.Log.Error().Err(err).Msg("error inserting workspace")
-		return fmt.Errorf("error inserting workspace: %v", err)
+		return nil, fmt.Errorf("error inserting workspace: %v", err)
 	}
 
-	// Insert object stores
-	for _, bucket := range ack.AWS.S3.Buckets {
-		storeID := uuid.New()
-		err = w.execQuery(tx, `
-			INSERT INTO workspace_stores (id, workspace_id, store_type, name)
-			VALUES ($1, $2, 'object', $3)`,
-			storeID, workspaceID, bucket.Name)
-		if err != nil {
-			w.Log.Error().Err(err).Msg("error inserting into workspace_stores")
-			return fmt.Errorf("error inserting into workspace_stores: %v", err)
-		}
+	return tx, nil
+}
 
-		err = w.execQuery(tx, `
-			INSERT INTO object_stores (store_id, path, envVar, accessPointArn)
-			VALUES ($1, $2, $3, $4)`,
-			storeID, bucket.Path, bucket.EnvVar, bucket.AccessPointARN)
-		if err != nil {
-			w.Log.Error().Err(err).Msg("error inserting into object_stores")
-			return fmt.Errorf("error inserting into object_stores: %v", err)
-		}
-	}
-
-	// Insert block stores
-	for _, accessPoint := range ack.AWS.EFS.AccessPoints {
-		storeID := uuid.New()
-		err = w.execQuery(tx, `
-			INSERT INTO workspace_stores (id, workspace_id, store_type, name)
-			VALUES ($1, $2, 'block', $3)`,
-			storeID, workspaceID, accessPoint.Name)
-		if err != nil {
-			w.Log.Error().Err(err).Msg("error inserting into workspace_stores")
-			return fmt.Errorf("error inserting into workspace_stores: %v", err)
-		}
-
-		err = w.execQuery(tx, `
-			INSERT INTO block_stores (store_id, accessPointId, fsId)
-			VALUES ($1, $2, $3)`,
-			storeID, accessPoint.AccessPointID, accessPoint.FSID)
-		if err != nil {
-			w.Log.Error().Err(err).Msg("error inserting into block_stores")
-			return fmt.Errorf("error inserting into block_stores: %v", err)
-		}
-	}
-
-	// Commit the transaction
+func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %v", err)
 	}
-
-	w.Log.Info().Msg("Workspace and stores inserted successfully")
+	w.Log.Info().Msg("Transaction committed successfully")
 	return nil
 }
 
