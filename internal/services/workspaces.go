@@ -70,6 +70,8 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	err = workspaceDB.Events.Publish(messagePayload)
 	if err != nil {
 		workspaceDB.Log.Error().Err(err).Msg("Failed to publish event.")
+
+		tx.Rollback()	// Rollback the transaction if the event fails to publish
 		http.Error(w, "Failed to create workspace event", http.StatusInternalServerError)
 		return
 	}
