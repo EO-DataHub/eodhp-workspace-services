@@ -2,65 +2,89 @@ package services
 
 import (
 	"encoding/json"
-	"log"
-	"net/http"
 
+	"net/http"
+	"time"
+
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/google/uuid"
 )
 
+// Example request - will mature as we understand the requirements better
+//
+//	{
+//	    "status": "created",
+//	    "name": "jlangstone-new",
+//	    "stores": {
+//	        "object": [
+//	            {
+//	                "bucketName": "example-bucket"
+//	            }
+//	        ],
+//	        "block": [
+//	            {
+//	                "name": "example-efs"
+//	            }
+//	        ]
+//	    }
+//	}
+//
 // Handles the creation of a workspace and its related components
 func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
-	
-	// Parse and decode the request body into a WorkspaceRequest object
-	var workspaceRequest models.WorkspaceRequest
-	if err := json.NewDecoder(r.Body).Decode(&workspaceRequest); err != nil {
+
+	// Get the claims from the context
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+
+	if !ok {
+		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse and decode the request body into a MessagePayload object
+	var messagePayload models.ReqMessagePayload
+	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
+		workspaceDB.Log.Error().Err(err).Msg("Invalid request payload")
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
-		log.Println("Error decoding request body:", err)
 		return
 	}
 
-	// Extract the workspace data from the request
-	workspace := models.Workspace{
-		Name:               workspaceRequest.Name,
-		Namespace:          workspaceRequest.Namespace,
-		ServiceAccountName: workspaceRequest.ServiceAccountName,
-		AWSRoleName:        workspaceRequest.AWSRoleName,
-	}
+	// Add the claims to the message payload
+	messagePayload.AccountOwner = claims.Username
+	messagePayload.Account = uuid.New()        // TODO: will be replaced with the actual account ID
+	messagePayload.MemberGroup = "placeholder" // TODO: will be replaced with the actual member group from Keycloak
 
-	// Insert the workspace and related data into the database
-	workspaceID, err := workspaceDB.InsertWorkspace(
-		workspace,
-		workspaceRequest.EFSAccessPoint,
-		workspaceRequest.S3Buckets,
-		workspaceRequest.PersistentVolumes,
-		workspaceRequest.PersistentVolumeClaims,
-	)
+	// Add the timestamp to the message payload to track the state of the workspace request
+	messagePayload.Timestamp = time.Now().Unix()
 
+	// Create the workspace transaction
+	tx, err := workspaceDB.InsertWorkspace(&messagePayload)
 	if err != nil {
-		// Respond with error
-		http.Error(w, "Failed to create workspace", http.StatusInternalServerError)
-		log.Println("Error inserting workspace:", err)
+		http.Error(w, "Failed to insert workspace", http.StatusInternalServerError)
 		return
 	}
 
-	// Respond with success
-	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte("Workspace created successfully"))
+	// Publish the message to be picked up by the workspace manager
+	err = workspaceDB.Events.Publish(messagePayload)
+	if err != nil {
+		workspaceDB.Log.Error().Err(err).Msg("Failed to publish event.")
 
-	// After inserting workspace, notify the event system
-	if workspaceDB.Events != nil {
-		eventPayload := events.EventPayload{
-			WorkspaceID: workspaceID, // Assuming the Workspace struct has an ID field
-			Action:      "create",
-		}
-
-		// Send notification via the event system
-		err = workspaceDB.Events.Notify(eventPayload)
-		if err != nil {
-			workspaceDB.Log.Error().Err(err).Msg("Failed to send event notification")
-			return
-		}
+		tx.Rollback()	// Rollback the transaction if the event fails to publish
+		http.Error(w, "Failed to create workspace event", http.StatusInternalServerError)
+		return
 	}
+
+	// Commit the transaction after sucessfully publishing the event
+	if err := workspaceDB.CommitTransaction(tx); err != nil {
+		http.Error(w, "Failed to commit workspace transaction", http.StatusInternalServerError)
+		return
+	}
+
+	// Respond with 201 success
+	w.WriteHeader(http.StatusCreated)
+
+	// TODO: Respond with an appropriate JSON message
+	w.Write([]byte("Workspace is creating"))
 }

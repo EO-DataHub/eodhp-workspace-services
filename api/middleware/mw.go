@@ -53,7 +53,9 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		// Add the token and claims to the context
 		ctx := context.WithValue(r.Context(), TokenKey, token)
 		ctx = context.WithValue(ctx, ClaimsKey, claims)
+
 		next.ServeHTTP(w, r.WithContext(ctx))
+
 	}
 }
 

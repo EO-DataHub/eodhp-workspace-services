@@ -88,92 +88,67 @@ func (w *WorkspaceDB) InitTables() error {
 	_, err = tx.Exec(`
 		CREATE TABLE IF NOT EXISTS workspaces (
 			id UUID PRIMARY KEY,
-			ws_name VARCHAR(255) UNIQUE NOT NULL,     
-			ws_namespace VARCHAR(255) NOT NULL,         
-			ws_service_account_name VARCHAR(255) NOT NULL,
-			ws_aws_role_name VARCHAR(255)
+			name VARCHAR(255) UNIQUE NOT NULL,
+			account UUID NOT NULL,
+			accountOwner TEXT NOT NULL,
+			memberGroup TEXT NOT NULL,
+			roleName TEXT NOT NULL,
+			roleArn TEXT NOT NULL,
+			status TEXT NOT NULL
 		);
 	`)
 	if err != nil {
-		w.Log.Error().Err(err).Msg("error creating efs_access_points table")
+		w.Log.Error().Err(err).Msg("error creating table workspaces")
 
 		tx.Rollback()
-		return fmt.Errorf("error creating workspaces table: %v", err)
+		return err
 	}
 
-	// Create the efs_access_points table
+	// Superclass table for workspace stores (both object stores and block stores)
 	_, err = tx.Exec(`
-		CREATE TABLE IF NOT EXISTS efs_access_points (
+		CREATE TABLE IF NOT EXISTS workspace_stores (
 			id UUID PRIMARY KEY,
 			workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
-			efs_ap_name VARCHAR(255) NOT NULL,
-			efs_ap_fsid VARCHAR(255) NOT NULL,
-			efs_ap_root_directory VARCHAR(255),
-			efs_ap_uid INT,
-			efs_ap_gid INT,
-			efs_ap_permissions VARCHAR(10)
+			store_type VARCHAR(50) NOT NULL, 		-- object or block
+			name VARCHAR(255) NOT NULL
 		);
 	`)
 	if err != nil {
-		w.Log.Error().Err(err).Msg("error creating efs_access_points table")
+		w.Log.Error().Err(err).Msg("error creating table workspace_stores")
 
 		tx.Rollback()
-		return fmt.Errorf("error creating efs_access_points table: %v", err)
+		return err
 	}
 
-	// Create the s3_buckets table
+	// Subclass table for object stores (inherits from workspace_stores)
 	_, err = tx.Exec(`
-		CREATE TABLE IF NOT EXISTS s3_buckets (
-			id UUID PRIMARY KEY,
-			workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
-			s3_bucket_name VARCHAR(255) NOT NULL,  
-			s3_bucket_path VARCHAR(255),        
-			s3_ap_name VARCHAR(255), 
-			s3_env_var VARCHAR(255)
+		CREATE TABLE IF NOT EXISTS object_stores (
+			store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
+			path VARCHAR(255) NOT NULL,
+			envVar VARCHAR(255) NOT NULL,
+			accessPointArn VARCHAR(255) NOT NULL
 		);
 	`)
 	if err != nil {
-		w.Log.Error().Err(err).Msg("error creating efs_access_points table")
+		w.Log.Error().Err(err).Msg("error creating table object_stores")
 
 		tx.Rollback()
-		return fmt.Errorf("error creating s3_buckets table: %v", err)
+		return err
 	}
 
-	// Create the persistent_volumes table
+	// Subclass table for block stores (inherits from workspace_stores)
 	_, err = tx.Exec(`
-		CREATE TABLE IF NOT EXISTS persistent_volumes (
-			id UUID PRIMARY KEY,
-			workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE, 
-			pv_name VARCHAR(255) NOT NULL,  
-			pv_sc VARCHAR(255),            
-			pv_size VARCHAR(10) NOT NULL,      
-			pv_driver VARCHAR(255),           
-			pv_ap_name VARCHAR(255)
+		CREATE TABLE IF NOT EXISTS block_stores (
+			store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
+			accessPointId VARCHAR(255) NOT NULL,  
+			fsId VARCHAR(255) NOT NULL
 		);
 	`)
 	if err != nil {
-		w.Log.Error().Err(err).Msg("error creating efs_access_points table")
+		w.Log.Error().Err(err).Msg("error creating table block_stores")
 
 		tx.Rollback()
-		return fmt.Errorf("error creating persistent_volumes table: %v", err)
-	}
-
-	// Create the persistent_volume_claims table
-	_, err = tx.Exec(`
-		CREATE TABLE IF NOT EXISTS persistent_volume_claims (
-			id UUID PRIMARY KEY,
-			workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE, 
-			pvc_name VARCHAR(255) NOT NULL,       
-			pvc_sc VARCHAR(255),            
-			pvc_size VARCHAR(10) NOT NULL,        
-			pv_name VARCHAR(255)
-		);
-	`)
-	if err != nil {
-		w.Log.Error().Err(err).Msg("error creating efs_access_points table")
-
-		tx.Rollback()
-		return fmt.Errorf("error creating persistent_volume_claims table: %v", err)
+		return err
 	}
 
 	// Commit the transaction to persist changes
@@ -185,91 +160,56 @@ func (w *WorkspaceDB) InitTables() error {
 	return nil
 }
 
-// inserts a workspace and its related data into the database - will rollback if not all statements executed
-func (w *WorkspaceDB) InsertWorkspace(ws models.Workspace,
-	efsAccessPoints []models.AWSEFSAccessPoint,
-	s3Buckets []models.AWSS3Bucket,
-	pvs []models.PersistentVolume,
-	pvcs []models.PersistentVolumeClaim) (uuid.UUID, error) {
-
-	// Generate UUID for the workspace
-	workspaceID := uuid.New()
-
+func (w *WorkspaceDB) InsertWorkspace(req *models.ReqMessagePayload) (*sql.Tx, error) {
 	tx, err := w.DB.Begin()
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("error starting transaction: %v", err)
+		return nil, fmt.Errorf("error starting transaction: %v", err)
 	}
 
-	defer func() {
-		if err != nil {
-			tx.Rollback()
-		}
-	}()
-
-	// Insert workspace and get the workspace ID
+	// Insert the workspace
+	workspaceID := uuid.New() // Generate a new workspace ID
 	err = w.execQuery(tx, `
-		INSERT INTO workspaces (id, ws_name, ws_namespace, ws_service_account_name, ws_aws_role_name)
-		VALUES ($1, $2, $3, $4, $5)`,
-		workspaceID, ws.Name, ws.Namespace, ws.ServiceAccountName, ws.AWSRoleName)
+		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, status)
+		VALUES ($1, $2, $3, $4, $5, $6)`,
+		workspaceID, req.Name, req.Account, req.AccountOwner,
+		req.MemberGroup, req.Status)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("error inserting workspace: %v", err)
-	}
-	fmt.Printf("Inserted workspace with ID: %s\n", workspaceID)
-
-	// Insert multiple AWS EFS Access Points
-	for _, efs := range efsAccessPoints {
-		efsID := uuid.New()
-		err = w.execQuery(tx, `
-			INSERT INTO efs_access_points (id, workspace_id, efs_ap_name, efs_ap_fsid, efs_ap_root_directory, efs_ap_uid, efs_ap_gid, efs_ap_permissions)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			efsID, workspaceID, efs.Name, efs.FSID, efs.RootDir, efs.UID, efs.GID, efs.Permissions)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("error inserting AWS EFS Access Point: %v", err)
-		}
+		w.Log.Error().Err(err).Msg("error inserting workspace")
+		return nil, fmt.Errorf("error inserting workspace: %v", err)
 	}
 
-	// Insert multiple AWS S3 Buckets
-	for _, bucket := range s3Buckets {
-		s3BucketID := uuid.New()
-		err = w.execQuery(tx, `
-			INSERT INTO s3_buckets (id, workspace_id, s3_bucket_name, s3_bucket_path, s3_ap_name, s3_env_var)
-			VALUES ($1, $2, $3, $4, $5, $6)`,
-			s3BucketID, workspaceID, bucket.BucketName, bucket.BucketPath, bucket.AccessPointName, bucket.EnvVar)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("error inserting AWS S3 Bucket: %v", err)
-		}
-	}
+	return tx, nil
+}
 
-	// Insert multiple Persistent Volumes
-	for _, pv := range pvs {
-		pvID := uuid.New()
-		err = w.execQuery(tx, `
-			INSERT INTO persistent_volumes (id, workspace_id, pv_name, pv_sc, pv_size, pv_driver, pv_ap_name)
-			VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-			pvID, workspaceID, pv.PVName, pv.StorageClass, pv.Size, pv.Driver, pv.AccessPointName)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("error inserting Persistent Volume: %v", err)
-		}
+func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %v", err)
 	}
+	w.Log.Info().Msg("Transaction committed successfully")
+	return nil
+}
 
-	// Insert multiple Persistent Volume Claims
-	for _, pvc := range pvcs {
-		pvcID := uuid.New()
-		err = w.execQuery(tx, `
-			INSERT INTO persistent_volume_claims (id, workspace_id, pvc_name, pvc_sc, pvc_size, pv_name)
-			VALUES ($1, $2, $3, $4, $5, $6)`,
-			pvcID, workspaceID, pvc.PVCName, pvc.StorageClass, pvc.Size, pvc.PVName)
-		if err != nil {
-			return uuid.Nil, fmt.Errorf("error inserting Persistent Volume Claim: %v", err)
-		}
+func (w *WorkspaceDB) DeleteWorkspace(workspaceID uuid.UUID) error {
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %v", err)
+	}
+	defer tx.Rollback()
+
+	// Delete the workspace (this will also delete the associated stores due to ON DELETE CASCADE)
+	err = w.execQuery(tx, `DELETE FROM workspaces WHERE id = $1`, workspaceID)
+	if err != nil {
+		w.Log.Error().Err(err).Msg("error deleting workspace")
+		return err
 	}
 
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
-		return uuid.Nil, fmt.Errorf("error committing transaction: %v", err)
+		return fmt.Errorf("error committing transaction: %v", err)
 	}
-	w.Log.Info().Msg("Transaction committed successfully for workspaceID: " + workspaceID.String())
-	return workspaceID, nil
+
+	w.Log.Info().Msg("Workspace deleted successfully")
+	return nil
 }
 
 func (w *WorkspaceDB) execQuery(tx *sql.Tx, query string, args ...interface{}) error {

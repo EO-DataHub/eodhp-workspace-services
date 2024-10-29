@@ -4,28 +4,22 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+
 	"time"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/apache/pulsar-client-go/pulsar"
-	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 type Notifier interface {
-	Notify(event EventPayload) error
+	Publish(event models.ReqMessagePayload) error
 	Close()
 }
 
-type EventPayload struct {
-	WorkspaceID uuid.UUID `json:"workspace_id"`
-	Action      string    `json:"action"` // e.g., create, update, delete - currently only create is used
-}
-
 type EventPublisher struct {
-	client    pulsar.Client
-	producer  pulsar.Producer
-	eventChan chan EventPayload // Queue our messages in this Channel
-	quitChan  chan struct{}     // Channel to signal shutdown
+	client   pulsar.Client
+	producer pulsar.Producer
 }
 
 const maxRetries = 3 // Hardcoded and slightly random for now - can be made configurable
@@ -47,40 +41,19 @@ func NewEventPublisher(pulsarURL, topic string) (*EventPublisher, error) {
 		return nil, fmt.Errorf("could not create Pulsar producer: %w", err)
 	}
 
-	// Initialize the EventPublisher
-	publisher := &EventPublisher{
-		client:    client,
-		producer:  producer,
-		eventChan: make(chan EventPayload, 100), // Buffered channel for events - should be ok for now
-		quitChan:  make(chan struct{}),
-	}
-
-	// Start the goroutine that processes events - we want this as separate go routine to prevent blocking API calls
-	go publisher.run()
-
-	log.Println("Pulsar client and producer initialized successfully")
-	return publisher, nil
-}
-
-// run listens on the event channel and sends events to Pulsar
-func (p *EventPublisher) run() {
-	for {
-		select {
-		case event := <-p.eventChan:
-			p.publishWithRetry(event)
-		case <-p.quitChan:
-			log.Println("Stopping event publisher...")
-			return
-		}
-	}
+	log.Info().Msg("Pulsar client and producer initialized successfully")
+	return &EventPublisher{
+		client:   client,
+		producer: producer,
+	}, nil
 }
 
 // Tries to publish an event, retrying if necessary
-func (p *EventPublisher) publishWithRetry(event EventPayload) {
+func (p *EventPublisher) Publish(event models.ReqMessagePayload) error {
 	message, err := json.Marshal(event)
 	if err != nil {
-		log.Printf("Failed to serialize event: %v", err)
-		return
+		log.Error().Err(err).Msg("Failed to serialize event")
+		return err
 	}
 
 	for attempt := 1; attempt <= maxRetries; attempt++ {
@@ -88,37 +61,23 @@ func (p *EventPublisher) publishWithRetry(event EventPayload) {
 			Payload: message,
 		})
 		if err == nil {
-			log.Printf("Event sent to Pulsar: %s", message)
-			return
+			return err
 		}
-
-		log.Printf("Failed to send event to Pulsar (attempt %d): %v", attempt, err)
+		log.Error().Int("attempt", attempt).Err(err).Msg("Failed to send event to Pulsar")
 
 		// Reconnect or retry logic, wait before retrying
 		if attempt < maxRetries {
 			time.Sleep(2 * time.Second) // Simple backoff, adjust as needed
-		} else {
-			log.Printf("Giving up after %d attempts", maxRetries)
 		}
 	}
-}
+	log.Error().Int("maxRetries", maxRetries).Msg("Giving up after maxRetries attempts")
+	return fmt.Errorf("failed to publish event after %d attempts: %w", maxRetries, err)
 
-// Instead of publishing directly, it enqueues the event on the event channel
-func (p *EventPublisher) Notify(event EventPayload) error {
-	select {
-	case p.eventChan <- event:
-		log.Printf("Event enqueued: %+v", event)
-		return nil
-	case <-time.After(2 * time.Second): // Timeout in case the channel is full - adjust as needed
-		return fmt.Errorf("failed to enqueue event: queue is full")
-	}
 }
 
 // Close the Pulsar client, producer, and stop the goroutine
 func (p *EventPublisher) Close() {
-	close(p.quitChan)
 	p.producer.Close()
 	p.client.Close()
-	close(p.eventChan)
-	log.Println("Pulsar client and producer closed successfully")
+	log.Info().Msg("Pulsar client and producer closed successfully")
 }

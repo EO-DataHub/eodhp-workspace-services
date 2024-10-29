@@ -11,10 +11,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var runServerCmd = &cobra.Command{
-	Use:   "runserver",
-	Short: "Run the server",
-	Long:  `Run the workspace services server`,
+var serveCmd = &cobra.Command{
+	Use:   "serve",
+	Short: "Run the HTTP server for handling API requests",
 	Run: func(cmd *cobra.Command, args []string) {
 
 		setUp()
@@ -39,11 +38,9 @@ var runServerCmd = &cobra.Command{
 		}
 
 		// Register the routes
-
-		// s3 routes
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
 
-		// workspace routes
+		// Workspace provisioning routes
 		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
 		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(workspaceDB))).Methods(http.MethodGet)
 		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(workspaceDB))).Methods(http.MethodPut)
@@ -56,14 +53,13 @@ var runServerCmd = &cobra.Command{
 
 			log.Error().Err(err).Msg("could not start server")
 		}
-
-		log.Printf("Server is running on http://localhost:%d", port)
+		log.Info().Msg(fmt.Sprintf("Server running on http://localhost:%d", port))
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(runServerCmd)
-	runServerCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
-	runServerCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
+	rootCmd.AddCommand(serveCmd)
+	serveCmd.Flags().StringVar(&host, "host", "0.0.0.0", "host to run the server on")
+	serveCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
 
 }
