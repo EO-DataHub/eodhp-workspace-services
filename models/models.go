@@ -2,63 +2,40 @@ package models
 
 import "github.com/google/uuid"
 
-type ReqAWSEFSAccessPoint struct {
-	Name string
+type ErrorResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"` // Message is optional; can omit if empty
 }
 
-type ReqAWSS3Bucket struct {
-	BucketName string
+// Represents an object store entry in the database.
+type ObjectStore struct {
+	StoreID        uuid.UUID `json:"store_id"`
+	Name           string    `json:"name"`
+	Path           string    `json:"path"`
+	EnvVar         string    `json:"env_var"`
+	AccessPointArn string    `json:"access_point_arn"`
 }
 
-type ReqStores struct {
-	Object []ReqAWSS3Bucket
-	Block  []ReqAWSEFSAccessPoint
-}
-
-type ReqMessagePayload struct {
-	Status        string    `json:"status"`
+// BlockStore represents a block store entry in the database.
+type BlockStore struct {
+	StoreID       uuid.UUID `json:"store_id"`
 	Name          string    `json:"name"`
-	Account       uuid.UUID `json:"account"`
-	AccountOwner  string    `json:"accountOwner"`
-	MemberGroup   string    `json:"memberGroup"`
-	Timestamp     int64     `json:"timestamp"`
-	Stores        ReqStores `json:"stores"`
+	AccessPointID string    `json:"access_point_id"`
+	FSID          string    `json:"fs_id"`
 }
 
-type AckPayload struct {
-	MessagePayload ReqMessagePayload `json:"messagePayload"`
-	AWS            AckAWSStatus      `json:"aws"`
+type Stores struct {
+	Object []ObjectStore `json:"object"`
+	Block  []BlockStore  `json:"block"`
 }
 
-type AckAWSStatus struct {
-	Role AckAWSRoleStatus `json:"role,omitempty"`
-	EFS  AckEFSStatus     `json:"efs,omitempty"`
-	S3   AckS3Status      `json:"s3,omitempty"`
-}
-
-type AckAWSRoleStatus struct {
-	Name string `json:"name,omitempty"`
-	ARN  string `json:"arn,omitempty"`
-}
-
-type AckEFSStatus struct {
-	AccessPoints []AckEFSAccessStatus `json:"accessPoints,omitempty"`
-}
-
-type AckEFSAccessStatus struct {
-	Name          string `json:"name,omitempty"`
-	AccessPointID string `json:"accessPointID,omitempty"`
-	FSID          string `json:"fsID,omitempty"`
-}
-
-type AckS3Status struct {
-	Buckets []AckS3BucketStatus `json:"buckets,omitempty"`
-}
-
-type AckS3BucketStatus struct {
-	Name           string `json:"name,omitempty"`
-	AccessPointARN string `json:"accessPointARN,omitempty"`
-	RolePolicy     string `json:"rolePolicy,omitempty"`
-	Path           string `json:"path,omitempty"`
-	EnvVar         string `json:"envVar,omitempty"`
+type Workspace struct {
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	Account      uuid.UUID `json:"account"`
+	AccountOwner string    `json:"account_owner"`
+	MemberGroup  string    `json:"member_group"`
+	Status       string    `json:"status"`
+	Timestamp    int64     `json:"timestamp"`
+	Stores       []Stores  `json:"stores"`
 }

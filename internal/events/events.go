@@ -13,7 +13,7 @@ import (
 )
 
 type Notifier interface {
-	Publish(event models.ReqMessagePayload) error
+	Publish(event models.Workspace) error
 	Close()
 }
 
@@ -49,7 +49,7 @@ func NewEventPublisher(pulsarURL, topic string) (*EventPublisher, error) {
 }
 
 // Tries to publish an event, retrying if necessary
-func (p *EventPublisher) Publish(event models.ReqMessagePayload) error {
+func (p *EventPublisher) Publish(event models.Workspace) error {
 	message, err := json.Marshal(event)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to serialize event")

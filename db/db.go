@@ -10,6 +10,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 )
@@ -160,7 +161,166 @@ func (w *WorkspaceDB) InitTables() error {
 	return nil
 }
 
-func (w *WorkspaceDB) InsertWorkspace(req *models.ReqMessagePayload) (*sql.Tx, error) {
+func (db *WorkspaceDB) GetUserWorkspaces(username string) ([]models.Workspace, error) {
+
+	// Get the workspaces for the user
+	workspaces, err := db.getWorkspaces(username)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve associated block stores for each workspace
+	blockStores, err := db.getBlockStores(workspaces)
+	if err != nil {
+		return nil, err
+	}
+
+	// Retrieve associated object stores for each workspace
+	objectStores, err := db.getObjectStores(workspaces)
+	if err != nil {
+		return nil, err
+	}
+
+	// Aggregate results into the response structure
+	for i := range workspaces {
+
+		workspaces[i].Stores = []models.Stores{
+			{
+				Object: objectStores[workspaces[i].ID],
+				Block:  blockStores[workspaces[i].ID],
+			},
+		}
+	}
+
+	return workspaces, nil
+}
+
+func (db *WorkspaceDB) getWorkspaces(username string) ([]models.Workspace, error) {
+	query := `SELECT id, name, account, accountowner, membergroup, status FROM dev.workspaces WHERE accountowner = $1`
+	rows, err := db.DB.Query(query, username)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspaces: %v", err)
+	}
+	defer rows.Close()
+
+	var workspaces []models.Workspace
+	for rows.Next() {
+		var ws models.Workspace
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.AccountOwner, &ws.MemberGroup, &ws.Status); err != nil {
+			return nil, fmt.Errorf("error scanning workspace: %v", err)
+		}
+		workspaces = append(workspaces, ws)
+	}
+	return workspaces, nil
+}
+
+// getBlockStores retrieves the block stores for each workspace in the provided list.
+func (db *WorkspaceDB) getBlockStores(workspaces []models.Workspace) (map[uuid.UUID][]models.BlockStore, error) {
+	workspaceIDs := extractWorkspaceIDs(workspaces)
+	query := `
+		SELECT ws.workspace_id, ws.name, bs.store_id, bs.accesspointid, bs.fsid
+		FROM dev.workspace_stores ws
+		INNER JOIN dev.block_stores bs ON bs.store_id = ws.id
+		WHERE ws.workspace_id = ANY($1)`
+	rows, err := db.DB.Query(query, pq.Array(workspaceIDs))
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving block stores: %v", err)
+	}
+	defer rows.Close()
+
+	blockStores := make(map[uuid.UUID][]models.BlockStore)
+	for rows.Next() {
+		var workspaceID uuid.UUID
+		var bs models.BlockStore
+		if err := rows.Scan(&workspaceID, &bs.Name, &bs.StoreID, &bs.AccessPointID, &bs.FSID); err != nil {
+			return nil, fmt.Errorf("error scanning block store: %v", err)
+		}
+		blockStores[workspaceID] = append(blockStores[workspaceID], bs)
+	}
+	return blockStores, nil
+}
+
+// getObjectStores retrieves the object stores for each workspace in the provided list.
+func (db *WorkspaceDB) getObjectStores(workspaces []models.Workspace) (map[uuid.UUID][]models.ObjectStore, error) {
+	workspaceIDs := extractWorkspaceIDs(workspaces)
+	query := `
+		SELECT ws.workspace_id, ws.name, os.store_id, os.path, os.envvar, os.accesspointarn
+		FROM dev.workspace_stores ws
+		INNER JOIN dev.object_stores os ON os.store_id = ws.id
+		WHERE ws.workspace_id = ANY($1)`
+	rows, err := db.DB.Query(query, pq.Array(workspaceIDs))
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving object stores: %v", err)
+	}
+	defer rows.Close()
+
+	objectStores := make(map[uuid.UUID][]models.ObjectStore)
+	for rows.Next() {
+		var workspaceID uuid.UUID
+		var os models.ObjectStore
+		if err := rows.Scan(&workspaceID, &os.Name, &os.StoreID, &os.Path, &os.EnvVar, &os.AccessPointArn); err != nil {
+			return nil, fmt.Errorf("error scanning object store: %v", err)
+		}
+		objectStores[workspaceID] = append(objectStores[workspaceID], os)
+	}
+	return objectStores, nil
+}
+
+// Helper function to extract workspace IDs for the query
+func extractWorkspaceIDs(workspaces []models.Workspace) []uuid.UUID {
+	ids := make([]uuid.UUID, len(workspaces))
+	for i, ws := range workspaces {
+		ids[i] = ws.ID
+	}
+	return ids
+}
+
+// func (w *WorkspaceDB) GetUserWorkspaces(username string) ([]models.ReqMessagePayload, error) {
+// 	var workspaces []models.ReqMessagePayload
+
+// 	// Query for workspaces with matching accountOwner
+// 	query := `
+// 		SELECT id, name, account, accountOwner, memberGroup, status
+// 		FROM workspaces
+// 		WHERE accountOwner = $1
+// 	`
+
+// 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+// 	defer cancel()
+
+// 	rows, err := w.DB.QueryContext(ctx, query, username)
+// 	if err != nil {
+// 		w.Log.Error().Err(err).Msg("Failed to retrieve workspaces")
+// 		return nil, err
+// 	}
+// 	defer rows.Close()
+
+// 	for rows.Next() {
+// 		var workspace models.ReqMessagePayload
+// 		var accountID uuid.UUID
+
+// 		// Scan the row into workspace fields
+// 		err := rows.Scan(&accountID, &workspace.Name, &workspace.Account, &workspace.AccountOwner, &workspace.MemberGroup, &workspace.Status)
+// 		if err != nil {
+// 			w.Log.Error().Err(err).Msg("Failed to scan workspace row")
+// 			return nil, err
+// 		}
+
+// 		// Set other fields as needed
+// 		workspace.Account = accountID
+// 		workspace.Timestamp = time.Now().Unix()
+
+// 		workspaces = append(workspaces, workspace)
+// 	}
+
+// 	if err := rows.Err(); err != nil {
+// 		return nil, err
+// 	}
+
+// 	return workspaces, nil
+// }
+
+func (w *WorkspaceDB) InsertWorkspace(req *models.Workspace) (*sql.Tx, error) {
 	tx, err := w.DB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("error starting transaction: %v", err)
