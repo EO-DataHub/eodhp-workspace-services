@@ -20,8 +20,7 @@ func CreateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 func GetWorkspaces(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		// placeholder for the implementation
-		http.Error(w, "Failed to get workspaces", http.StatusInternalServerError)
+		services.GetWorkspacesService(workspaceDB, w, r)
 	}
 }
 

@@ -10,12 +10,12 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
@@ -24,82 +24,98 @@ import (
 
 // Implements the Notifier interface for testing
 type MockEventPublisher struct {
-	PublishedMessage models.ReqMessagePayload
-	AckResponse      models.AckPayload
+	PublishedMessage models.Workspace
+	Response         models.Workspace
 }
 
 // Mock the Publish function to avoid hitting real external dependencies
-func (m *MockEventPublisher) Publish(event models.ReqMessagePayload) error {
+func (m *MockEventPublisher) Publish(event models.Workspace) error {
 	m.PublishedMessage = event
 
 	// Determine the response based on the action (status)
+	// Prepare the mock response based on the operation status
 	switch event.Status {
 	case "creating":
-		// Return a full ACK response
-		m.AckResponse = models.AckPayload{
-			MessagePayload: event,
-			AWS: models.AckAWSStatus{
-				Role: models.AckAWSRoleStatus{
-					Name: "WorkspaceRole",
-					ARN:  "arn:aws:iam::123456789012:role/WorkspaceRole",
-				},
-				EFS: models.AckEFSStatus{
-					AccessPoints: []models.AckEFSAccessStatus{
-						{AccessPointID: "fsap-0123456789abcdef0", FSID: "fs-54321abcd", Name: "primary-efs-access-point"},
+		// Populate a full Workspace response for "creating" status
+		m.Response = models.Workspace{
+			ID:           uuid.New(), // Simulate new ID
+			Name:         event.Name,
+			Account:      event.Account,
+			AccountOwner: event.AccountOwner,
+			MemberGroup:  event.MemberGroup,
+			Status:       "created",
+			Stores: &[]models.Stores{
+				{
+					Object: []models.ObjectStore{
+						{
+							StoreID:        uuid.New(),
+							Path:           "/test-bucket-path",
+							EnvVar:         "TEST_BUCKET",
+							AccessPointArn: "arn:aws:s3:accesspoint:test-region:123456789012:test-bucket-access-point",
+						},
 					},
-				},
-				S3: models.AckS3Status{
-					Buckets: []models.AckS3BucketStatus{
-						{Name: "test-bucket", AccessPointARN: "arn:aws:s3:accesspoint:test-region:123456789012:test-bucket-access-point", Path: "/test-bucket-path", EnvVar: "TEST_BUCKET"},
+					Block: []models.BlockStore{
+						{
+							StoreID:       uuid.New(),
+							AccessPointID: "fsap-0123456789abcdef0",
+							FSID:          "fs-54321abcd",
+						},
 					},
 				},
 			},
 		}
-		m.AckResponse.MessagePayload.Status = "created"
 	case "updated":
-		// Return a full ACK response
-		m.AckResponse = models.AckPayload{
-			MessagePayload: event,
-			AWS: models.AckAWSStatus{
-				Role: models.AckAWSRoleStatus{
-					Name: "UpdatedWorkspaceRole",
-					ARN:  "arn:aws:iam::123456789012:role/UpdatedWorkspaceRole",
-				},
-				EFS: models.AckEFSStatus{
-					AccessPoints: []models.AckEFSAccessStatus{
-						{AccessPointID: "fsap-9876543210fedcba", FSID: "fs-98765zyxw", Name: "updated-efs-access-point"},
+		// Populate a response for "updated" status
+		m.Response = models.Workspace{
+			ID:           event.ID,
+			Name:         event.Name,
+			Account:      event.Account,
+			AccountOwner: event.AccountOwner,
+			MemberGroup:  event.MemberGroup,
+			Status:       "updated",
+			Stores: &[]models.Stores{
+				{
+					Object: []models.ObjectStore{
+						{
+							StoreID:        uuid.New(),
+							Path:           "/updated-bucket-path",
+							EnvVar:         "UPDATED_BUCKET",
+							AccessPointArn: "arn:aws:s3:accesspoint:test-region:123456789012:updated-bucket-access-point",
+						},
 					},
-				},
-				S3: models.AckS3Status{
-					Buckets: []models.AckS3BucketStatus{
-						{Name: "updated-bucket", AccessPointARN: "arn:aws:s3:accesspoint:test-region:123456789012:updated-bucket-access-point", Path: "/updated-bucket-path", EnvVar: "UPDATED_BUCKET"},
+					Block: []models.BlockStore{
+						{
+							StoreID:       uuid.New(),
+							AccessPointID: "fsap-9876543210fedcba",
+							FSID:          "fs-98765zyxw",
+						},
 					},
 				},
 			},
 		}
-		m.AckResponse.MessagePayload.Status = "updated"
 	case "deleted":
-		// only return the status and original event
-		m.AckResponse = models.AckPayload{
-			MessagePayload: event,
-			AWS:            models.AckAWSStatus{}, // No AWS-related information for deletion
+		// Populate a response with minimal information for "deleted" status
+		m.Response = models.Workspace{
+			ID:           event.ID,
+			Name:         event.Name,
+			Account:      event.Account,
+			AccountOwner: event.AccountOwner,
+			MemberGroup:  event.MemberGroup,
+			Status:       "deleted",
 		}
-		m.AckResponse.MessagePayload.Status = "deleted"
 	default:
-		// Handle unknown actions
-		m.AckResponse = models.AckPayload{
-			MessagePayload: event,
-			AWS:            models.AckAWSStatus{},
+		// Populate a response for unknown status
+		m.Response = models.Workspace{
+			ID:           event.ID,
+			Name:         event.Name,
+			Account:      event.Account,
+			AccountOwner: event.AccountOwner,
+			MemberGroup:  event.MemberGroup,
+			Status:       "unknown",
 		}
-		m.AckResponse.MessagePayload.Status = "unknown"
 	}
 
 	return nil
-}
-
-// Mock the ReceiveAck function to simulate receiving an ACK response
-func (m *MockEventPublisher) ReceiveAck(messagePayload models.ReqMessagePayload) (*models.AckPayload, error) {
-	return &m.AckResponse, nil
 }
 
 // Mock the Close function to avoid hitting real external dependencies (simulate)
@@ -190,11 +206,10 @@ func TestAPIOperations(t *testing.T) {
 func testCreateWorkspace(t *testing.T, mockDB *db.WorkspaceDB) {
 
 	// Mock a workspace request for creation
-	workspaceRequest := models.ReqMessagePayload{
+	workspaceRequest := models.Workspace{
 		Status:       "creating",
 		Name:         "test-workspace",
 		AccountOwner: "test-owner",
-		Timestamp:    time.Now().Unix(),
 	}
 
 	// Convert the workspace request to JSON
@@ -218,12 +233,11 @@ func testCreateWorkspace(t *testing.T, mockDB *db.WorkspaceDB) {
 	// Check the status code
 	assert.Equal(t, http.StatusCreated, rr.Code)
 
-	// Verify that the ACK payload is correct for creation
-	ack := mockDB.Events.(*MockEventPublisher).AckResponse
-	assert.Equal(t, "created", ack.MessagePayload.Status)
-	assert.NotEmpty(t, ack.AWS.Role.ARN)
-	assert.NotEmpty(t, ack.AWS.EFS.AccessPoints)
-	assert.NotEmpty(t, ack.AWS.S3.Buckets)
+	// Verify that the workspace creation event was published
+	publishedMessage := mockDB.Events.(*MockEventPublisher).PublishedMessage
+	assert.Equal(t, "creating", publishedMessage.Status)
+	assert.Equal(t, "test-workspace", publishedMessage.Name)
+	assert.Equal(t, "test-owner", publishedMessage.AccountOwner)
 
 	// Verify that the workspace was inserted into the database
 	var workspaceCount int

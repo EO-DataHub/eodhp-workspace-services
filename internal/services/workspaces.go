@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"net/http"
-	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
@@ -13,38 +12,63 @@ import (
 	"github.com/google/uuid"
 )
 
-// Example request - will mature as we understand the requirements better
-//
-//	{
-//	    "status": "created",
-//	    "name": "jlangstone-new",
-//	    "stores": {
-//	        "object": [
-//	            {
-//	                "bucketName": "example-bucket"
-//	            }
-//	        ],
-//	        "block": [
-//	            {
-//	                "name": "example-efs"
-//	            }
-//	        ]
-//	    }
-//	}
-//
+func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+
+	// Get the claims from the context
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		return
+	}
+
+	// Retrieve user workspaces based on the username
+	// TODO: retrieve workspaces based on the member group
+	workspaces, err := workspaceDB.GetUserWorkspaces(claims.Username)
+	if err != nil {
+		workspaceDB.Log.Error().Err(err).Msg("Failed to retrieve workspaces for user")
+		http.Error(w, "Failed to retrieve workspaces", http.StatusInternalServerError) // TODO: encode proper error response
+		return
+	}
+
+	// Prepare response with full details
+	var responses []models.Workspace
+	for _, ws := range workspaces {
+		response := models.Workspace{
+			ID:           ws.ID,
+			Name:         ws.Name,
+			Account:      ws.Account,
+			AccountOwner: ws.AccountOwner,
+			MemberGroup:  ws.MemberGroup,
+			Status:       ws.Status,
+			Stores:       ws.Stores,
+		}
+		responses = append(responses, response)
+	}
+
+	// Encode and send the response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	if err := json.NewEncoder(w).Encode(struct {
+		Workspaces []models.Workspace `json:"workspaces"`
+	}{Workspaces: responses}); err != nil {
+		workspaceDB.Log.Error().Err(err).Msg("Failed to encode response")
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
+
 // Handles the creation of a workspace and its related components
 func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
 
 	// Get the claims from the context
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
-
 	if !ok {
 		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
 		return
 	}
 
 	// Parse and decode the request body into a MessagePayload object
-	var messagePayload models.ReqMessagePayload
+	var messagePayload models.Workspace
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
 		workspaceDB.Log.Error().Err(err).Msg("Invalid request payload")
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -55,9 +79,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	messagePayload.AccountOwner = claims.Username
 	messagePayload.Account = uuid.New()        // TODO: will be replaced with the actual account ID
 	messagePayload.MemberGroup = "placeholder" // TODO: will be replaced with the actual member group from Keycloak
-
-	// Add the timestamp to the message payload to track the state of the workspace request
-	messagePayload.Timestamp = time.Now().Unix()
 
 	// Create the workspace transaction
 	tx, err := workspaceDB.InsertWorkspace(&messagePayload)
@@ -71,7 +92,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	if err != nil {
 		workspaceDB.Log.Error().Err(err).Msg("Failed to publish event.")
 
-		tx.Rollback()	// Rollback the transaction if the event fails to publish
+		tx.Rollback() // Rollback the transaction if the event fails to publish
 		http.Error(w, "Failed to create workspace event", http.StatusInternalServerError)
 		return
 	}
