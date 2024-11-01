@@ -26,7 +26,6 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	workspaces, err := workspaceDB.GetUserWorkspaces(claims.Username)
 	if err != nil {
 		workspaceDB.Log.Error().Err(err).Msg("Failed to retrieve workspaces for user")
-		//w.WriteHeader(http.StatusInternalServerError)
 		http.Error(w, "Failed to retrieve workspaces", http.StatusInternalServerError) // TODO: encode proper error response
 		return
 	}
