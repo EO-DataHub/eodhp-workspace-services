@@ -44,7 +44,7 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			AccountOwner: event.AccountOwner,
 			MemberGroup:  event.MemberGroup,
 			Status:       "created",
-			Stores: []models.Stores{
+			Stores: &[]models.Stores{
 				{
 					Object: []models.ObjectStore{
 						{
@@ -73,7 +73,7 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			AccountOwner: event.AccountOwner,
 			MemberGroup:  event.MemberGroup,
 			Status:       "updated",
-			Stores: []models.Stores{
+			Stores: &[]models.Stores{
 				{
 					Object: []models.ObjectStore{
 						{

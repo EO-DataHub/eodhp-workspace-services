@@ -183,7 +183,7 @@ func (db *WorkspaceDB) GetUserWorkspaces(username string) ([]models.Workspace, e
 	// Aggregate results into the response structure
 	for i := range workspaces {
 
-		workspaces[i].Stores = []models.Stores{
+		workspaces[i].Stores = &[]models.Stores{
 			{
 				Object: objectStores[workspaces[i].ID],
 				Block:  blockStores[workspaces[i].ID],

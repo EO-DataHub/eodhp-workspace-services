@@ -36,5 +36,5 @@ type Workspace struct {
 	AccountOwner string    `json:"account_owner"`
 	MemberGroup  string    `json:"member_group"`
 	Status       string    `json:"status"`
-	Stores       []Stores  `json:"stores"`
+	Stores       *[]Stores `json:"stores"`
 }
