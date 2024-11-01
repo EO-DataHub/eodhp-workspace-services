@@ -17,5 +17,5 @@ var consumeCmd = &cobra.Command{
 }
 
 func init() {
-	fmt.Println("consume initialized")
+	rootCmd.AddCommand(consumeCmd)
 }

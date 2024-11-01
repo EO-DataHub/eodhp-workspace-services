@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
@@ -45,7 +44,6 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			AccountOwner: event.AccountOwner,
 			MemberGroup:  event.MemberGroup,
 			Status:       "created",
-			Timestamp:    time.Now().Unix(),
 			Stores: []models.Stores{
 				{
 					Object: []models.ObjectStore{
@@ -75,7 +73,6 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			AccountOwner: event.AccountOwner,
 			MemberGroup:  event.MemberGroup,
 			Status:       "updated",
-			Timestamp:    time.Now().Unix(),
 			Stores: []models.Stores{
 				{
 					Object: []models.ObjectStore{
@@ -105,7 +102,6 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			AccountOwner: event.AccountOwner,
 			MemberGroup:  event.MemberGroup,
 			Status:       "deleted",
-			Timestamp:    time.Now().Unix(),
 		}
 	default:
 		// Populate a response for unknown status
@@ -116,7 +112,6 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			AccountOwner: event.AccountOwner,
 			MemberGroup:  event.MemberGroup,
 			Status:       "unknown",
-			Timestamp:    time.Now().Unix(),
 		}
 	}
 
@@ -215,7 +210,6 @@ func testCreateWorkspace(t *testing.T, mockDB *db.WorkspaceDB) {
 		Status:       "creating",
 		Name:         "test-workspace",
 		AccountOwner: "test-owner",
-		Timestamp:    time.Now().Unix(),
 	}
 
 	// Convert the workspace request to JSON

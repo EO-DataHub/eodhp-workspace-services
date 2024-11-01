@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"net/http"
-	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
@@ -26,19 +25,9 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	// TODO: retrieve workspaces based on the member group
 	workspaces, err := workspaceDB.GetUserWorkspaces(claims.Username)
 	if err != nil {
-
-		// errorResponse := models.ErrorResponse{
-		// 	Status:  "error",
-		// 	Message: err.Error(),
-		// }
-
-		// w.Header().Set("Content-Type", "application/json")
-		// w.WriteHeader(http.StatusInternalServerError) // HTTP 500 Internal Server Error
-		// return
-
 		workspaceDB.Log.Error().Err(err).Msg("Failed to retrieve workspaces for user")
-		w.WriteHeader(http.StatusInternalServerError)
-		//http.Error(w, "Failed to retrieve workspaces", http.StatusInternalServerError)
+		//w.WriteHeader(http.StatusInternalServerError)
+		http.Error(w, "Failed to retrieve workspaces", http.StatusInternalServerError) // TODO: encode proper error response
 		return
 	}
 
@@ -52,7 +41,6 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 			AccountOwner: ws.AccountOwner,
 			MemberGroup:  ws.MemberGroup,
 			Status:       ws.Status,
-			Timestamp:    ws.Timestamp,
 			Stores:       ws.Stores,
 		}
 		responses = append(responses, response)
@@ -92,9 +80,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	messagePayload.AccountOwner = claims.Username
 	messagePayload.Account = uuid.New()        // TODO: will be replaced with the actual account ID
 	messagePayload.MemberGroup = "placeholder" // TODO: will be replaced with the actual member group from Keycloak
-
-	// Add the timestamp to the message payload to track the state of the workspace request
-	messagePayload.Timestamp = time.Now().Unix()
 
 	// Create the workspace transaction
 	tx, err := workspaceDB.InsertWorkspace(&messagePayload)
