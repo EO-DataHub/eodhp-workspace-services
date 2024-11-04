@@ -160,10 +160,10 @@ func (w *WorkspaceDB) InitTables() error {
 	return nil
 }
 
-func (db *WorkspaceDB) GetUserWorkspaces(username string) ([]models.Workspace, error) {
+func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]models.Workspace, error) {
 
-	// Get the workspaces for the user
-	workspaces, err := db.getWorkspaces(username)
+	// Get the workspaces the user is a member of
+	workspaces, err := db.getWorkspaces(memberGroups)
 	if err != nil {
 		return nil, err
 	}
@@ -194,9 +194,9 @@ func (db *WorkspaceDB) GetUserWorkspaces(username string) ([]models.Workspace, e
 	return workspaces, nil
 }
 
-func (db *WorkspaceDB) getWorkspaces(username string) ([]models.Workspace, error) {
-	query := `SELECT id, name, account, accountowner, membergroup, status FROM workspaces WHERE accountowner = $1`
-	rows, err := db.DB.Query(query, username)
+func (db *WorkspaceDB) getWorkspaces(memberGroups []string) ([]models.Workspace, error) {
+	query := `SELECT id, name, account, accountowner, membergroup, status FROM workspaces WHERE memberGroup = ANY($1)`
+	rows, err := db.DB.Query(query, pq.Array(memberGroups))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %v", err)
 	}
@@ -213,7 +213,7 @@ func (db *WorkspaceDB) getWorkspaces(username string) ([]models.Workspace, error
 	return workspaces, nil
 }
 
-// getBlockStores retrieves the block stores for each workspace in the provided list.
+// Retrieves the block stores for each workspace in the provided list.
 func (db *WorkspaceDB) getBlockStores(workspaces []models.Workspace) (map[uuid.UUID][]models.BlockStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `
@@ -239,7 +239,7 @@ func (db *WorkspaceDB) getBlockStores(workspaces []models.Workspace) (map[uuid.U
 	return blockStores, nil
 }
 
-// getObjectStores retrieves the object stores for each workspace in the provided list.
+// Retrieves the object stores for each workspace in the provided list.
 func (db *WorkspaceDB) getObjectStores(workspaces []models.Workspace) (map[uuid.UUID][]models.ObjectStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `

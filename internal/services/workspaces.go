@@ -21,9 +21,8 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 		return
 	}
 
-	// Retrieve user workspaces based on the username
-	// TODO: retrieve workspaces based on the member group
-	workspaces, err := workspaceDB.GetUserWorkspaces(claims.Username)
+	// Retrieve user workspaces based on the member_groups embedded in the claims
+	workspaces, err := workspaceDB.GetUserWorkspaces(claims.MemberGroups)
 	if err != nil {
 		workspaceDB.Log.Error().Err(err).Msg("Failed to retrieve workspaces for user")
 		http.Error(w, "Failed to retrieve workspaces", http.StatusInternalServerError) // TODO: encode proper error response
