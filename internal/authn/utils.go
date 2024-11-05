@@ -11,8 +11,9 @@ var ErrInvalidClaims = errors.New("invalid claims")
 
 type Claims struct {
 	jwt.StandardClaims
-	Username    string `json:"preferred_username"`
-	RealmAccess struct {
+	Username     string   `json:"preferred_username"`
+	MemberGroups []string `json:"member_groups"`
+	RealmAccess  struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
 }
