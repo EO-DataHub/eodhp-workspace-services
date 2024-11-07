@@ -21,16 +21,24 @@ func WriteErrResponse(w http.ResponseWriter, statusCode int, response interface{
 // WriteDatabaseErrorResponse handles pq.Error and writes JSON error responses
 func HandleErrResponse(w http.ResponseWriter, statusCode int, err error) {
 	var pqErr *pq.Error
+	var response models.Response
+
 	if errors.As(err, &pqErr) {
-		response := models.Response{
+		response = models.Response{
 			Success:      0,
 			ErrorCode:    pqErr.Code.Name(),
 			ErrorDetails: pqErr.Message,
 		}
-		WriteErrResponse(w, statusCode, response)
+
 	} else {
-		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		response = models.Response{
+			Success:      0,
+			ErrorDetails: err.Error(),
+		}
+		//http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
+
+	WriteErrResponse(w, statusCode, response)
 }
 
 func HandleSuccessResponse(w http.ResponseWriter, statusCode int, headers map[string]string, response interface{}) {

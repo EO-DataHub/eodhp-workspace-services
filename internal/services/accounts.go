@@ -69,6 +69,7 @@ func GetAccountsService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *h
 }
 
 func UpdateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+
 	vars := mux.Vars(r)
 
 	accountID, err := uuid.Parse(vars["account-id"])
