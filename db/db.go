@@ -60,10 +60,6 @@ func (w *WorkspaceDB) Close() error {
 	w.Log.Info().Msg("database connection closed")
 
 	w.Events.Close()
-	w.Log.Info().Msg("event publisher closed")
-	w.DB = nil
-	w.Events = nil
-	w.Log = nil
 
 	return nil
 }
@@ -73,7 +69,7 @@ func (w *WorkspaceDB) InitTables() error {
 	err := w.DB.Ping()
 	if err != nil {
 		w.Log.Error().Err(err).Msg("Database connection ping failed")
-		return fmt.Errorf("database connection ping failed: %v", err)
+		return fmt.Errorf("database connection ping failed: %w", err)
 	}
 
 	w.Log.Debug().Msg("Database connection is healthy, starting table initialization")
@@ -81,7 +77,23 @@ func (w *WorkspaceDB) InitTables() error {
 	tx, err := w.DB.Begin()
 	if err != nil {
 		w.Log.Error().Err(err).Msg("error starting transaction")
-		return fmt.Errorf("error starting transaction: %v", err)
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Create the accounts table
+	_, err = tx.Exec(`
+		CREATE TABLE IF NOT EXISTS accounts (
+			id UUID PRIMARY KEY,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			name VARCHAR(255) NOT NULL,
+			account_owner TEXT NOT NULL
+		);
+	`)
+	if err != nil {
+		w.Log.Error().Err(err).Msg("error creating table accounts")
+
+		tx.Rollback()
+		return err
 	}
 
 	// Create the workspaces table
@@ -89,11 +101,10 @@ func (w *WorkspaceDB) InitTables() error {
 		CREATE TABLE IF NOT EXISTS workspaces (
 			id UUID PRIMARY KEY,
 			name VARCHAR(255) UNIQUE NOT NULL,
-			account UUID NOT NULL,
-			accountOwner TEXT NOT NULL,
-			memberGroup TEXT NOT NULL,
-			roleName TEXT NULL,
-			roleArn TEXT NULL,
+			account_id UUID NOT NULL,
+			member_group TEXT NOT NULL,
+			role_name TEXT NULL,
+			role_arn TEXT NULL,
 			status TEXT NOT NULL
 		);
 	`)
@@ -125,8 +136,8 @@ func (w *WorkspaceDB) InitTables() error {
 		CREATE TABLE IF NOT EXISTS object_stores (
 			store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
 			path VARCHAR(255) NOT NULL,
-			envVar VARCHAR(255) NOT NULL,
-			accessPointArn VARCHAR(255) NOT NULL
+			env_var VARCHAR(255) NOT NULL,
+			access_point_arn VARCHAR(255) NOT NULL
 		);
 	`)
 	if err != nil {
@@ -140,8 +151,8 @@ func (w *WorkspaceDB) InitTables() error {
 	_, err = tx.Exec(`
 		CREATE TABLE IF NOT EXISTS block_stores (
 			store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
-			accessPointId VARCHAR(255) NOT NULL,  
-			fsId VARCHAR(255) NOT NULL
+			access_point_id VARCHAR(255) NOT NULL,  
+			fs_id VARCHAR(255) NOT NULL
 		);
 	`)
 	if err != nil {
@@ -153,7 +164,7 @@ func (w *WorkspaceDB) InitTables() error {
 
 	// Commit the transaction to persist changes
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error committing transaction: %v", err)
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
 	w.Log.Info().Msg("Tables initialized successfully")
@@ -195,18 +206,18 @@ func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]models.Worksp
 }
 
 func (db *WorkspaceDB) getWorkspaces(memberGroups []string) ([]models.Workspace, error) {
-	query := `SELECT id, name, account, accountowner, membergroup, status FROM workspaces WHERE memberGroup = ANY($1)`
+	query := `SELECT id, name, account, member_group, status FROM workspaces WHERE member_group = ANY($1)`
 	rows, err := db.DB.Query(query, pq.Array(memberGroups))
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspaces: %v", err)
+		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
 	}
 	defer rows.Close()
 
 	var workspaces []models.Workspace
 	for rows.Next() {
 		var ws models.Workspace
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.AccountOwner, &ws.MemberGroup, &ws.Status); err != nil {
-			return nil, fmt.Errorf("error scanning workspace: %v", err)
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status); err != nil {
+			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 		workspaces = append(workspaces, ws)
 	}
@@ -217,13 +228,13 @@ func (db *WorkspaceDB) getWorkspaces(memberGroups []string) ([]models.Workspace,
 func (db *WorkspaceDB) getBlockStores(workspaces []models.Workspace) (map[uuid.UUID][]models.BlockStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `
-		SELECT ws.workspace_id, ws.name, bs.store_id, bs.accesspointid, bs.fsid
+		SELECT ws.workspace_id, ws.name, bs.store_id, bs.access_point_id, bs.fs_id
 		FROM workspace_stores ws
 		INNER JOIN block_stores bs ON bs.store_id = ws.id
 		WHERE ws.workspace_id = ANY($1)`
 	rows, err := db.DB.Query(query, pq.Array(workspaceIDs))
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving block stores: %v", err)
+		return nil, fmt.Errorf("error retrieving block stores: %w", err)
 	}
 	defer rows.Close()
 
@@ -232,7 +243,7 @@ func (db *WorkspaceDB) getBlockStores(workspaces []models.Workspace) (map[uuid.U
 		var workspaceID uuid.UUID
 		var bs models.BlockStore
 		if err := rows.Scan(&workspaceID, &bs.Name, &bs.StoreID, &bs.AccessPointID, &bs.FSID); err != nil {
-			return nil, fmt.Errorf("error scanning block store: %v", err)
+			return nil, fmt.Errorf("error scanning block store: %w", err)
 		}
 		blockStores[workspaceID] = append(blockStores[workspaceID], bs)
 	}
@@ -243,13 +254,13 @@ func (db *WorkspaceDB) getBlockStores(workspaces []models.Workspace) (map[uuid.U
 func (db *WorkspaceDB) getObjectStores(workspaces []models.Workspace) (map[uuid.UUID][]models.ObjectStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `
-		SELECT ws.workspace_id, ws.name, os.store_id, os.path, os.envvar, os.accesspointarn
+		SELECT ws.workspace_id, ws.name, os.store_id, os.path, os.env_var, os.access_point_arn
 		FROM workspace_stores ws
 		INNER JOIN object_stores os ON os.store_id = ws.id
 		WHERE ws.workspace_id = ANY($1)`
 	rows, err := db.DB.Query(query, pq.Array(workspaceIDs))
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving object stores: %v", err)
+		return nil, fmt.Errorf("error retrieving object stores: %w", err)
 	}
 	defer rows.Close()
 
@@ -258,7 +269,7 @@ func (db *WorkspaceDB) getObjectStores(workspaces []models.Workspace) (map[uuid.
 		var workspaceID uuid.UUID
 		var os models.ObjectStore
 		if err := rows.Scan(&workspaceID, &os.Name, &os.StoreID, &os.Path, &os.EnvVar, &os.AccessPointArn); err != nil {
-			return nil, fmt.Errorf("error scanning object store: %v", err)
+			return nil, fmt.Errorf("error scanning object store: %w", err)
 		}
 		objectStores[workspaceID] = append(objectStores[workspaceID], os)
 	}
@@ -277,36 +288,136 @@ func extractWorkspaceIDs(workspaces []models.Workspace) []uuid.UUID {
 func (w *WorkspaceDB) InsertWorkspace(req *models.Workspace) (*sql.Tx, error) {
 	tx, err := w.DB.Begin()
 	if err != nil {
-		return nil, fmt.Errorf("error starting transaction: %v", err)
+		return nil, fmt.Errorf("error starting transaction: %w", err)
 	}
 
 	// Insert the workspace
 	workspaceID := uuid.New() // Generate a new workspace ID
 	err = w.execQuery(tx, `
-		INSERT INTO workspaces (id, name, account, accountOwner, memberGroup, status)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
-		workspaceID, req.Name, req.Account, req.AccountOwner,
-		req.MemberGroup, req.Status)
+		INSERT INTO workspaces (id, name, account, member_group, status)
+		VALUES ($1, $2, $3, $4, $5)`,
+		workspaceID, req.Name, req.Account, req.MemberGroup, req.Status)
 	if err != nil {
 		w.Log.Error().Err(err).Msg("error inserting workspace")
-		return nil, fmt.Errorf("error inserting workspace: %v", err)
+		return nil, fmt.Errorf("error inserting workspace: %w", err)
 	}
 
 	return tx, nil
 }
 
-func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error committing transaction: %v", err)
+func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]models.Account, error) {
+	query := `SELECT id, name, account_owner FROM accounts WHERE account_owner = $1`
+	rows, err := db.DB.Query(query, accountOwner)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving accounts: %w", err)
 	}
-	w.Log.Info().Msg("Transaction committed successfully")
+	defer rows.Close()
+
+	var accounts []models.Account
+	for rows.Next() {
+		var ac models.Account
+		if err := rows.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
+			return nil, fmt.Errorf("error scanning accounts: %w", err)
+		}
+		accounts = append(accounts, ac)
+	}
+	return accounts, nil
+}
+
+func (w *WorkspaceDB) InsertAccount(req *models.Account) (*models.Account, error) {
+
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	accountID := uuid.New()
+	created_at := time.Now().UTC()
+
+	err = w.execQuery(tx, `
+		INSERT INTO accounts (id, created_at, name, account_owner)
+		VALUES ($1, $2, $3, $4)`,
+		accountID, created_at, req.Name, req.AccountOwner)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := w.CommitTransaction(tx); err != nil {
+		return nil, fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	account := models.Account{
+		ID:           accountID,
+		Name:         req.Name,
+		AccountOwner: req.AccountOwner,
+	}
+
+	return &account, nil
+}
+
+func (w *WorkspaceDB) UpdateAccountOwner(accountID uuid.UUID, newOwner string) (*models.Account, error) {
+	// Start a transaction
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Perform the update
+	err = w.execQuery(tx, `
+		UPDATE accounts 
+		SET account_owner = $1 WHERE id = $2`,
+		newOwner, accountID)
+	if err != nil {
+		tx.Rollback()
+		w.Log.Error().Err(err).Msg("error updating account owner")
+		return nil, fmt.Errorf("error updating account owner: %w", err)
+	}
+
+	// Commit the transaction
+	if err := w.CommitTransaction(tx); err != nil {
+		return nil, fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	// Construct and return the updated account object
+	account := &models.Account{
+		ID:           accountID,
+		AccountOwner: newOwner,
+	}
+
+	w.Log.Info().Msg("Account owner updated successfully")
+	return account, nil
+}
+
+func (w *WorkspaceDB) DeleteAccount(accountID uuid.UUID) error {
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Ensure the transaction is rolled back in case of an error
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	err = w.execQuery(tx, `
+    DELETE FROM accounts WHERE id = $1`, accountID)
+	if err != nil {
+		return fmt.Errorf("error executing delete query: %w", err)
+	}
+
+	if err := w.CommitTransaction(tx); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
 	return nil
 }
 
 func (w *WorkspaceDB) DeleteWorkspace(workspaceID uuid.UUID) error {
 	tx, err := w.DB.Begin()
 	if err != nil {
-		return fmt.Errorf("error starting transaction: %v", err)
+		return fmt.Errorf("error starting transaction: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -319,7 +430,7 @@ func (w *WorkspaceDB) DeleteWorkspace(workspaceID uuid.UUID) error {
 
 	// Commit the transaction
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error committing transaction: %v", err)
+		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
 	w.Log.Info().Msg("Workspace deleted successfully")
@@ -334,7 +445,15 @@ func (w *WorkspaceDB) execQuery(tx *sql.Tx, query string, args ...interface{}) e
 
 	_, err := tx.Exec(query, args...)
 	if err != nil {
-		return fmt.Errorf("failed to execute query: %v", err)
+		return err
 	}
+	return nil
+}
+
+func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+	w.Log.Info().Msg("Transaction committed successfully")
 	return nil
 }

@@ -1,11 +1,34 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
-type ErrorResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"` // Message is optional; can omit if empty
+type Response struct {
+	Success      int         `json:"success"`
+	ErrorCode    string      `json:"error_code,omitempty"`
+	ErrorDetails string      `json:"error_details,omitempty"`
+	Data         interface{} `json:"data,omitempty"`
 }
+
+type WorkspacesResponse struct {
+	Workspaces []Workspace `json:"workspaces"`
+}
+
+type WorkspaceResponse struct {
+	Workspace Workspace `json:"workspace"`
+}
+
+// AccountsResponse represents a response with a list of accounts
+type AccountsResponse struct {
+	Accounts []Account `json:"accounts"`
+}
+
+// AccountResponse represents a response with a single account
+type AccountResponse struct {
+	Account Account `json:"account"`
+}
+
 
 // Represents an object store entry in the database.
 type ObjectStore struct {
@@ -30,11 +53,16 @@ type Stores struct {
 }
 
 type Workspace struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Account     uuid.UUID `json:"account"`
+	MemberGroup string    `json:"member_group"`
+	Status      string    `json:"status"`
+	Stores      *[]Stores `json:"stores"`
+}
+
+type Account struct {
 	ID           uuid.UUID `json:"id"`
 	Name         string    `json:"name"`
-	Account      uuid.UUID `json:"account"`
-	AccountOwner string    `json:"account_owner"`
-	MemberGroup  string    `json:"member_group"`
-	Status       string    `json:"status"`
-	Stores       *[]Stores `json:"stores"`
+	AccountOwner string    `json:"accountOwner"`
 }

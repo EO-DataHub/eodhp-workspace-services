@@ -9,62 +9,34 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
-	"github.com/google/uuid"
 )
 
 func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
 
-	// Get the claims from the context
+	// Extract the memberGroups from the claims
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
 		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
 		return
 	}
 
-	// Retrieve user workspaces based on the member_groups embedded in the claims
+	// Retrieve user workspaces based on the memberGroups
 	workspaces, err := workspaceDB.GetUserWorkspaces(claims.MemberGroups)
 	if err != nil {
-		workspaceDB.Log.Error().Err(err).Msg("Failed to retrieve workspaces for user")
-		http.Error(w, "Failed to retrieve workspaces", http.StatusInternalServerError) // TODO: encode proper error response
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	// Prepare response with full details
-	var responses []models.Workspace
-	for _, ws := range workspaces {
-		response := models.Workspace{
-			ID:           ws.ID,
-			Name:         ws.Name,
-			Account:      ws.Account,
-			AccountOwner: ws.AccountOwner,
-			MemberGroup:  ws.MemberGroup,
-			Status:       ws.Status,
-			Stores:       ws.Stores,
-		}
-		responses = append(responses, response)
-	}
-
 	// Encode and send the response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+		Success: 1,
+		Data:    models.WorkspacesResponse{Workspaces: workspaces},
+	})
 
-	if err := json.NewEncoder(w).Encode(struct {
-		Workspaces []models.Workspace `json:"workspaces"`
-	}{Workspaces: responses}); err != nil {
-		workspaceDB.Log.Error().Err(err).Msg("Failed to encode response")
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
 }
 
 // Handles the creation of a workspace and its related components
 func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
-
-	// Get the claims from the context
-	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
-	if !ok {
-		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
-		return
-	}
 
 	// Parse and decode the request body into a MessagePayload object
 	var messagePayload models.Workspace
@@ -75,14 +47,12 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	}
 
 	// Add the claims to the message payload
-	messagePayload.AccountOwner = claims.Username
-	messagePayload.Account = uuid.New()        // TODO: will be replaced with the actual account ID
 	messagePayload.MemberGroup = "placeholder" // TODO: will be replaced with the actual member group from Keycloak
 
 	// Create the workspace transaction
 	tx, err := workspaceDB.InsertWorkspace(&messagePayload)
 	if err != nil {
-		http.Error(w, "Failed to insert workspace", http.StatusInternalServerError)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -102,9 +72,8 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 		return
 	}
 
-	// Respond with 201 success
-	w.WriteHeader(http.StatusCreated)
+	HandleSuccessResponse(w, http.StatusCreated, nil, models.Response{
+		Success: 1,
+	})
 
-	// TODO: Respond with an appropriate JSON message
-	w.Write([]byte("Workspace is creating"))
 }

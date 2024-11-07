@@ -38,12 +38,11 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 	case "creating":
 		// Populate a full Workspace response for "creating" status
 		m.Response = models.Workspace{
-			ID:           uuid.New(), // Simulate new ID
-			Name:         event.Name,
-			Account:      event.Account,
-			AccountOwner: event.AccountOwner,
-			MemberGroup:  event.MemberGroup,
-			Status:       "created",
+			ID:          uuid.New(), // Simulate new ID
+			Name:        event.Name,
+			Account:     event.Account,
+			MemberGroup: event.MemberGroup,
+			Status:      "created",
 			Stores: &[]models.Stores{
 				{
 					Object: []models.ObjectStore{
@@ -67,12 +66,11 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 	case "updated":
 		// Populate a response for "updated" status
 		m.Response = models.Workspace{
-			ID:           event.ID,
-			Name:         event.Name,
-			Account:      event.Account,
-			AccountOwner: event.AccountOwner,
-			MemberGroup:  event.MemberGroup,
-			Status:       "updated",
+			ID:          event.ID,
+			Name:        event.Name,
+			Account:     event.Account,
+			MemberGroup: event.MemberGroup,
+			Status:      "updated",
 			Stores: &[]models.Stores{
 				{
 					Object: []models.ObjectStore{
@@ -96,22 +94,20 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 	case "deleted":
 		// Populate a response with minimal information for "deleted" status
 		m.Response = models.Workspace{
-			ID:           event.ID,
-			Name:         event.Name,
-			Account:      event.Account,
-			AccountOwner: event.AccountOwner,
-			MemberGroup:  event.MemberGroup,
-			Status:       "deleted",
+			ID:          event.ID,
+			Name:        event.Name,
+			Account:     event.Account,
+			MemberGroup: event.MemberGroup,
+			Status:      "deleted",
 		}
 	default:
 		// Populate a response for unknown status
 		m.Response = models.Workspace{
-			ID:           event.ID,
-			Name:         event.Name,
-			Account:      event.Account,
-			AccountOwner: event.AccountOwner,
-			MemberGroup:  event.MemberGroup,
-			Status:       "unknown",
+			ID:          event.ID,
+			Name:        event.Name,
+			Account:     event.Account,
+			MemberGroup: event.MemberGroup,
+			Status:      "unknown",
 		}
 	}
 
@@ -207,9 +203,8 @@ func testCreateWorkspace(t *testing.T, mockDB *db.WorkspaceDB) {
 
 	// Mock a workspace request for creation
 	workspaceRequest := models.Workspace{
-		Status:       "creating",
-		Name:         "test-workspace",
-		AccountOwner: "test-owner",
+		Status: "creating",
+		Name:   "test-workspace",
 	}
 
 	// Convert the workspace request to JSON
@@ -237,7 +232,6 @@ func testCreateWorkspace(t *testing.T, mockDB *db.WorkspaceDB) {
 	publishedMessage := mockDB.Events.(*MockEventPublisher).PublishedMessage
 	assert.Equal(t, "creating", publishedMessage.Status)
 	assert.Equal(t, "test-workspace", publishedMessage.Name)
-	assert.Equal(t, "test-owner", publishedMessage.AccountOwner)
 
 	// Verify that the workspace was inserted into the database
 	var workspaceCount int
