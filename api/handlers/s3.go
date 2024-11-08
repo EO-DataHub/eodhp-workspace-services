@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// GetS3Credentials handles HTTP requests for retreiving s3 STS credentials from AWS
 func GetS3Credentials() http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {

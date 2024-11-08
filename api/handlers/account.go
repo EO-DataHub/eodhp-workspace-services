@@ -5,12 +5,13 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	services "github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
-	services "github.com/EO-DataHub/eodhp-workspace-services/internal/services"
 	_ "github.com/lib/pq"
 )
 
+// CreateAccount handles HTTP requests for creating a new account.
 func CreateAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -19,6 +20,7 @@ func CreateAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// GetAccounts handles HTTP requests for retrieving accounts.
 func GetAccounts(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -27,6 +29,7 @@ func GetAccounts(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// DeleteAccount handles HTTP requests for deleting an account.
 func DeleteAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -35,6 +38,7 @@ func DeleteAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// UpdateAccount handles HTTP requests for updating an account.
 func UpdateAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
