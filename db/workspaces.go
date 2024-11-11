@@ -42,7 +42,6 @@ func (w *WorkspaceDB) CreateWorkspace(req *models.Workspace) (*sql.Tx, error) {
 		VALUES ($1, $2, $3, $4, $5)`,
 		workspaceID, req.Name, req.Account, req.MemberGroup, req.Status)
 	if err != nil {
-		w.Log.Error().Err(err).Msg("error inserting workspace")
 		return nil, fmt.Errorf("error inserting workspace: %w", err)
 	}
 
@@ -169,6 +168,16 @@ func (db *WorkspaceDB) getObjectStores(workspaces []models.Workspace) (map[uuid.
 	return objectStores, nil
 }
 
+// CheckWorkspaceExists checks if a workspace with the specified name already exists.
+func (db *WorkspaceDB) CheckWorkspaceExists(name string) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM workspaces WHERE name = $1)`
+	var exists bool
+	err := db.DB.QueryRow(query, name).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error checking workspace existence: %w", err)
+	}
+	return exists, nil
+}
 
 // extractWorkspaceIDs extracts workspace IDs from a slice of Workspace structs.
 func extractWorkspaceIDs(workspaces []models.Workspace) []uuid.UUID {

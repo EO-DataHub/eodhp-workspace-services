@@ -48,6 +48,34 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 		return
 	}
 
+	// Check that the workspace name does not already exist
+	workspaceExists, err := workspaceDB.CheckWorkspaceExists(messagePayload.Name)
+	if err != nil {
+		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Return a conflict response if the workspace name already exists
+	if workspaceExists {
+		HandleErrResponse(workspaceDB, w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", messagePayload.Name))
+		return
+	}
+
+	// Check that the account exists and the user is the account owner
+	account, err := workspaceDB.CheckAccountExists(messagePayload.Account)
+	if err != nil {
+		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Return a not found response if the account does not exist
+	if !account {
+		HandleErrResponse(workspaceDB, w, http.StatusNotFound, fmt.Errorf("account with ID %s not found", messagePayload.Account))
+		return
+	}
+
+	messagePayload.Status = "creating"
+
 	// Set a placeholder for MemberGroup (to be replaced by actual data from Keycloak)
 	messagePayload.MemberGroup = "placeholder"
 
@@ -80,6 +108,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	// Send a success response after creating the workspace and publishing the event
 	HandleSuccessResponse(w, http.StatusCreated, nil, models.Response{
 		Success: 1,
+		Data:    models.WorkspaceResponse{Workspace: messagePayload},
 	}, location)
 
 }

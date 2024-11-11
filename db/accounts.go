@@ -165,3 +165,14 @@ func (db *WorkspaceDB) getAccountWorkspaces(accountID uuid.UUID) ([]models.Works
 
 	return workspaces, nil
 }
+
+// CheckAccountExists checks if an account exists in the database.
+func (db *WorkspaceDB) CheckAccountExists(accountID uuid.UUID) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1)`
+	var exists bool
+	err := db.DB.QueryRow(query, accountID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("error checking account existence: %w", err)
+	}
+	return exists, nil
+}
