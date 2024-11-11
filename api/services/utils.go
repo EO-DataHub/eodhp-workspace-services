@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/lib/pq"
 )
+
+var dnsNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // HandleErrResponse formats and sends error details, including pq.Error specifics.
 func HandleErrResponse(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, statusCode int, err error) {
@@ -104,4 +107,9 @@ func HasRole(roles []string, role string) bool {
 		}
 	}
 	return false
+}
+
+// isDNSCompatible returns true if the provided name is DNS-compatible
+func IsDNSCompatible(name string) bool {
+	return dnsNameRegex.MatchString(name)
 }

@@ -48,6 +48,12 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 		return
 	}
 
+	// Check the name is DNS-compatible
+	if !IsDNSCompatible(messagePayload.Name) {
+		HandleErrResponse(workspaceDB, w, http.StatusConflict, fmt.Errorf("invalid workspace name: must be DNS-compatible"))
+		return
+	}
+
 	// Check that the workspace name does not already exist
 	workspaceExists, err := workspaceDB.CheckWorkspaceExists(messagePayload.Name)
 	if err != nil {
