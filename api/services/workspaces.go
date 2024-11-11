@@ -2,6 +2,7 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"net/http"
 
@@ -11,20 +12,20 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 )
 
-// GetWorkspacesService retrieves all workspaces accessible by the authenticated user's member groups.
+// GetWorkspacesService retrieves all workspaces accessible to the authenticated user's groups.
 func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
 
-	// Extract member groups from user claims
+	// Extract groups the user is a member of from the claims
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
 		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
 		return
 	}
 
-	// Retrieve workspaces for the user based on their member groups
+	// Retrieve workspaces assigned to these groups
 	workspaces, err := workspaceDB.GetUserWorkspaces(claims.MemberGroups)
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -32,7 +33,7 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
 		Success: 1,
 		Data:    models.WorkspacesResponse{Workspaces: workspaces},
-	})
+	}, "")
 
 }
 
@@ -53,7 +54,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	// Begin the workspace creation transaction
 	tx, err := workspaceDB.CreateWorkspace(&messagePayload)
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -73,9 +74,12 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 		return
 	}
 
+	// Add location header
+	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
+
 	// Send a success response after creating the workspace and publishing the event
 	HandleSuccessResponse(w, http.StatusCreated, nil, models.Response{
 		Success: 1,
-	})
+	}, location)
 
 }

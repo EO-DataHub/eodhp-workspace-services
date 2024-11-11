@@ -35,6 +35,26 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]models.Account, error
 	return accounts, nil
 }
 
+// GetAccount retrieves a single account.
+func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*models.Account, error) {
+	query := `SELECT id, name, account_owner FROM accounts WHERE id = $1`
+	row := db.DB.QueryRow(query, accountID)
+
+	var ac models.Account
+	if err := row.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
+		return nil, fmt.Errorf("error scanning accounts: %w", err)
+	}
+
+	workspaces, err := db.getAccountWorkspaces(ac.ID)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspaces for account: %w", err)
+	}
+	ac.Workspaces = workspaces
+
+	return &ac, nil
+
+}
+
 // CreateAccount creates a new account in the database.
 func (w *WorkspaceDB) CreateAccount(req *models.Account) (*models.Account, error) {
 

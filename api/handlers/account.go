@@ -26,6 +26,15 @@ func GetAccounts(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// GetAccount handles HTTP requests for retrieving a single account.
+func GetAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		services.GetAccountService(workspaceDB, w, r)
+	}
+}
+
 // DeleteAccount handles HTTP requests for deleting an account.
 func DeleteAccount(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 

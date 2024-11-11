@@ -49,6 +49,7 @@ var serveCmd = &cobra.Command{
 		// Account routes
 		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(workspaceDB))).Methods(http.MethodPost)
 		r.HandleFunc("/api/accounts", middleware(handlers.GetAccounts(workspaceDB))).Methods(http.MethodGet)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.GetAccount(workspaceDB))).Methods(http.MethodGet)
 		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.DeleteAccount(workspaceDB))).Methods(http.MethodDelete)
 		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.UpdateAccount(workspaceDB))).Methods(http.MethodPut)
 
