@@ -105,10 +105,21 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 		return
 	}
 
+	// Handle non-existent account
+	if account == nil {
+		// Return 404 Not Found as if the account does not exist
+		HandleSuccessResponse(w, http.StatusNotFound, nil, models.Response{
+			Success:      0,
+			ErrorCode:    "not_found",
+			ErrorDetails: "The requested account does not exist.",
+		}, "")
+		return
+	}
+
 	// Check if the account owner matches the claims username
 	if account.AccountOwner != claims.Username {
 		// Return a success: 0 response to indicate unauthorized access without exposing details
-		HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+		HandleSuccessResponse(w, http.StatusForbidden, nil, models.Response{
 			Success:      0,
 			ErrorCode:    "unauthorized",
 			ErrorDetails: "You do not have access to this account.",

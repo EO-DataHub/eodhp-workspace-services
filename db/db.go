@@ -90,7 +90,7 @@ func (w *WorkspaceDB) InitTables() error {
 		`CREATE TABLE IF NOT EXISTS workspaces (
 				id UUID PRIMARY KEY,
 				name VARCHAR(255) UNIQUE NOT NULL,
-				account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+				account UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
 				member_group TEXT NOT NULL,
 				role_name TEXT NULL,
 				role_arn TEXT NULL,

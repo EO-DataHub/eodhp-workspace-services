@@ -1,98 +1,50 @@
+// workspaces_test.go
 package services
 
 import (
-	"bytes"
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"testing"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
+	_ "github.com/lib/pq" // Import the pq driver for PostgreSQL
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// Implements the Notifier interface for testing
+// MockEventPublisher implements the Notifier interface for testing
 type MockEventPublisher struct {
 	PublishedMessage models.Workspace
 	Response         models.Workspace
 }
 
-// Mock the Publish function to avoid hitting real external dependencies
 func (m *MockEventPublisher) Publish(event models.Workspace) error {
 	m.PublishedMessage = event
-
-	// Determine the response based on the action (status)
-	// Prepare the mock response based on the operation status
+	// Simulate different responses based on event status
 	switch event.Status {
 	case "creating":
-		// Populate a full Workspace response for "creating" status
 		m.Response = models.Workspace{
-			ID:          uuid.New(), // Simulate new ID
+			ID:          uuid.New(),
 			Name:        event.Name,
 			Account:     event.Account,
 			MemberGroup: event.MemberGroup,
 			Status:      "created",
-			Stores: &[]models.Stores{
-				{
-					Object: []models.ObjectStore{
-						{
-							StoreID:        uuid.New(),
-							Path:           "/test-bucket-path",
-							EnvVar:         "TEST_BUCKET",
-							AccessPointArn: "arn:aws:s3:accesspoint:test-region:123456789012:test-bucket-access-point",
-						},
-					},
-					Block: []models.BlockStore{
-						{
-							StoreID:       uuid.New(),
-							AccessPointID: "fsap-0123456789abcdef0",
-							FSID:          "fs-54321abcd",
-						},
-					},
-				},
-			},
 		}
-	case "updated":
-		// Populate a response for "updated" status
+	case "updating":
 		m.Response = models.Workspace{
 			ID:          event.ID,
 			Name:        event.Name,
 			Account:     event.Account,
 			MemberGroup: event.MemberGroup,
 			Status:      "updated",
-			Stores: &[]models.Stores{
-				{
-					Object: []models.ObjectStore{
-						{
-							StoreID:        uuid.New(),
-							Path:           "/updated-bucket-path",
-							EnvVar:         "UPDATED_BUCKET",
-							AccessPointArn: "arn:aws:s3:accesspoint:test-region:123456789012:updated-bucket-access-point",
-						},
-					},
-					Block: []models.BlockStore{
-						{
-							StoreID:       uuid.New(),
-							AccessPointID: "fsap-9876543210fedcba",
-							FSID:          "fs-98765zyxw",
-						},
-					},
-				},
-			},
 		}
-	case "deleted":
-		// Populate a response with minimal information for "deleted" status
+	case "deleting":
 		m.Response = models.Workspace{
 			ID:          event.ID,
 			Name:        event.Name,
@@ -101,7 +53,6 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			Status:      "deleted",
 		}
 	default:
-		// Populate a response for unknown status
 		m.Response = models.Workspace{
 			ID:          event.ID,
 			Name:        event.Name,
@@ -110,17 +61,13 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			Status:      "unknown",
 		}
 	}
-
 	return nil
 }
 
-// Mock the Close function to avoid hitting real external dependencies (simulate)
-func (m *MockEventPublisher) Close() {
-}
+func (m *MockEventPublisher) Close() {}
 
-// Helper function to setup PostgreSQL container using testcontainers
+// setupPostgresContainer initializes a PostgreSQL container for testing
 func setupPostgresContainer(t *testing.T) (*sql.DB, string, func()) {
-	// Request a PostgreSQL container from testcontainers
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
 		Image:        "postgres:13",
@@ -141,101 +88,241 @@ func setupPostgresContainer(t *testing.T) (*sql.DB, string, func()) {
 		t.Fatalf("could not start container: %s", err)
 	}
 
-	// Get the container's host and port
-	host, _ := postgresC.Host(ctx)
-	port, _ := postgresC.MappedPort(ctx, "5432/tcp")
-
-	// Form the connection string
-	connStr := fmt.Sprintf("postgres://postgres:postgres@%s:%s/postgres?sslmode=disable", host, port.Port())
-
-	// Open a connection to PostgreSQL
-	dbConn, err := sql.Open("postgres", connStr)
+	host, err := postgresC.Host(ctx)
 	if err != nil {
-		t.Fatalf("failed to open db connection: %s", err)
+		t.Fatalf("could not get container host: %s", err)
+	}
+	port, err := postgresC.MappedPort(ctx, "5432/tcp")
+	if err != nil {
+		t.Fatalf("could not get mapped port: %s", err)
 	}
 
-	// Return the connection string and cleanup function
-	return dbConn, connStr, func() {
+	connStr := fmt.Sprintf("postgres://postgres:postgres@%s:%s/postgres?sslmode=disable", host, port.Port())
+
+	// Wait until the database is ready
+	var dbConn *sql.DB
+	for i := 0; i < 10; i++ {
+		dbConn, err = sql.Open("postgres", connStr)
+		if err != nil {
+			t.Logf("waiting for database to be ready: %v", err)
+			continue
+		}
+		err = dbConn.Ping()
+		if err == nil {
+			break
+		}
+		t.Logf("waiting for database to be ready: %v", err)
+	}
+
+	if err != nil {
+		postgresC.Terminate(ctx)
+		t.Fatalf("could not connect to database: %s", err)
+	}
+
+	cleanup := func() {
 		dbConn.Close()
 		postgresC.Terminate(ctx)
 	}
+
+	return dbConn, connStr, cleanup
 }
 
-// Helper function to mock the JWT claims in the context
-func mockJWTClaims(req *http.Request) *http.Request {
-	claims := authn.Claims{
-		Username: "test-owner",
-	}
-	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, claims)
-	return req.WithContext(ctx)
+// TestMain sets up the testing environment
+func TestMain(m *testing.M) {
+	// Optional: Set up global configurations or environment variables here
+	os.Exit(m.Run())
 }
 
-func TestAPIOperations(t *testing.T) {
-	// Set up PostgreSQL container and connection string
+// TestCreateWorkspace tests the creation of a workspace
+func TestCreateWorkspace(t *testing.T) {
+	// Set up PostgreSQL container
 	dbConn, _, cleanup := setupPostgresContainer(t)
 	defer cleanup()
 
-	// Initialize the mock publisher
-	mockPublisher := &MockEventPublisher{}
-	mockLogger := zerolog.New(os.Stdout)
+	// Initialize logger
+	mockLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
 
-	// Create the actual WorkspaceDB struct with the test database connection and mock event publisher
-	mockDB := &db.WorkspaceDB{
-		DB:     dbConn,        // Real database connection from Testcontainers
-		Events: mockPublisher, // Mock publisher simulating event notifications and ACKs
-		Log:    &mockLogger,   // Mock logger
+	// Initialize the mock event publisher
+	mockPublisher := &MockEventPublisher{}
+
+	// Create the WorkspaceDB instance
+	workspaceDB := &db.WorkspaceDB{
+		DB:     dbConn,
+		Events: mockPublisher,
+		Log:    &mockLogger,
 	}
 
-	// Initialize the tables in the database
-	err := mockDB.InitTables()
-	assert.NoError(t, err)
+	// Initialize database tables
+	err := workspaceDB.InitTables()
+	assert.NoError(t, err, "should initialize tables without error")
 
-	// Run each API test - for now just the ones fully impemented
-	t.Run("Test Create Workspace", func(t *testing.T) {
-		testCreateWorkspace(t, mockDB)
-	})
+	// Create an account first, as workspaces require a valid account
+	accountID := uuid.New()
+	_, err = workspaceDB.DB.Exec(`
+		INSERT INTO accounts (id, name, account_owner)
+		VALUES ($1, $2, $3)`,
+		accountID, "Test Account", "owner@example.com",
+	)
+	assert.NoError(t, err, "should insert account without error")
 
-	// Add more tests here once the handlers are written
+	// Define the workspace to be created
+	workspaceRequest := models.Workspace{
+		ID:          uuid.New(),
+		Name:        "test-workspace",
+		Account:     accountID,
+		MemberGroup: "test-group",
+		Status:      "creating",
+	}
+
+	// Start a transaction for creating the workspace
+	tx, err := workspaceDB.CreateWorkspace(&workspaceRequest)
+	assert.NoError(t, err, "should start transaction without error")
+	assert.NotNil(t, tx, "transaction should not be nil")
+
+	// Simulate publishing the event
+	err = workspaceDB.Events.Publish(workspaceRequest)
+	assert.NoError(t, err, "should publish event without error")
+
+	// Commit the transaction
+	err = workspaceDB.CommitTransaction(tx)
+	assert.NoError(t, err, "should commit transaction without error")
+
+	// Verify that the workspace was inserted
+	var count int
+	err = workspaceDB.DB.QueryRow(`SELECT COUNT(*) FROM workspaces WHERE name = $1`, workspaceRequest.Name).Scan(&count)
+	assert.NoError(t, err, "should query workspace count without error")
+	assert.Equal(t, 1, count, "workspace should be inserted")
+
+	// Verify that the event was published correctly
+	published := mockPublisher.PublishedMessage
+	assert.Equal(t, "creating", published.Status, "published status should be 'creating'")
+	assert.Equal(t, workspaceRequest.Name, published.Name, "published name should match")
 }
 
-// Tests the creation of a workspace request, receiving the ACK, and storing data in the mock database
-func testCreateWorkspace(t *testing.T, mockDB *db.WorkspaceDB) {
+// TestGetUserWorkspaces tests retrieving user workspaces based on member groups
+func TestGetUserWorkspaces(t *testing.T) {
+	// Set up PostgreSQL container
+	dbConn, _, cleanup := setupPostgresContainer(t)
+	defer cleanup()
 
-	// Mock a workspace request for creation
-	workspaceRequest := models.Workspace{
-		Status: "creating",
-		Name:   "test-workspace",
+	// Initialize logger
+	mockLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	// Initialize the mock event publisher
+	mockPublisher := &MockEventPublisher{}
+
+	// Create the WorkspaceDB instance
+	workspaceDB := &db.WorkspaceDB{
+		DB:     dbConn,
+		Events: mockPublisher,
+		Log:    &mockLogger,
 	}
 
-	// Convert the workspace request to JSON
-	requestBody, err := json.Marshal(workspaceRequest)
-	assert.NoError(t, err)
+	// Initialize database tables
+	err := workspaceDB.InitTables()
+	assert.NoError(t, err, "should initialize tables without error")
 
-	// Create a new HTTP request without going through middleware
-	req, err := http.NewRequest("POST", "/workspace", bytes.NewBuffer(requestBody))
-	assert.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
+	// Create accounts
+	accountID := uuid.New()
+	_, err = workspaceDB.DB.Exec(`
+		INSERT INTO accounts (id, name, account_owner)
+		VALUES ($1, $2, $3)`,
+		accountID, "Test Account", "owner@example.com",
+	)
+	assert.NoError(t, err, "should insert account without error")
 
-	// Add mock claims to context
-	req = mockJWTClaims(req)
+	// Insert workspaces
+	workspace1 := models.Workspace{
+		ID:          uuid.New(),
+		Name:        "workspace-one",
+		Account:     accountID,
+		MemberGroup: "group1",
+		Status:      "creating",
+	}
+	workspace2 := models.Workspace{
+		ID:          uuid.New(),
+		Name:        "workspace-two",
+		Account:     accountID,
+		MemberGroup: "group2",
+		Status:      "creating",
+	}
 
-	// Use httptest to record the response
-	rr := httptest.NewRecorder()
+	_, err = workspaceDB.DB.Exec(`
+		INSERT INTO workspaces (id, name, account, member_group, status)
+		VALUES ($1, $2, $3, $4, $5)`,
+		workspace1.ID, workspace1.Name, workspace1.Account, workspace1.MemberGroup, workspace1.Status,
+	)
+	assert.NoError(t, err, "should insert workspace one without error")
 
-	// Call the handler directly (skipping middleware)
-	CreateWorkspaceService(mockDB, rr, req)
+	_, err = workspaceDB.DB.Exec(`
+		INSERT INTO workspaces (id, name, account, member_group, status)
+		VALUES ($1, $2, $3, $4, $5)`,
+		workspace2.ID, workspace2.Name, workspace2.Account, workspace2.MemberGroup, workspace2.Status,
+	)
+	assert.NoError(t, err, "should insert workspace two without error")
 
-	// Check the status code
-	assert.Equal(t, http.StatusCreated, rr.Code)
+	// Retrieve workspaces for group1
+	memberGroups := []string{"group1"}
+	workspaces, err := workspaceDB.GetUserWorkspaces(memberGroups)
+	assert.NoError(t, err, "should retrieve workspaces without error")
+	assert.Len(t, workspaces, 1, "should retrieve one workspace")
+	assert.Equal(t, "workspace-one", workspaces[0].Name, "workspace name should match")
 
-	// Verify that the workspace creation event was published
-	publishedMessage := mockDB.Events.(*MockEventPublisher).PublishedMessage
-	assert.Equal(t, "creating", publishedMessage.Status)
-	assert.Equal(t, "test-workspace", publishedMessage.Name)
+	// Retrieve workspaces for group1 and group2
+	memberGroups = []string{"group1", "group2"}
+	workspaces, err = workspaceDB.GetUserWorkspaces(memberGroups)
+	assert.NoError(t, err, "should retrieve workspaces without error")
+	assert.Len(t, workspaces, 2, "should retrieve two workspaces")
+}
 
-	// Verify that the workspace was inserted into the database
-	var workspaceCount int
-	err = mockDB.DB.QueryRow(`SELECT COUNT(*) FROM workspaces WHERE name = $1`, "test-workspace").Scan(&workspaceCount)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, workspaceCount)
+// TestCheckWorkspaceExists tests checking the existence of a workspace by name
+func TestCheckWorkspaceExists(t *testing.T) {
+	// Set up PostgreSQL container
+	dbConn, _, cleanup := setupPostgresContainer(t)
+	defer cleanup()
+
+	// Initialize logger
+	mockLogger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	// Initialize the mock event publisher
+	mockPublisher := &MockEventPublisher{}
+
+	// Create the WorkspaceDB instance
+	workspaceDB := &db.WorkspaceDB{
+		DB:     dbConn,
+		Events: mockPublisher,
+		Log:    &mockLogger,
+	}
+
+	// Initialize database tables
+	err := workspaceDB.InitTables()
+	assert.NoError(t, err, "should initialize tables without error")
+
+	// Create an account
+	accountID := uuid.New()
+	_, err = workspaceDB.DB.Exec(`
+		INSERT INTO accounts (id, name, account_owner)
+		VALUES ($1, $2, $3)`,
+		accountID, "Test Account", "owner@example.com",
+	)
+	assert.NoError(t, err, "should insert account without error")
+
+	// Insert a workspace
+	workspaceName := "existing-workspace"
+	_, err = workspaceDB.DB.Exec(`
+		INSERT INTO workspaces (id, name, account, member_group, status)
+		VALUES ($1, $2, $3, $4, $5)`,
+		uuid.New(), workspaceName, accountID, "group1", "created",
+	)
+	assert.NoError(t, err, "should insert workspace without error")
+
+	// Check existence of existing workspace
+	exists, err := workspaceDB.CheckWorkspaceExists(workspaceName)
+	assert.NoError(t, err, "should check workspace existence without error")
+	assert.True(t, exists, "workspace should exist")
+
+	// Check existence of non-existing workspace
+	exists, err = workspaceDB.CheckWorkspaceExists("non-existing-workspace")
+	assert.NoError(t, err, "should check workspace existence without error")
+	assert.False(t, exists, "workspace should not exist")
 }

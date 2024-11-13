@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -42,6 +43,11 @@ func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*models.Account, error) 
 
 	var ac models.Account
 	if err := row.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
+		if err == sql.ErrNoRows {
+			// Account does not exist, return nil account and nil error
+			return nil, nil
+		}
+		
 		return nil, fmt.Errorf("error scanning accounts: %w", err)
 	}
 

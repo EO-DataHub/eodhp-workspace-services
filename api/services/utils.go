@@ -53,7 +53,7 @@ func HandleErrResponse(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, statu
 		response = models.Response{
 			Success:      0,
 			ErrorCode:    "internal_server_error",
-			ErrorDetails: err.Error(),
+			ErrorDetails: "An internal server error occurred.",
 		}
 	}
 
