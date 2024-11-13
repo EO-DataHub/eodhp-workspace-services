@@ -6,6 +6,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/handlers"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/aws"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -37,8 +38,11 @@ var serveCmd = &cobra.Command{
 			return middleware.WithLogger(middleware.JWTMiddleware(next))
 		}
 
+		// Instance of real AWS STS Client
+		stsClient := &aws.DefaultSTSClient{}
+
 		// Register the routes
-		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials(stsClient))).Methods(http.MethodGet)
 
 		// Workspace routes
 		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)

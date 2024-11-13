@@ -2,35 +2,17 @@
 package services
 
 import (
-	"context"
 	"database/sql"
-	"net/http"
 	"os"
 	"testing"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq" // Import the pq driver for PostgreSQL
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
-
-// mockJWTClaims adds mock JWT claims to the request context.
-func mockJWTClaims(req *http.Request, username string, roles []string) *http.Request {
-	claims := authn.Claims{
-		Username: username,
-		RealmAccess: struct {
-			Roles []string `json:"roles"`
-		}{
-			Roles: roles,
-		},
-	}
-	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, claims)
-	return req.WithContext(ctx)
-}
 
 // TestCreateAccount tests the creation of an account.
 func TestCreateAccount(t *testing.T) {
