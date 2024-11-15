@@ -9,6 +9,17 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 )
 
+type STSClient interface {
+	AssumeRoleWithWebIdentity(workspaceName string) (*S3STSCredentialsResponse, error)
+}
+
+// Default implementation of STSClient to call AWS STS
+type DefaultSTSClient struct{}
+
+func (c *DefaultSTSClient) AssumeRoleWithWebIdentity(workspaceName string) (*S3STSCredentialsResponse, error) {
+	return AssumeRoleWithWebIdentity(workspaceName)
+}
+
 type S3STSCredentialsResponse struct {
 	AccessKeyId     string `json:"accessKeyId"`
 	SecretAccessKey string `json:"secretAccessKey"`

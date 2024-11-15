@@ -3,12 +3,13 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/services"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
+// CreateWorkspace handles HTTP requests for creating a new workspace.
 func CreateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -17,6 +18,7 @@ func CreateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// GetWorkspaces handles HTTP requests for retrieving workspaces.
 func GetWorkspaces(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +26,8 @@ func GetWorkspaces(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// UpdateWorkspace handles HTTP requests for updating a specific workspace by ID.
+// This is a placeholder for the actual implementation.
 func UpdateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +40,8 @@ func UpdateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// PatchWorkspace handles HTTP requests for partially updating a specific workspace by ID.
+// This is a placeholder for the actual implementation.
 func PatchWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {

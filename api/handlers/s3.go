@@ -11,7 +11,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func GetS3Credentials() http.HandlerFunc {
+// GetS3Credentials handles HTTP requests for retreiving s3 STS credentials from AWS
+func GetS3Credentials(stsClient aws.STSClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		logger := zerolog.Ctx(r.Context()).With().
@@ -30,7 +31,7 @@ func GetS3Credentials() http.HandlerFunc {
 
 		workspaceName := claims.Username
 
-		creds, err := aws.AssumeRoleWithWebIdentity(workspaceName)
+		creds, err := stsClient.AssumeRoleWithWebIdentity(workspaceName)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

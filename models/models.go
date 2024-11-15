@@ -1,13 +1,38 @@
 package models
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
-type ErrorResponse struct {
-	Status  string `json:"status"`
-	Message string `json:"message,omitempty"` // Message is optional; can omit if empty
+// Response represents a generic API response structure.
+type Response struct {
+	Success      int         `json:"success"`
+	ErrorCode    string      `json:"error_code,omitempty"`
+	ErrorDetails string      `json:"error_details,omitempty"`
+	Data         interface{} `json:"data,omitempty"`
 }
 
-// Represents an object store entry in the database.
+// WorkspacesResponse holds a list of workspaces.
+type WorkspacesResponse struct {
+	Workspaces []Workspace `json:"workspaces"`
+}
+
+// WorkspaceResponse represents a response with a single workspace.
+type WorkspaceResponse struct {
+	Workspace Workspace `json:"workspace"`
+}
+
+// AccountsResponse holds a list of accounts.
+type AccountsResponse struct {
+	Accounts []Account `json:"accounts"`
+}
+
+// AccountResponse represents a response with a single account.
+type AccountResponse struct {
+	Account Account `json:"account"`
+}
+
+// ObjectStore represents an object storage entry with related metadata.
 type ObjectStore struct {
 	StoreID        uuid.UUID `json:"store_id"`
 	Name           string    `json:"name"`
@@ -16,7 +41,7 @@ type ObjectStore struct {
 	AccessPointArn string    `json:"access_point_arn"`
 }
 
-// BlockStore represents a block store entry in the database.
+// BlockStore represents a block storage entry with related metadata.
 type BlockStore struct {
 	StoreID       uuid.UUID `json:"store_id"`
 	Name          string    `json:"name"`
@@ -24,17 +49,26 @@ type BlockStore struct {
 	FSID          string    `json:"fs_id"`
 }
 
+// Stores holds lists of object and block stores associated with a workspace.
 type Stores struct {
 	Object []ObjectStore `json:"object"`
 	Block  []BlockStore  `json:"block"`
 }
 
+// Workspace represents a workspace with associated stores.
 type Workspace struct {
-	ID           uuid.UUID `json:"id"`
-	Name         string    `json:"name"`
-	Account      uuid.UUID `json:"account"`
-	AccountOwner string    `json:"account_owner"`
-	MemberGroup  string    `json:"member_group"`
-	Status       string    `json:"status"`
-	Stores       *[]Stores `json:"stores"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Account     uuid.UUID `json:"account"`
+	MemberGroup string    `json:"member_group"`
+	Status      string    `json:"status"`
+	Stores      *[]Stores `json:"stores"`
+}
+
+// Account represents an account with associated workspaces.
+type Account struct {
+	ID           uuid.UUID   `json:"id"`
+	Name         string      `json:"name"`
+	AccountOwner string      `json:"accountOwner"`
+	Workspaces   []Workspace `json:"workspaces"`
 }

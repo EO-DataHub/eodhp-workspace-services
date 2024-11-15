@@ -6,6 +6,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/handlers"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/aws"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -37,14 +38,24 @@ var serveCmd = &cobra.Command{
 			return middleware.WithLogger(middleware.JWTMiddleware(next))
 		}
 
-		// Register the routes
-		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials())).Methods(http.MethodGet)
+		// Instance of real AWS STS Client
+		stsClient := &aws.DefaultSTSClient{}
 
-		// Workspace provisioning routes
+		// Register the routes
+		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials(stsClient))).Methods(http.MethodGet)
+
+		// Workspace routes
 		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
 		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(workspaceDB))).Methods(http.MethodGet)
 		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(workspaceDB))).Methods(http.MethodPut)
 		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(workspaceDB))).Methods(http.MethodPatch)
+
+		// Account routes
+		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(workspaceDB))).Methods(http.MethodPost)
+		r.HandleFunc("/api/accounts", middleware(handlers.GetAccounts(workspaceDB))).Methods(http.MethodGet)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.GetAccount(workspaceDB))).Methods(http.MethodGet)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.DeleteAccount(workspaceDB))).Methods(http.MethodDelete)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.UpdateAccount(workspaceDB))).Methods(http.MethodPut)
 
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
