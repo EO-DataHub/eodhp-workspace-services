@@ -12,10 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type Notifier interface {
-	Publish(event models.Workspace) error
-	Close()
-}
 
 type EventPublisher struct {
 	client   pulsar.Client

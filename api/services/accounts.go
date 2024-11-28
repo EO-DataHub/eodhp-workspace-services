@@ -27,7 +27,7 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	// Decode the request payload into an Account struct
 	var messagePayload models.Account
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusBadRequest, err)
+		HandleErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -39,7 +39,7 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	// Create the account in the database
 	account, err := workspaceDB.CreateAccount(&messagePayload)
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func GetAccountsService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *h
 	accounts, err := workspaceDB.GetAccounts(claims.Username)
 
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -93,7 +93,7 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusBadRequest, err)
+		HandleErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -101,7 +101,7 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	account, err := workspaceDB.GetAccount(accountID)
 
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -142,21 +142,21 @@ func UpdateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusBadRequest, err)
+		HandleErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	// Decode the request payload into an Account struct
 	var updatePayload models.Account
 	if err := json.NewDecoder(r.Body).Decode(&updatePayload); err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusBadRequest, err)
+		HandleErrResponse(w, http.StatusBadRequest, err)
 		return
 	}
 
 	// Call UpdateAccount to change the account fields in the database
 	updatedAccount, err := workspaceDB.UpdateAccount(accountID, updatePayload)
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -181,7 +181,7 @@ func DeleteAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	err = workspaceDB.DeleteAccount(accountID)
 
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 

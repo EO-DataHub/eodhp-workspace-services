@@ -7,6 +7,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 // GetAccounts retrieves all accounts owned by the specified account owner.
@@ -47,7 +48,7 @@ func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*models.Account, error) 
 			// Account does not exist, return nil account and nil error
 			return nil, nil
 		}
-		
+
 		return nil, fmt.Errorf("error scanning accounts: %w", err)
 	}
 
@@ -110,7 +111,7 @@ func (w *WorkspaceDB) UpdateAccount(accountID uuid.UUID, account models.Account)
 		account.Name, account.AccountOwner, accountID)
 	if err != nil {
 		tx.Rollback()
-		w.Log.Error().Err(err).Msg("error updating account owner")
+		log.Error().Err(err).Msg("error updating account owner")
 		return nil, fmt.Errorf("error updating account owner: %w", err)
 	}
 
@@ -122,7 +123,7 @@ func (w *WorkspaceDB) UpdateAccount(accountID uuid.UUID, account models.Account)
 	// Construct and return the updated account object
 	account.ID = accountID
 
-	w.Log.Info().Msg("Account updated successfully")
+	log.Info().Msg("Account updated successfully")
 	return &account, nil
 }
 

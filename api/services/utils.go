@@ -7,15 +7,15 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/lib/pq"
+	"github.com/rs/zerolog/log"
 )
 
 var dnsNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // HandleErrResponse formats and sends error details, including pq.Error specifics.
-func HandleErrResponse(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, statusCode int, err error) {
+func HandleErrResponse(w http.ResponseWriter, statusCode int, err error) {
 	var pqErr *pq.Error
 	var response models.Response
 	var syntaxErr *json.SyntaxError
@@ -25,7 +25,7 @@ func HandleErrResponse(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, statu
 	if errors.As(err, &pqErr) {
 
 		// Log the error details but don't expose them to the client
-		workspaceDB.Log.Error().
+		log.Error().
 			Err(err).
 			Msg(fmt.Sprintf("Database error: Code=%s, Message=%s", pqErr.Code.Name(), pqErr.Message))
 

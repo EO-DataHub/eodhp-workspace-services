@@ -5,16 +5,17 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
 // CreateWorkspace handles HTTP requests for creating a new workspace.
-func CreateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+func CreateWorkspace(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.CreateWorkspaceService(workspaceDB, w, r)
+		services.CreateWorkspaceService(workspaceDB, publisher, w, r)
 	}
 }
 
