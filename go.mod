@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.3
 
 require (
-	github.com/EO-DataHub/eodhp-workspace-controller v0.0.0-20241127160044-cc1c5c01bc78
+	github.com/EO-DataHub/eodhp-workspace-manager v0.0.0-20241202163858-c55a1d79e62f
 	github.com/apache/pulsar-client-go v0.14.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2/config v1.27.33
@@ -28,7 +28,7 @@ require (
 	github.com/AthenZ/athenz v1.12.4 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
-	github.com/EO-DataHub/eodhp-workspace-manager v0.0.0-20241122142344-c0458dde2a24 // indirect
+	github.com/EO-DataHub/eodhp-workspace-controller v0.0.0-20241127160044-cc1c5c01bc78 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.11.5 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect

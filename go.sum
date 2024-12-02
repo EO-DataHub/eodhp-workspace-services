@@ -16,6 +16,8 @@ github.com/EO-DataHub/eodhp-workspace-controller v0.0.0-20241127160044-cc1c5c01b
 github.com/EO-DataHub/eodhp-workspace-controller v0.0.0-20241127160044-cc1c5c01bc78/go.mod h1:DbjUYBNjgyyDrvUqslkGJ7cLTOiT9DoFHLuZi022B+E=
 github.com/EO-DataHub/eodhp-workspace-manager v0.0.0-20241122142344-c0458dde2a24 h1:yvV4ZDNMRdKoXay2zUzXqWXt3p1SPbjqJ3DcnTAO9Kg=
 github.com/EO-DataHub/eodhp-workspace-manager v0.0.0-20241122142344-c0458dde2a24/go.mod h1:l4fXFDEVMmHmogcEsmpN78AVMp1AsvPLJuoYIVn+vmg=
+github.com/EO-DataHub/eodhp-workspace-manager v0.0.0-20241202163858-c55a1d79e62f h1:oMLB21yd/+jEorufjI/gF7HrfbTwq0t+W3PExLp3lu0=
+github.com/EO-DataHub/eodhp-workspace-manager v0.0.0-20241202163858-c55a1d79e62f/go.mod h1:l4fXFDEVMmHmogcEsmpN78AVMp1AsvPLJuoYIVn+vmg=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/Microsoft/hcsshim v0.11.5 h1:haEcLNpj9Ka1gd3B3tAEs9CpE0c+1IhoL59w/exYU38=

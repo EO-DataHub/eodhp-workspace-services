@@ -28,15 +28,15 @@ var consumeCmd = &cobra.Command{
 
 		// Consume messages
 		for {
-			fmt.Println("Waiting for messages...")
+			log.Info().Msg("Waiting for messages...")
+
 			msg, err := consumer.ReceiveMessage(context.Background())
 			if err != nil {
 				log.Error().Err(err).Msg("Error receiving message")
 				continue
 			}
 
-			// convert into
-			fmt.Println("Received message: ", string(msg.Payload()))
+			log.Info().Str("status", string(msg.Payload())).Msg("Received message")
 
 			// Unmarshal the JSON message into WorkspaceStatus struct
 			var workspaceStatus ws_manager.WorkspaceStatus
@@ -46,12 +46,32 @@ var consumeCmd = &cobra.Command{
 				return
 			}
 
-			err = workspaceDB.UpdateWorkspaceStatus(workspaceStatus)
+			// Get the workspace from the database and check if the incoming status is newer
+			workspaceInDB, err := workspaceDB.GetWorkspace(workspaceStatus.Name)
+
 			if err != nil {
-				log.Fatal().Err(err).Msg("Failed to update workspace status")
+				log.Fatal().Err(err).Str("workspace_name", workspaceStatus.Name).Msg("Failed to get workspace")
 			}
-			// Process message and update database
-			consumer.Ack(msg)
+
+			// Update the workspace in the database if the incoming status is newer
+			if workspaceStatus.LastUpdated.After(workspaceInDB.LastUpdated) {
+				err = workspaceDB.UpdateWorkspaceStatus(workspaceStatus)
+				if err != nil {
+					log.Fatal().Err(err).Msg("Failed to update workspace status")
+
+					// Nack the message if there is an error and attempt redelivery
+					consumer.Nack(msg)
+				}
+
+				// Acknowledge the message if status is updated successfully
+				consumer.Ack(msg)
+			} else {
+				log.Warn().Msg("Incoming status is older")
+
+				// Discard the message if incoming status is older
+				consumer.Ack(msg)
+			}
+
 		}
 
 	},

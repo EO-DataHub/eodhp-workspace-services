@@ -9,6 +9,27 @@ import (
 	"github.com/lib/pq"
 )
 
+// getWorkspace retrieves a workspace by name.
+func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error) {
+
+	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE name = $1`
+	rows, err := db.DB.Query(query, workspace_name)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspace: %w", err)
+	}
+	defer rows.Close()
+
+	var ws ws_manager.WorkspaceSettings
+	if rows.Next() {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
+			return nil, fmt.Errorf("error scanning workspace: %w", err)
+		}
+	} else {
+		return nil, fmt.Errorf("workspace not found")
+	}
+	return &ws, nil
+}
+
 // GetUserWorkspaces retrieves workspaces accessible to the specified member groups.
 func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
 
@@ -38,8 +59,8 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 	workspaceID := uuid.New()
 
 	err = w.execQuery(tx, `
-		INSERT INTO workspaces (id, name, account, member_group, status)
-		VALUES ($1, $2, $3, $4, $5)`,
+		INSERT INTO workspaces (id, name, account, member_group, status, last_updated)
+		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
 		workspaceID, req.Name, req.Account, req.MemberGroup, req.Status)
 	if err != nil {
 		return nil, fmt.Errorf("error inserting workspace: %w", err)
@@ -133,7 +154,7 @@ func (db *WorkspaceDB) getWorkspaceStores(workspaces []ws_manager.WorkspaceSetti
 
 // getWorkspacesByMemberGroup retrieves workspaces for the provided member groups.
 func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
-	query := `SELECT id, name, account, member_group, status FROM workspaces WHERE member_group = ANY($1)`
+	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE member_group = ANY($1)`
 	rows, err := db.DB.Query(query, pq.Array(memberGroups))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
@@ -143,7 +164,7 @@ func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_m
 	var workspaces []ws_manager.WorkspaceSettings
 	for rows.Next() {
 		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 		workspaces = append(workspaces, ws)
@@ -153,7 +174,7 @@ func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_m
 
 // getWorkspacesByAccount retrieves workspaces linked to a specific account ID.
 func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager.WorkspaceSettings, error) {
-	query := `SELECT id, name, account, member_group, status FROM workspaces WHERE account = $1`
+	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE account = $1`
 	rows, err := db.DB.Query(query, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
@@ -163,7 +184,7 @@ func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager
 	var workspaces []ws_manager.WorkspaceSettings
 	for rows.Next() {
 		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 		workspaces = append(workspaces, ws)
@@ -293,9 +314,9 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 	// Update the workspaces table status to 'created'
 	err = w.execQuery(tx, `
         UPDATE workspaces
-        SET status = $1
+        SET status = $1, last_updated = CURRENT_TIMESTAMP
         WHERE id = $2`,
-		"created", workspaceID)
+		"created", workspaceID) // TODO: "created" as default placeholder for now until we interpret the CR status - Work to be done in EODHP-976
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error updating workspace status: %w", err)
@@ -308,7 +329,5 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
-	// Get the workspace ID from the workspace name
-	fmt.Println("Workspace ID: ", workspaceID)
 	return nil
 }

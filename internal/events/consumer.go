@@ -23,6 +23,10 @@ func NewEventConsumer(pulsarURL, topic, subscription string) (*EventConsumer, er
 		Topic:            topic,
 		SubscriptionName: subscription,
 		Type:             pulsar.Shared,
+		DLQ: &pulsar.DLQPolicy{
+			MaxDeliveries:   3,
+			DeadLetterTopic: topic + "-dlq",
+		},
 	})
 	if err != nil {
 		client.Close()
@@ -44,6 +48,11 @@ func (c *EventConsumer) ReceiveMessage(ctx context.Context) (pulsar.Message, err
 // Ack acknowledges a message.
 func (c *EventConsumer) Ack(msg pulsar.Message) {
 	c.consumer.Ack(msg)
+}
+
+// Nack negatively acknowledges a message.
+func (c *EventConsumer) Nack(msg pulsar.Message) {
+	c.consumer.Nack(msg)
 }
 
 // Close cleans up the Pulsar consumer and client.

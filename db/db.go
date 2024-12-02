@@ -82,7 +82,8 @@ func (w *WorkspaceDB) InitTables() error {
 				member_group TEXT NOT NULL,
 				role_name TEXT NULL,
 				role_arn TEXT NULL,
-				status TEXT NOT NULL
+				status TEXT NOT NULL,
+				last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 			);`,
 		`CREATE TABLE IF NOT EXISTS workspace_stores (
 				id UUID PRIMARY KEY,
