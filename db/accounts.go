@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 // GetAccounts retrieves all accounts owned by the specified account owner.
-func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]models.Account, error) {
+func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, error) {
 	query := `SELECT id, name, account_owner FROM accounts WHERE account_owner = $1`
 	rows, err := db.DB.Query(query, accountOwner)
 	if err != nil {
@@ -19,9 +20,9 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]models.Account, error
 	}
 	defer rows.Close()
 
-	var accounts []models.Account
+	var accounts []ws_services.Account
 	for rows.Next() {
-		var ac models.Account
+		var ac ws_services.Account
 		if err := rows.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
 			return nil, fmt.Errorf("error scanning accounts: %w", err)
 		}
@@ -38,11 +39,11 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]models.Account, error
 }
 
 // GetAccount retrieves a single account.
-func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*models.Account, error) {
+func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*ws_services.Account, error) {
 	query := `SELECT id, name, account_owner FROM accounts WHERE id = $1`
 	row := db.DB.QueryRow(query, accountID)
 
-	var ac models.Account
+	var ac ws_services.Account
 	if err := row.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
 		if err == sql.ErrNoRows {
 			// Account does not exist, return nil account and nil error
@@ -63,7 +64,7 @@ func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*models.Account, error) 
 }
 
 // CreateAccount creates a new account in the database.
-func (w *WorkspaceDB) CreateAccount(req *models.Account) (*models.Account, error) {
+func (w *WorkspaceDB) CreateAccount(req *ws_services.Account) (*ws_services.Account, error) {
 
 	tx, err := w.DB.Begin()
 	if err != nil {
@@ -87,7 +88,7 @@ func (w *WorkspaceDB) CreateAccount(req *models.Account) (*models.Account, error
 		return nil, fmt.Errorf("error committing transaction: %w", err)
 	}
 
-	account := models.Account{
+	account := ws_services.Account{
 		ID:           accountID,
 		Name:         req.Name,
 		AccountOwner: req.AccountOwner,
@@ -97,7 +98,7 @@ func (w *WorkspaceDB) CreateAccount(req *models.Account) (*models.Account, error
 }
 
 // UpdateAccount updates an existing account's details.
-func (w *WorkspaceDB) UpdateAccount(accountID uuid.UUID, account models.Account) (*models.Account, error) {
+func (w *WorkspaceDB) UpdateAccount(accountID uuid.UUID, account ws_services.Account) (*ws_services.Account, error) {
 	// Start a transaction
 	tx, err := w.DB.Begin()
 	if err != nil {
@@ -156,7 +157,7 @@ func (w *WorkspaceDB) DeleteAccount(accountID uuid.UUID) error {
 }
 
 // getAccountWorkspaces retrieves all workspaces associated with a specific account ID.
-func (db *WorkspaceDB) getAccountWorkspaces(accountID uuid.UUID) ([]models.Workspace, error) {
+func (db *WorkspaceDB) getAccountWorkspaces(accountID uuid.UUID) ([]ws_manager.WorkspaceSettings, error) {
 
 	workspaces, err := db.getWorkspacesByAccount(accountID)
 	if err != nil {

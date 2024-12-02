@@ -9,7 +9,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 )
@@ -25,7 +25,7 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Decode the request payload into an Account struct
-	var messagePayload models.Account
+	var messagePayload ws_services.Account
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
 		HandleErrResponse(w, http.StatusBadRequest, err)
 		return
@@ -47,9 +47,9 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, account.ID)
 
 	// Send a success response with the created account data
-	HandleSuccessResponse(w, http.StatusCreated, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusCreated, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.AccountResponse{Account: *account},
+		Data:    ws_services.AccountResponse{Account: *account},
 	}, location)
 }
 
@@ -72,9 +72,9 @@ func GetAccountsService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *h
 	}
 
 	// Send a success response with the retrieved accounts data
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.AccountsResponse{Accounts: accounts},
+		Data:    ws_services.AccountsResponse{Accounts: accounts},
 	}, "")
 
 }
@@ -108,7 +108,7 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	// Handle non-existent account
 	if account == nil {
 		// Return 404 Not Found as if the account does not exist
-		HandleSuccessResponse(w, http.StatusNotFound, nil, models.Response{
+		HandleSuccessResponse(w, http.StatusNotFound, nil, ws_services.Response{
 			Success:      0,
 			ErrorCode:    "not_found",
 			ErrorDetails: "The requested account does not exist.",
@@ -119,7 +119,7 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	// Check if the account owner matches the claims username
 	if account.AccountOwner != claims.Username {
 		// Return a success: 0 response to indicate unauthorized access without exposing details
-		HandleSuccessResponse(w, http.StatusForbidden, nil, models.Response{
+		HandleSuccessResponse(w, http.StatusForbidden, nil, ws_services.Response{
 			Success:      0,
 			ErrorCode:    "unauthorized",
 			ErrorDetails: "You do not have access to this account.",
@@ -128,9 +128,9 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	}
 
 	// Send a success response with the retrieved accounts data
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.AccountResponse{Account: *account},
+		Data:    ws_services.AccountResponse{Account: *account},
 	}, "")
 
 }
@@ -147,7 +147,7 @@ func UpdateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Decode the request payload into an Account struct
-	var updatePayload models.Account
+	var updatePayload ws_services.Account
 	if err := json.NewDecoder(r.Body).Decode(&updatePayload); err != nil {
 		HandleErrResponse(w, http.StatusBadRequest, err)
 		return
@@ -161,9 +161,9 @@ func UpdateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Send a success response with the updated account data
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.AccountResponse{Account: *updatedAccount},
+		Data:    ws_services.AccountResponse{Account: *updatedAccount},
 	}, "")
 
 }
@@ -185,7 +185,7 @@ func DeleteAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 		return
 	}
 
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
 		Success: 1,
 	}, "")
 

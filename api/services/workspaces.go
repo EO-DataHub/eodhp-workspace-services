@@ -6,11 +6,12 @@ import (
 
 	"net/http"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -32,9 +33,9 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Send a success response with the retrieved workspaces data
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.WorkspacesResponse{Workspaces: workspaces},
+		Data:    ws_services.WorkspacesResponse{Workspaces: workspaces},
 	}, "")
 
 }
@@ -43,7 +44,7 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, w http.ResponseWriter, r *http.Request) {
 
 	// Decode the request body into a Workspace struct
-	var messagePayload models.Workspace
+	var messagePayload ws_manager.WorkspaceSettings
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
 		log.Error().Err(err).Msg("Invalid request payload")
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
@@ -72,7 +73,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	}
 
 	// Check that the account exists and the user is the account owner
-	fmt.Println(messagePayload.Account)
 	account, err := workspaceDB.CheckAccountExists(messagePayload.Account)
 	if err != nil {
 		fmt.Println(err)
@@ -88,9 +88,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	}
 
 	messagePayload.Status = "creating"
-
-	// Set a placeholder for MemberGroup (to be replaced by actual data from Keycloak)
-	messagePayload.MemberGroup = "placeholder"
 
 	// Begin the workspace creation transaction
 	tx, err := workspaceDB.CreateWorkspace(&messagePayload)
@@ -119,9 +116,9 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
 
 	// Send a success response after creating the workspace and publishing the event
-	HandleSuccessResponse(w, http.StatusCreated, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusCreated, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.WorkspaceResponse{Workspace: messagePayload},
+		Data:    ws_services.WorkspaceResponse{Workspace: messagePayload},
 	}, location)
 
 }
