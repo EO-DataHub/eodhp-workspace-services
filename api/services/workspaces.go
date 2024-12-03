@@ -6,10 +6,13 @@ import (
 
 	"net/http"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/rs/zerolog/log"
 )
 
 // GetWorkspacesService retrieves all workspaces accessible to the authenticated user's groups.
@@ -25,78 +28,79 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	// Retrieve workspaces assigned to these groups
 	workspaces, err := workspaceDB.GetUserWorkspaces(claims.MemberGroups)
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	// Send a success response with the retrieved workspaces data
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.WorkspacesResponse{Workspaces: workspaces},
+		Data:    ws_services.WorkspacesResponse{Workspaces: workspaces},
 	}, "")
 
 }
 
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
-func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, w http.ResponseWriter, r *http.Request) {
 
 	// Decode the request body into a Workspace struct
-	var messagePayload models.Workspace
+	var messagePayload ws_manager.WorkspaceSettings
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
-		workspaceDB.Log.Error().Err(err).Msg("Invalid request payload")
+		log.Error().Err(err).Msg("Invalid request payload")
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
 
 	// Check the name is DNS-compatible
 	if !IsDNSCompatible(messagePayload.Name) {
-		HandleErrResponse(workspaceDB, w, http.StatusConflict, fmt.Errorf("invalid workspace name: must be DNS-compatible"))
+		log.Error().Msg("Invalid workspace name: must be DNS-compatible")
+		HandleErrResponse(w, http.StatusConflict, fmt.Errorf("invalid workspace name: must be DNS-compatible"))
 		return
 	}
 
 	// Check that the workspace name does not already exist
 	workspaceExists, err := workspaceDB.CheckWorkspaceExists(messagePayload.Name)
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	// Return a conflict response if the workspace name already exists
 	if workspaceExists {
-		HandleErrResponse(workspaceDB, w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", messagePayload.Name))
+		log.Error().Msgf("workspace with name %s already exists", messagePayload.Name)
+		HandleErrResponse(w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", messagePayload.Name))
 		return
 	}
 
 	// Check that the account exists and the user is the account owner
 	account, err := workspaceDB.CheckAccountExists(messagePayload.Account)
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		fmt.Println(err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	// Return a not found response if the account does not exist
 	if !account {
-		HandleErrResponse(workspaceDB, w, http.StatusNotFound, fmt.Errorf("account with ID %s not found", messagePayload.Account))
+		log.Error().Msgf("account with ID %s not found", messagePayload.Account)
+		HandleErrResponse(w, http.StatusNotFound, fmt.Errorf("account with ID %s not found", messagePayload.Account))
 		return
 	}
 
 	messagePayload.Status = "creating"
 
-	// Set a placeholder for MemberGroup (to be replaced by actual data from Keycloak)
-	messagePayload.MemberGroup = "placeholder"
-
 	// Begin the workspace creation transaction
 	tx, err := workspaceDB.CreateWorkspace(&messagePayload)
 	if err != nil {
-		HandleErrResponse(workspaceDB, w, http.StatusInternalServerError, err)
+		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
 	// Publish a message for workspace creation
-	err = workspaceDB.Events.Publish(messagePayload)
+	err = publisher.Publish(messagePayload)
 	if err != nil {
 		// Rollback the transaction if publishing fails
-		workspaceDB.Log.Error().Err(err).Msg("Failed to publish event.")
+		log.Error().Err(err).Msg("Failed to publish event.")
 		tx.Rollback()
 		http.Error(w, "Failed to create workspace event", http.StatusInternalServerError)
 		return
@@ -112,9 +116,9 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, 
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
 
 	// Send a success response after creating the workspace and publishing the event
-	HandleSuccessResponse(w, http.StatusCreated, nil, models.Response{
+	HandleSuccessResponse(w, http.StatusCreated, nil, ws_services.Response{
 		Success: 1,
-		Data:    models.WorkspaceResponse{Workspace: messagePayload},
+		Data:    ws_services.WorkspaceResponse{Workspace: messagePayload},
 	}, location)
 
 }

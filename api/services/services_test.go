@@ -7,8 +7,8 @@ import (
 	"os"
 	"testing"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/testcontainers/testcontainers-go"
@@ -17,16 +17,16 @@ import (
 
 // MockEventPublisher implements the Notifier interface for testing
 type MockEventPublisher struct {
-	PublishedMessage models.Workspace
-	Response         models.Workspace
+	PublishedMessage ws_manager.WorkspaceSettings
+	Response         ws_manager.WorkspaceSettings
 }
 
-func (m *MockEventPublisher) Publish(event models.Workspace) error {
+func (m *MockEventPublisher) Publish(event ws_manager.WorkspaceSettings) error {
 	m.PublishedMessage = event
 	// Simulate different responses based on event status
 	switch event.Status {
 	case "creating":
-		m.Response = models.Workspace{
+		m.Response = ws_manager.WorkspaceSettings{
 			ID:          uuid.New(),
 			Name:        event.Name,
 			Account:     event.Account,
@@ -34,7 +34,7 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			Status:      "created",
 		}
 	case "updating":
-		m.Response = models.Workspace{
+		m.Response = ws_manager.WorkspaceSettings{
 			ID:          event.ID,
 			Name:        event.Name,
 			Account:     event.Account,
@@ -42,7 +42,7 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			Status:      "updated",
 		}
 	case "deleting":
-		m.Response = models.Workspace{
+		m.Response = ws_manager.WorkspaceSettings{
 			ID:          event.ID,
 			Name:        event.Name,
 			Account:     event.Account,
@@ -50,7 +50,7 @@ func (m *MockEventPublisher) Publish(event models.Workspace) error {
 			Status:      "deleted",
 		}
 	default:
-		m.Response = models.Workspace{
+		m.Response = ws_manager.WorkspaceSettings{
 			ID:          event.ID,
 			Name:        event.Name,
 			Account:     event.Account,
@@ -154,9 +154,7 @@ func TestMain(m *testing.M) {
 
 	// Initialize shared WorkspaceDB instance
 	workspaceDB = &db.WorkspaceDB{
-		DB:     sharedDB,
-		Events: mockPublisher,
-		Log:    &mockLogger,
+		DB: sharedDB,
 	}
 
 	// Initialize database tables for the tests

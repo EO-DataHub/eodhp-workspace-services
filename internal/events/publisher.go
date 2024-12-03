@@ -7,15 +7,10 @@ import (
 
 	"time"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/rs/zerolog/log"
 )
-
-type Notifier interface {
-	Publish(event models.Workspace) error
-	Close()
-}
 
 type EventPublisher struct {
 	client   pulsar.Client
@@ -49,7 +44,7 @@ func NewEventPublisher(pulsarURL, topic string) (*EventPublisher, error) {
 }
 
 // Tries to publish an event, retrying if necessary
-func (p *EventPublisher) Publish(event models.Workspace) error {
+func (p *EventPublisher) Publish(event ws_manager.WorkspaceSettings) error {
 	message, err := json.Marshal(event)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to serialize event")

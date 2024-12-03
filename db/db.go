@@ -7,19 +7,16 @@ import (
 	"os"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
-	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // WorkspaceDB wraps database, events, and logging functionalities.
 type WorkspaceDB struct {
-	DB     *sql.DB
-	Events events.Notifier
-	Log    *zerolog.Logger
+	DB *sql.DB
 }
 
 // NewWorkspaceDB initializes a WorkspaceDB instance with a database connection.
-func NewWorkspaceDB(events events.Notifier, log *zerolog.Logger) (*WorkspaceDB, error) {
+func NewWorkspaceDB() (*WorkspaceDB, error) {
 
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
@@ -44,22 +41,13 @@ func NewWorkspaceDB(events events.Notifier, log *zerolog.Logger) (*WorkspaceDB, 
 	}
 
 	return &WorkspaceDB{
-		DB:     db,
-		Events: events,
-		Log:    log,
+		DB: db,
 	}, nil
 }
 
 // Close closes the database connection and event notifier.
 func (w *WorkspaceDB) Close() error {
-	if err := w.DB.Close(); err != nil {
-		return err
-	}
-	w.Log.Info().Msg("database connection closed")
-
-	w.Events.Close()
-
-	return nil
+	return w.DB.Close()
 }
 
 // InitTables creates necessary tables if they do not already exist.
@@ -67,15 +55,15 @@ func (w *WorkspaceDB) InitTables() error {
 
 	err := w.DB.Ping()
 	if err != nil {
-		w.Log.Error().Err(err).Msg("Database connection ping failed")
+		log.Error().Err(err).Msg("Database connection ping failed")
 		return fmt.Errorf("database connection ping failed: %w", err)
 	}
 
-	w.Log.Debug().Msg("Database connection is healthy, starting table initialization")
+	log.Debug().Msg("Database connection is healthy, starting table initialization")
 
 	tx, err := w.DB.Begin()
 	if err != nil {
-		w.Log.Error().Err(err).Msg("error starting transaction")
+		log.Error().Err(err).Msg("error starting transaction")
 		return fmt.Errorf("error starting transaction: %w", err)
 	}
 
@@ -94,7 +82,8 @@ func (w *WorkspaceDB) InitTables() error {
 				member_group TEXT NOT NULL,
 				role_name TEXT NULL,
 				role_arn TEXT NULL,
-				status TEXT NOT NULL
+				status TEXT NOT NULL,
+				last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
 			);`,
 		`CREATE TABLE IF NOT EXISTS workspace_stores (
 				id UUID PRIMARY KEY,
@@ -118,7 +107,7 @@ func (w *WorkspaceDB) InitTables() error {
 	// Execute each table creation query in the transaction
 	for _, query := range createTableQueries {
 		if _, err := tx.Exec(query); err != nil {
-			w.Log.Error().Err(err).Msg("error creating table")
+			log.Error().Err(err).Msg("error creating table")
 			tx.Rollback()
 			return err
 		}
@@ -129,7 +118,7 @@ func (w *WorkspaceDB) InitTables() error {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
-	w.Log.Info().Msg("Tables initialized successfully")
+	log.Info().Msg("Tables initialized successfully")
 	return nil
 }
 
@@ -152,6 +141,6 @@ func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
-	w.Log.Info().Msg("Transaction committed successfully")
+	log.Info().Msg("Transaction committed successfully")
 	return nil
 }

@@ -7,17 +7,17 @@ import (
 	"net/http"
 	"regexp"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/lib/pq"
+	"github.com/rs/zerolog/log"
 )
 
 var dnsNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // HandleErrResponse formats and sends error details, including pq.Error specifics.
-func HandleErrResponse(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, statusCode int, err error) {
+func HandleErrResponse(w http.ResponseWriter, statusCode int, err error) {
 	var pqErr *pq.Error
-	var response models.Response
+	var response ws_services.Response
 	var syntaxErr *json.SyntaxError
 	var unmarshalTypeErr *json.UnmarshalTypeError
 
@@ -25,32 +25,32 @@ func HandleErrResponse(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, statu
 	if errors.As(err, &pqErr) {
 
 		// Log the error details but don't expose them to the client
-		workspaceDB.Log.Error().
+		log.Error().
 			Err(err).
 			Msg(fmt.Sprintf("Database error: Code=%s, Message=%s", pqErr.Code.Name(), pqErr.Message))
 
-		response = models.Response{
+		response = ws_services.Response{
 			Success:      0,
 			ErrorCode:    "internal_server_error",
 			ErrorDetails: "An internal server error occurred. Please try again later.",
 		}
 		// Check if the error is a JSON syntax error
 	} else if errors.As(err, &syntaxErr) {
-		response = models.Response{
+		response = ws_services.Response{
 			Success:      0,
 			ErrorCode:    "json_syntax_error",
 			ErrorDetails: fmt.Sprintf("Invalid JSON syntax at byte offset %d", syntaxErr.Offset),
 		}
 		// Check if the error is a JSON unmarshal type error
 	} else if errors.As(err, &unmarshalTypeErr) {
-		response = models.Response{
+		response = ws_services.Response{
 			Success:      0,
 			ErrorCode:    "json_type_error",
 			ErrorDetails: fmt.Sprintf("Invalid JSON type for field '%s' at byte offset %d", unmarshalTypeErr.Field, unmarshalTypeErr.Offset),
 		}
 	} else {
 		// For other error types, set a generic error response
-		response = models.Response{
+		response = ws_services.Response{
 			Success:      0,
 			ErrorCode:    "internal_server_error",
 			ErrorDetails: "An internal server error occurred.",

@@ -3,7 +3,7 @@ package services
 import (
 	"testing"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq" // Import the pq driver for PostgreSQL
 	"github.com/stretchr/testify/assert"
@@ -21,7 +21,7 @@ func TestCreateWorkspace(t *testing.T) {
 	assert.NoError(t, err, "should insert account without error")
 
 	// Define the workspace to be created
-	workspaceRequest := models.Workspace{
+	workspaceRequest := ws_manager.WorkspaceSettings{
 		ID:          uuid.New(),
 		Name:        "test-workspace",
 		Account:     accountID,
@@ -35,7 +35,7 @@ func TestCreateWorkspace(t *testing.T) {
 	assert.NotNil(t, tx, "transaction should not be nil")
 
 	// Simulate publishing the event
-	err = workspaceDB.Events.Publish(workspaceRequest)
+	err = mockPublisher.Publish(workspaceRequest)
 	assert.NoError(t, err, "should publish event without error")
 
 	// Commit the transaction
@@ -67,14 +67,14 @@ func TestGetUserWorkspaces(t *testing.T) {
 	assert.NoError(t, err, "should insert account without error")
 
 	// Insert workspaces
-	workspace1 := models.Workspace{
+	workspace1 := ws_manager.WorkspaceSettings{
 		ID:          uuid.New(),
 		Name:        "workspace-one",
 		Account:     accountID,
 		MemberGroup: "group1",
 		Status:      "creating",
 	}
-	workspace2 := models.Workspace{
+	workspace2 := ws_manager.WorkspaceSettings{
 		ID:          uuid.New(),
 		Name:        "workspace-two",
 		Account:     accountID,

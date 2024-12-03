@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -37,7 +36,10 @@ type databaseConfig struct {
 }
 
 type pulsarConfig struct {
-	URL string `yaml:"url"`
+	URL           string `yaml:"url"`
+	TopicProducer string `yaml:"topicProducer"`
+	TopicConsumer string `yaml:"topicConsumer"`
+	Subscription  string `yaml:"subscription"`
 }
 
 var rootCmd = &cobra.Command{
@@ -54,11 +56,12 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&logLevel, "log", "warn", "sets the log level")
+	rootCmd.PersistentFlags().StringVar(&logLevel, "log", "info", "sets the log level")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "/etc/workspace-services/config.yaml", "path to config file")
+
 }
 
-func setUp() {
+func commonSetUp() {
 
 	setLogging(logLevel)
 
@@ -69,22 +72,15 @@ func setUp() {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
 
-	// Initialize Pulsar connection
-	var eventPublisher *events.EventPublisher
-	if eventPublisher, err = initializeNotifications(&config.Pulsar); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize event notifier")
-	}
-
 	// Initialize WorkspaceDB
-	err = initializeDatabase(eventPublisher)
+	err = initializeDatabase()
 	if err != nil {
 		fmt.Println("Failed to initialize database", err)
 		return
 	}
-
 }
 
-func initializeDatabase(eventPublisher *events.EventPublisher) error {
+func initializeDatabase() error {
 
 	err := os.Setenv("DATABASE_URL", config.Database.Source)
 	if err != nil {
@@ -92,7 +88,7 @@ func initializeDatabase(eventPublisher *events.EventPublisher) error {
 		return err
 	}
 
-	workspaceDB, err = db.NewWorkspaceDB(eventPublisher, &log.Logger)
+	workspaceDB, err = db.NewWorkspaceDB()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize WorkspaceDB")
 		return err
@@ -101,22 +97,10 @@ func initializeDatabase(eventPublisher *events.EventPublisher) error {
 	// Create database tables if they don't exist
 	err = workspaceDB.InitTables()
 	if err != nil {
-		workspaceDB.Log.Fatal().Err(err).Msg("Failed to initialize database tables")
+		log.Fatal().Err(err).Msg("Failed to initialize database tables")
 	}
 
 	return nil
-}
-
-func initializeNotifications(config *pulsarConfig) (*events.EventPublisher, error) {
-
-	reqtopic := "persistent://public/default/workspace-configuration"
-	eventPublisher, err := events.NewEventPublisher(config.URL, reqtopic)
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize Pulsar event publisher")
-	}
-
-	return eventPublisher, nil
-
 }
 
 func setLogging(level string) zerolog.Logger {
@@ -182,6 +166,7 @@ func loadConfig(path string) (*Config, error) {
 	return c, nil
 }
 
+// loadConfig loads the config from the provided YAML data
 func (c *Config) loadConfig(data []byte) error {
 	// Unmarshal the YAML data into the config struct
 	err := yaml.Unmarshal(data, &c)
@@ -193,6 +178,7 @@ func (c *Config) loadConfig(data []byte) error {
 	return nil
 }
 
+// loadEnvVars loads the environment variables into a map
 func loadEnvVars() map[string]string {
 	envVars := make(map[string]string)
 	for _, env := range os.Environ() {

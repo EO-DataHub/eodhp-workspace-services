@@ -7,6 +7,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/handlers"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/aws"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -17,18 +18,15 @@ var serveCmd = &cobra.Command{
 	Short: "Run the HTTP server for handling API requests",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		setUp()
+		// Load the config, initialize the database and set up logging
+		commonSetUp()
 
-		// Ensure the database and notification connections close if gracefully program exits
-		defer func() {
-			if workspaceDB != nil {
-				err := workspaceDB.Close()
-				if err != nil {
-					log.Fatal().Err(err).Msg("Failed to close database connection")
-				}
-
-			}
-		}()
+		// Initialize event publisher
+		publisher, err := events.NewEventPublisher(config.Pulsar.URL, config.Pulsar.TopicProducer)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize event publisher")
+		}
+		defer publisher.Close()
 
 		// Create routes
 		r := mux.NewRouter()
@@ -45,7 +43,7 @@ var serveCmd = &cobra.Command{
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials(stsClient))).Methods(http.MethodGet)
 
 		// Workspace routes
-		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB))).Methods(http.MethodPost)
+		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB, publisher))).Methods(http.MethodPost)
 		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(workspaceDB))).Methods(http.MethodGet)
 		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(workspaceDB))).Methods(http.MethodPut)
 		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(workspaceDB))).Methods(http.MethodPatch)
