@@ -1,4 +1,4 @@
-FROM golang:1.22 AS builder
+FROM golang:1.23 AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -26,4 +26,4 @@ USER 65532:65532
 
 EXPOSE 8080
 ENTRYPOINT ["app"]
-CMD ["runserver", "--host=0.0.0.0", "--port=8080"]
+CMD ["serve", "--host=0.0.0.0", "--port=8080"]
