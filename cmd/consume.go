@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
@@ -42,15 +41,16 @@ var consumeCmd = &cobra.Command{
 			var workspaceStatus ws_manager.WorkspaceStatus
 			err = json.Unmarshal([]byte(msg.Payload()), &workspaceStatus)
 			if err != nil {
-				fmt.Printf("Error unmarshaling JSON: %v\n", err)
-				return
+				log.Error().Err(err).Msg("Error unmarshaling JSON")
+				continue
 			}
 
 			// Get the workspace from the database and check if the incoming status is newer
 			workspaceInDB, err := workspaceDB.GetWorkspace(workspaceStatus.Name)
 
 			if err != nil {
-				log.Fatal().Err(err).Str("workspace_name", workspaceStatus.Name).Msg("Failed to get workspace")
+				log.Error().Err(err).Str("workspace_name", workspaceStatus.Name).Msg("Workspace not found")
+				continue
 			}
 
 			// Update the workspace in the database if the incoming status is newer
@@ -61,10 +61,12 @@ var consumeCmd = &cobra.Command{
 
 					// Nack the message if there is an error and attempt redelivery
 					consumer.Nack(msg)
+					continue
 				}
 
 				// Acknowledge the message if status is updated successfully
 				consumer.Ack(msg)
+
 			} else {
 				log.Warn().Msg("Incoming status is older")
 
