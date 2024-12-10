@@ -55,13 +55,28 @@ var consumeCmd = &cobra.Command{
 
 			// Update the workspace in the database if the incoming status is newer
 			if workspaceStatus.LastUpdated.After(workspaceInDB.LastUpdated) {
-				err = workspaceDB.UpdateWorkspaceStatus(workspaceStatus)
-				if err != nil {
-					log.Fatal().Err(err).Msg("Failed to update workspace status")
 
-					// Nack the message if there is an error and attempt redelivery
-					consumer.Nack(msg)
-					continue
+				// If the namespace is empty, delete the workspace
+				if workspaceStatus.Namespace == "" {
+					err = workspaceDB.DeleteWorkspace(workspaceStatus.Name)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to delete workspace")
+
+						// Nack the message if there is an error and attempt redelivery
+						consumer.Nack(msg)
+						continue
+					}
+
+				} else {
+					// Update the workspace status
+					err = workspaceDB.UpdateWorkspaceStatus(workspaceStatus)
+					if err != nil {
+						log.Error().Err(err).Msg("Failed to update workspace status")
+
+						// Nack the message if there is an error and attempt redelivery
+						consumer.Nack(msg)
+						continue
+					}
 				}
 
 				// Acknowledge the message if status is updated successfully
