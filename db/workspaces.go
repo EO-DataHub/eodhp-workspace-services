@@ -311,12 +311,12 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 		}
 	}
 
-	// Update the workspaces table status to 'created'
+	// Update the workspaces table
 	err = w.execQuery(tx, `
         UPDATE workspaces
-        SET status = $1, last_updated = CURRENT_TIMESTAMP
-        WHERE id = $2`,
-		"created", workspaceID) // TODO: "created" as default placeholder for now until we interpret the CR status - Work to be done in EODHP-976
+        SET status = $1, rolename = $2, rolearn = $3, last_updated = CURRENT_TIMESTAMP
+        WHERE id = $4`,
+		"ready", status.AWS.Role.Name, status.AWS.Role.ARN, workspaceID)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error updating workspace status: %w", err)
@@ -330,4 +330,29 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 	}
 
 	return nil
+}
+
+func (w *WorkspaceDB) DeleteWorkspace(workspaceName string) error {
+
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Delete the workspace record by name
+	_, err = tx.Exec(`DELETE FROM workspaces WHERE name = $1`, workspaceName)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error deleting workspace: %w", err)
+	}
+
+	// Commit the transaction
+	err = tx.Commit()
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
+
 }
