@@ -12,6 +12,7 @@ import (
 // getWorkspace retrieves a workspace by name.
 func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error) {
 
+	// Check that the workspace exists
 	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE name = $1`
 	rows, err := db.DB.Query(query, workspace_name)
 	if err != nil {
@@ -27,7 +28,15 @@ func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.Workspac
 	} else {
 		return nil, fmt.Errorf("workspace not found")
 	}
-	return &ws, nil
+
+	// Attach the stores to this workspace
+	workspaces := []ws_manager.WorkspaceSettings{ws}
+	workspacesWithStores, err := db.getWorkspaceStores(workspaces)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspace stores: %w", err)
+	}
+
+	return &workspacesWithStores[0], nil
 }
 
 // GetUserWorkspaces retrieves workspaces accessible to the specified member groups.

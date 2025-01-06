@@ -109,6 +109,16 @@ func HasRole(roles []string, role string) bool {
 	return false
 }
 
+// Helper function to check if a member group is in the claims array
+func isMemberGroupAuthorized(workspaceGroup string, claimsGroups []string) bool {
+	for _, group := range claimsGroups {
+		if workspaceGroup == group {
+			return true
+		}
+	}
+	return false
+}
+
 // isDNSCompatible returns true if the provided name is DNS-compatible
 func IsDNSCompatible(name string) bool {
 	return dnsNameRegex.MatchString(name)

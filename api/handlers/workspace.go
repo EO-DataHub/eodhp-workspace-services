@@ -27,6 +27,14 @@ func GetWorkspaces(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// GetWorkspace handles HTTP requests for retrieving an individual workspace.
+func GetWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		services.GetWorkspaceService(workspaceDB, w, r)
+	}
+}
+
 // UpdateWorkspace handles HTTP requests for updating a specific workspace by ID.
 // This is a placeholder for the actual implementation.
 func UpdateWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {

@@ -1,9 +1,11 @@
 # EO DataHub Workspace Services
-An API gateway to the EO DataHub to manage workspace related API requests
+An API gateway to the EO DataHub to manage workspace related API requests and process events for workspace management.
 
 ## Getting Started
 ### Requisites
 - Go 1.16 or higher
+- Access to a PostgresSQL database
+- Apache Pulsar installed locally or access to a Pulsar cluster
 
 ### Installation
 Clone the repository:
@@ -23,6 +25,9 @@ database:
   source: postgres://{{.SQL_USER}}:{{.SQL_PASSWORD}}@{{.SQL_HOST}}:{{.SQL_PORT}}/{{.SQL_DATABASE}}?search_path={{.SQL_SCHEMA}}
 pulsar:
   url: pulsar://<<REPLACE>>
+  topicProducer: persistent://public/default/workspace-settings
+  topicConsumer: persistent://public/default/workspace-status
+  subscription: workspace-status-sub
 ```
 The repository connects to the workspaces database. In the cluster it will get it's connection string from env vars already setup. This config file is defined in the `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
 
@@ -39,11 +44,19 @@ These details can be given upon request.
 ## Run with Pulsar Locally
 Make sure pulsar is installed. If you run `./pulsar standalone` and amend the config file to your localhost, then the app will attach to it.
 
-## Run Server:
-```go run main.go runserver --config /path/to/config.yaml```
+## Run the API Server:
+To start the server:
+
+```go run main.go serve --config /path/to/config.yaml```
 
 
 
+### Consume Workspace Events
+The `consume` command runs a Pulsar consumer that listens to events on the `workspace-status` topic and processes workspace updates in the database.
+
+To start the server:
+
+```go run main.go consume --config /path/to/config.yaml```
 
 ## Deployment
 - Push to the ECR:
