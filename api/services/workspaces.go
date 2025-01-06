@@ -12,6 +12,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 )
 
@@ -38,6 +39,45 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 		Data:    ws_services.WorkspacesResponse{Workspaces: workspaces},
 	}, "")
 
+}
+
+// GetWorkspaceService retrieves an individual workspace accessible to the authenticated user's groups.
+func GetWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+
+	// Extract groups the user is a member of from the claims
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		return
+	}
+
+	// Parse the workspace ID from the URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+
+	// Retrieve account associated with the user's username
+	workspace, err := workspaceDB.GetWorkspace(workspaceID)
+
+	if err != nil {
+		HandleErrResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Check if the account owner matches any of the claims member groups
+	if !isMemberGroupAuthorized(workspace.MemberGroup, claims.MemberGroups) {
+		// Return a success: 0 response to indicate unauthorized access without exposing details
+		HandleSuccessResponse(w, http.StatusForbidden, nil, ws_services.Response{
+			Success:      0,
+			ErrorCode:    "unauthorized",
+			ErrorDetails: "You do not have access to this account.",
+		}, "")
+		return
+	}
+
+	// Send a success response with the retrieved workspaces data
+	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
+		Success: 1,
+		Data:    ws_services.WorkspaceResponse{Workspace: *workspace},
+	}, "")
 }
 
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
