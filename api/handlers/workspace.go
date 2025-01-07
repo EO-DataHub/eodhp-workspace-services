@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
@@ -10,12 +12,40 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
+func InitializeKeycloakClient() (*services.KeycloakClient, error) {
+	keycloakBaseURL := "https://dev.eodatahub.org.uk/keycloak"
+	keycloakClientID := "oauth2-proxy-workspaces"
+	keycloakClientSecret := "HWGhOvvqCn6Ts8aV7vRiETb8ht0OM78d"
+	keycloakRealm := "eodhp"
+
+	// Create a new Keycloak client
+	keycloakClient := services.NewKeycloakClient(keycloakBaseURL, keycloakRealm)
+
+	// Retrieve the token
+	err := keycloakClient.GetToken(keycloakClientID, keycloakClientSecret)
+	if err != nil {
+		log.Printf("Failed to get Keycloak token: %v", err)
+		return nil, fmt.Errorf("failed to authenticate with Keycloak: %w", err)
+	}
+
+	return keycloakClient, nil
+}
+
 // CreateWorkspace handles HTTP requests for creating a new workspace.
 func CreateWorkspace(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.CreateWorkspaceService(workspaceDB, publisher, w, r)
+		// Initialize the Keycloak client for administrative tasks
+		keycloakClient, err := InitializeKeycloakClient()
+		if err != nil {
+			log.Printf("Keycloak initialization error: %v", err)
+			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			return
+		}
+
+		services.CreateWorkspaceService(workspaceDB, publisher, keycloakClient, w, r)
 	}
 }
 
