@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/google/uuid"
@@ -62,6 +63,11 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 	tx, err := w.DB.Begin()
 	if err != nil {
 		return nil, fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	// Groups in keycloak have a leading / to represent their full path in heirarchical group structure. We want to maintain this in the database
+	if !strings.HasPrefix(req.MemberGroup, "/") {
+		req.MemberGroup = "/" + req.MemberGroup
 	}
 
 	// Generate a new workspace ID

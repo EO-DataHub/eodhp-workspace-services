@@ -15,11 +15,19 @@ import (
 var dnsNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // HandleErrResponse formats and sends error details, including pq.Error specifics.
-func HandleErrResponse(w http.ResponseWriter, statusCode int, err error) {
+func HandleErrResponse(w http.ResponseWriter, statusCode int, err error, customMessage ...string) {
 	var pqErr *pq.Error
 	var response ws_services.Response
 	var syntaxErr *json.SyntaxError
 	var unmarshalTypeErr *json.UnmarshalTypeError
+
+	// Determine the default error message
+	defaultMessage := "An internal server error occurred."
+
+	// Use the custom message if provided
+	if len(customMessage) > 0 {
+		defaultMessage = customMessage[0]
+	}
 
 	// Check if the error is a PostgreSQL-specific error (pq.Error)
 	if errors.As(err, &pqErr) {
@@ -53,7 +61,7 @@ func HandleErrResponse(w http.ResponseWriter, statusCode int, err error) {
 		response = ws_services.Response{
 			Success:      0,
 			ErrorCode:    "internal_server_error",
-			ErrorDetails: "An internal server error occurred.",
+			ErrorDetails: defaultMessage,
 		}
 	}
 

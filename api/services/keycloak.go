@@ -65,14 +65,15 @@ func (kc *KeycloakClient) GetToken(clientID, clientSecret string) error {
 }
 
 // CreateGroup creates a new group in Keycloak.
-func (kc *KeycloakClient) CreateGroup(groupName string) (string, error) {
+func (kc *KeycloakClient) CreateGroup(groupName string) (string, int, error) {
+
 	group := map[string]string{"name": groupName}
 	body, _ := json.Marshal(group)
 
 	url := fmt.Sprintf("%s/admin/realms/%s/groups", kc.BaseURL, kc.Realm)
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", 0, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", kc.Token))
@@ -80,17 +81,17 @@ func (kc *KeycloakClient) CreateGroup(groupName string) (string, error) {
 
 	resp, err := kc.HTTPClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to make request: %w", err)
+		return "", 0, fmt.Errorf("failed to make request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("failed to create group, status: %d, response: %s", resp.StatusCode, string(body))
+		return "", resp.StatusCode, fmt.Errorf("failed to create group, status: %d, response: %s", resp.StatusCode, string(body))
 	}
 
 	location := resp.Header.Get("Location")
-	return extractIDFromLocation(location), nil
+	return extractIDFromLocation(location), resp.StatusCode, nil
 }
 
 // Helper function to extract group ID from the Location header.

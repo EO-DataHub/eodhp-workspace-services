@@ -129,37 +129,41 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	messagePayload.Status = "creating"
 
 	// Create a group in Keycloak
-	groupID, err := kc.CreateGroup(messagePayload.MemberGroup)
+	groupID, statusCode, err := kc.CreateGroup(messagePayload.MemberGroup)
+
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create group in Keycloak")
+		if statusCode == http.StatusConflict {
+			HandleErrResponse(w, http.StatusConflict, err, fmt.Sprintf("MemberGroup %s already exists in Keycloak", messagePayload.MemberGroup))
+		} else {
+			HandleErrResponse(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	log.Info().Msgf("Group %s created successfully with ID: %s", messagePayload.MemberGroup, groupID)
+
+	// Begin the workspace creation transaction
+	tx, err := workspaceDB.CreateWorkspace(&messagePayload)
+	if err != nil {
 		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
 
-	log.Info().Msgf("Group created successfully with ID: %s", groupID)
+	// Publish a message for workspace creation
+	err = publisher.Publish(messagePayload)
+	if err != nil {
+		// Rollback the transaction if publishing fails
+		log.Error().Err(err).Msg("Failed to publish event.")
+		tx.Rollback()
+		http.Error(w, "Failed to create workspace event", http.StatusInternalServerError)
+		return
+	}
 
-	// // Begin the workspace creation transaction
-	// tx, err := workspaceDB.CreateWorkspace(&messagePayload)
-	// if err != nil {
-	// 	HandleErrResponse(w, http.StatusInternalServerError, err)
-	// 	return
-	// }
-
-	// // Publish a message for workspace creation
-	// err = publisher.Publish(messagePayload)
-	// if err != nil {
-	// 	// Rollback the transaction if publishing fails
-	// 	log.Error().Err(err).Msg("Failed to publish event.")
-	// 	tx.Rollback()
-	// 	http.Error(w, "Failed to create workspace event", http.StatusInternalServerError)
-	// 	return
-	// }
-
-	// // Commit the transaction after successful publishing
-	// if err := workspaceDB.CommitTransaction(tx); err != nil {
-	// 	http.Error(w, "Failed to commit workspace transaction", http.StatusInternalServerError)
-	// 	return
-	// }
+	// Commit the transaction after successful publishing
+	if err := workspaceDB.CommitTransaction(tx); err != nil {
+		http.Error(w, "Failed to commit workspace transaction", http.StatusInternalServerError)
+		return
+	}
 
 	// Add location header
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
