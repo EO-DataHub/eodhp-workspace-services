@@ -129,7 +129,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	messagePayload.Status = "creating"
 
 	// Create a group in Keycloak
-	groupID, statusCode, err := kc.CreateGroup(messagePayload.MemberGroup)
+	statusCode, err := kc.CreateGroup(messagePayload.MemberGroup)
 
 	if err != nil {
 		if statusCode == http.StatusConflict {
@@ -140,7 +140,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 		return
 	}
 
-	log.Info().Msgf("Group %s created successfully with ID: %s", messagePayload.MemberGroup, groupID)
+	log.Info().Msgf("Group %s created successfully", messagePayload.MemberGroup)
 
 	// Begin the workspace creation transaction
 	tx, err := workspaceDB.CreateWorkspace(&messagePayload)

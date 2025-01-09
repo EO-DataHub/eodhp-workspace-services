@@ -92,3 +92,54 @@ func PatchWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 		http.Error(w, "Failed to patch workspace "+workspaceID, http.StatusInternalServerError)
 	}
 }
+
+// GetUsers handles HTTP requests for retrieving users that are members of a workspace
+func GetUsers(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Initialize the Keycloak client for administrative tasks
+		keycloakClient, err := InitializeKeycloakClient()
+		if err != nil {
+			log.Printf("Keycloak initialization error: %v", err)
+			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			return
+		}
+
+		services.GetUsersService(workspaceDB, keycloakClient, w, r)
+	}
+}
+
+// AddUser handle HTTP requests for adding a user as a member of a workspace
+func AddUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Initialize the Keycloak client for administrative tasks
+		keycloakClient, err := InitializeKeycloakClient()
+		if err != nil {
+			log.Printf("Keycloak initialization error: %v", err)
+			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			return
+		}
+
+		services.AddUserService(workspaceDB, keycloakClient, w, r)
+	}
+}
+
+// RemoveUser handle HTTP requests for removing a user as a member of a workspace
+func RemoveUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Initialize the Keycloak client for administrative tasks
+		keycloakClient, err := InitializeKeycloakClient()
+		if err != nil {
+			log.Printf("Keycloak initialization error: %v", err)
+			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			return
+		}
+
+		services.RemoveUserService(workspaceDB, keycloakClient, w, r)
+	}
+}

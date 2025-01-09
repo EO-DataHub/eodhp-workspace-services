@@ -5,24 +5,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// Response represents a generic API response structure.
-type Response struct {
-	Success      int         `json:"success"`
-	ErrorCode    string      `json:"error_code,omitempty"`
-	ErrorDetails string      `json:"error_details,omitempty"`
-	Data         interface{} `json:"data,omitempty"`
-}
-
-// WorkspacesResponse holds a list of workspaces.
-type WorkspacesResponse struct {
-	Workspaces []ws_manager.WorkspaceSettings `json:"workspaces"`
-}
-
-// WorkspaceResponse represents a response with a single workspace.
-type WorkspaceResponse struct {
-	Workspace ws_manager.WorkspaceSettings `json:"workspace"`
-}
-
 // AccountsResponse holds a list of accounts.
 type AccountsResponse struct {
 	Accounts []Account `json:"accounts"`
