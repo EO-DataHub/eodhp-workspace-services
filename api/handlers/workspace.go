@@ -110,6 +110,23 @@ func GetUsers(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 	}
 }
 
+// GetUser handles HTTP requests for retrieving individual users that are members of a workspace
+func GetUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Initialize the Keycloak client for administrative tasks
+		keycloakClient, err := InitializeKeycloakClient()
+		if err != nil {
+			log.Printf("Keycloak initialization error: %v", err)
+			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			return
+		}
+
+		services.GetUserService(workspaceDB, keycloakClient, w, r)
+	}
+}
+
 // AddUser handle HTTP requests for adding a user as a member of a workspace
 func AddUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 

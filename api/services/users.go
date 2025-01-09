@@ -32,6 +32,7 @@ func GetUsersService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.Res
 		return
 	}
 
+	// Get the members of the group
 	members, err := kc.GetGroupMembers(group.ID)
 
 	if err != nil {
@@ -39,17 +40,44 @@ func GetUsersService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.Res
 		return
 	}
 
-	// Send a success response with the retrieved member data
-	HandleSuccessResponse(w, http.StatusOK, nil, models.Response{
-		Success: 1,
-		Data:    models.GroupMembersResponse{Members: members},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, members, "")
+}
+
+// GetUsersService retrieves all users associated with a workspace.
+func GetUserService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
+
+	// Parse the workspace ID from the URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+	userID := mux.Vars(r)["user-id"]
+	// Get information about the workspace
+	workspace, err := workspaceDB.GetWorkspace(workspaceID)
+
+	if err != nil {
+		HandleErrResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Find the group ID from keycloak
+	group, err := kc.GetGroup(workspace.MemberGroup)
+
+	if err != nil {
+		HandleErrResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Get the members of the group
+	member, err := kc.GetGroupMember(group.ID, userID)
+
+	if err != nil {
+		HandleErrResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	HandleSuccessResponse(w, http.StatusOK, nil, member, "")
 }
 
 // GetUsersService retrieves all users associated with a workspace.
 func AddUserService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
-
-	// Only the accountOwner can add/remove users!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 	// Decode the request body into a UserMembershipRequest struct
 	var messagePayload models.UserMembershipRequest

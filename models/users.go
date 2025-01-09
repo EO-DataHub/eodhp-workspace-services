@@ -15,11 +15,6 @@ type Group struct {
 	Name string `json:"name"`
 }
 
-// GroupMembersResponse represents a response with a list of group members.
-type GroupMembersResponse struct {
-	Members []User `json:"members"`
-}
-
 type UserMembershipRequest struct {
 	GroupID string `json:"groupId"`
 	UserID  string `json:"userId"`

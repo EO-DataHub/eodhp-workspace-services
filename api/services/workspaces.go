@@ -34,10 +34,7 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Send a success response with the retrieved workspaces data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.WorkspacesResponse{Workspaces: workspaces},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, workspaces, "")
 
 }
 
@@ -74,10 +71,7 @@ func GetWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *
 	}
 
 	// Send a success response with the retrieved workspaces data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.WorkspaceResponse{Workspace: *workspace},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, *workspace, "")
 }
 
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
@@ -169,9 +163,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
 
 	// Send a success response after creating the workspace and publishing the event
-	HandleSuccessResponse(w, http.StatusCreated, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.WorkspaceResponse{Workspace: messagePayload},
-	}, location)
+	HandleSuccessResponse(w, http.StatusCreated, nil, messagePayload, location)
 
 }

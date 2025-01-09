@@ -120,6 +120,24 @@ func (kc *KeycloakClient) GetGroupMembers(groupID string) ([]models.User, error)
 	return members, nil
 }
 
+func (kc *KeycloakClient) GetGroupMember(groupID, userID string) (*models.User, error) {
+
+	members, err := kc.GetGroupMembers(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch group members: %w", err)
+	}
+
+	// Search for the user in the list of members
+	for _, member := range members {
+		if member.ID == userID {
+			return &member, nil
+		}
+	}
+
+	// Return error if the user is not found
+	return nil, fmt.Errorf("user with ID %s not found in group %s", userID, groupID)
+}
+
 // AddMemberToGroup adds a user to a group in Keycloak.
 func (kc *KeycloakClient) AddMemberToGroup(userID, groupID string) error {
 	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups/%s", kc.BaseURL, kc.Realm, userID, groupID)
