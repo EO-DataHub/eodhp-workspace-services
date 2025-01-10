@@ -323,7 +323,7 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 	// Update the workspaces table
 	err = w.execQuery(tx, `
         UPDATE workspaces
-        SET status = $1, rolename = $2, rolearn = $3, last_updated = CURRENT_TIMESTAMP
+        SET status = $1, role_name = $2, role_arn = $3, last_updated = CURRENT_TIMESTAMP
         WHERE id = $4`,
 		"ready", status.AWS.Role.Name, status.AWS.Role.ARN, workspaceID)
 	if err != nil {
