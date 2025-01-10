@@ -51,9 +51,9 @@ var serveCmd = &cobra.Command{
 
 		// Workspace management routes
 		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.GetUsers(workspaceDB))).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.AddUser(workspaceDB))).Methods(http.MethodPut)
 		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.GetUser(workspaceDB))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.AddUser(workspaceDB))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.RemoveUser(workspaceDB))).Methods(http.MethodDelete)
+		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.RemoveUser(workspaceDB))).Methods(http.MethodDelete)
 
 		// Account routes
 		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(workspaceDB))).Methods(http.MethodPost)
