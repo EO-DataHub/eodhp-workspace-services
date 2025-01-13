@@ -18,8 +18,8 @@ func TestGetToken(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewKeycloakClient(server.URL, "test-realm")
-	err := client.GetToken("client-id", "client-secret")
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
+	err := client.GetToken()
 	assert.NoError(t, err)
 	assert.Equal(t, "mocked-access-token", client.Token)
 }
@@ -35,7 +35,7 @@ func TestCreateGroup(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewKeycloakClient(server.URL, "test-realm")
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
 	client.Token = "mocked-token"
 
 	statusCode, err := client.CreateGroup("test-group")
@@ -52,7 +52,7 @@ func TestGetGroup(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewKeycloakClient(server.URL, "test-realm")
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
 	client.Token = "mocked-token"
 
 	group, err := client.GetGroup("test-group")
@@ -70,7 +70,7 @@ func TestGetGroupMembers(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewKeycloakClient(server.URL, "test-realm")
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
 	client.Token = "mocked-token"
 
 	members, err := client.GetGroupMembers("group-id")
@@ -88,7 +88,7 @@ func TestAddMemberToGroup(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewKeycloakClient(server.URL, "test-realm")
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
 	client.Token = "mocked-token"
 
 	err := client.AddMemberToGroup("user-id", "group-id")
@@ -103,7 +103,7 @@ func TestRemoveMemberFromGroup(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewKeycloakClient(server.URL, "test-realm")
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
 	client.Token = "mocked-token"
 
 	err := client.RemoveMemberFromGroup("user-id", "group-id")

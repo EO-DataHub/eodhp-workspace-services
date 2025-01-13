@@ -12,26 +12,30 @@ import (
 
 // KeycloakClient is a client for interacting with the Keycloak API.
 type KeycloakClient struct {
-	BaseURL    string
-	Realm      string
-	Token      string
-	HTTPClient *http.Client
+	BaseURL      string
+	ClientID     string
+	ClientSecret string
+	Realm        string
+	Token        string
+	HTTPClient   *http.Client
 }
 
 // NewKeycloakClient creates a new instance of KeycloakClient.
-func NewKeycloakClient(baseURL, realm string) *KeycloakClient {
+func NewKeycloakClient(baseURL, clientID, clientSecret, realm string) *KeycloakClient {
 	return &KeycloakClient{
-		BaseURL:    baseURL,
-		Realm:      realm,
-		HTTPClient: &http.Client{},
+		BaseURL:      baseURL,
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Realm:        realm,
+		HTTPClient:   &http.Client{},
 	}
 }
 
 // GetToken retrieves a Keycloak access token using client_credentials.
-func (kc *KeycloakClient) GetToken(clientID, clientSecret string) error {
+func (kc *KeycloakClient) GetToken() error {
 	tokenURL := fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token", kc.BaseURL, kc.Realm)
 
-	data := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", clientID, clientSecret)
+	data := fmt.Sprintf("grant_type=client_credentials&client_id=%s&client_secret=%s", kc.ClientID, kc.ClientSecret)
 
 	respBody, _, err := kc.makeRequest(http.MethodPost, tokenURL, "application/x-www-form-urlencoded", []byte(data))
 	if err != nil {

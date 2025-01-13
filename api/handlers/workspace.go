@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
@@ -12,36 +10,15 @@ import (
 	_ "github.com/lib/pq"
 )
 
-// InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func InitializeKeycloakClient() (*services.KeycloakClient, error) {
-	keycloakBaseURL := "https://dev.eodatahub.org.uk/keycloak"
-	keycloakClientID := "oauth2-proxy-workspaces"
-	keycloakClientSecret := "HWGhOvvqCn6Ts8aV7vRiETb8ht0OM78d"
-	keycloakRealm := "eodhp"
-
-	// Create a new Keycloak client
-	keycloakClient := services.NewKeycloakClient(keycloakBaseURL, keycloakRealm)
-
-	// Retrieve the token
-	err := keycloakClient.GetToken(keycloakClientID, keycloakClientSecret)
-	if err != nil {
-		log.Printf("Failed to get Keycloak token: %v", err)
-		return nil, fmt.Errorf("failed to authenticate with Keycloak: %w", err)
-	}
-
-	return keycloakClient, nil
-}
-
 // CreateWorkspace handles HTTP requests for creating a new workspace.
-func CreateWorkspace(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher) http.HandlerFunc {
+func CreateWorkspace(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, keycloakClient *services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Initialize the Keycloak client for administrative tasks
-		keycloakClient, err := InitializeKeycloakClient()
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
 		if err != nil {
-			log.Printf("Keycloak initialization error: %v", err)
-			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
 			return
 		}
 
@@ -94,15 +71,14 @@ func PatchWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 }
 
 // GetUsers handles HTTP requests for retrieving users that are members of a workspace
-func GetUsers(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+func GetUsers(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Initialize the Keycloak client for administrative tasks
-		keycloakClient, err := InitializeKeycloakClient()
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
 		if err != nil {
-			log.Printf("Keycloak initialization error: %v", err)
-			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
 			return
 		}
 
@@ -111,15 +87,14 @@ func GetUsers(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 }
 
 // GetUser handles HTTP requests for retrieving individual users that are members of a workspace
-func GetUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+func GetUser(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Initialize the Keycloak client for administrative tasks
-		keycloakClient, err := InitializeKeycloakClient()
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
 		if err != nil {
-			log.Printf("Keycloak initialization error: %v", err)
-			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
 			return
 		}
 
@@ -128,15 +103,14 @@ func GetUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 }
 
 // AddUser handle HTTP requests for adding a user as a member of a workspace
-func AddUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+func AddUser(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Initialize the Keycloak client for administrative tasks
-		keycloakClient, err := InitializeKeycloakClient()
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
 		if err != nil {
-			log.Printf("Keycloak initialization error: %v", err)
-			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
 			return
 		}
 
@@ -145,15 +119,14 @@ func AddUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 }
 
 // RemoveUser handle HTTP requests for removing a user as a member of a workspace
-func RemoveUser(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
+func RemoveUser(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Initialize the Keycloak client for administrative tasks
-		keycloakClient, err := InitializeKeycloakClient()
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
 		if err != nil {
-			log.Printf("Keycloak initialization error: %v", err)
-			http.Error(w, "Failed to authenticate with Keycloak", http.StatusInternalServerError)
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
 			return
 		}
 
