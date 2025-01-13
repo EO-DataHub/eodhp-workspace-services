@@ -47,10 +47,8 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, account.ID)
 
 	// Send a success response with the created account data
-	HandleSuccessResponse(w, http.StatusCreated, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.AccountResponse{Account: *account},
-	}, location)
+	HandleSuccessResponse(w, http.StatusCreated, nil, *account, location)
+
 }
 
 // GetAccountsService retrieves all accounts for the authenticated user.
@@ -72,10 +70,7 @@ func GetAccountsService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *h
 	}
 
 	// Send a success response with the retrieved accounts data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.AccountsResponse{Accounts: accounts},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, accounts, "")
 
 }
 
@@ -128,10 +123,7 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	}
 
 	// Send a success response with the retrieved accounts data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.AccountResponse{Account: *account},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, *account, "")
 
 }
 
@@ -161,10 +153,7 @@ func UpdateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Send a success response with the updated account data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.AccountResponse{Account: *updatedAccount},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, *updatedAccount, "")
 
 }
 
@@ -185,8 +174,6 @@ func DeleteAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 		return
 	}
 
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-	}, "")
+	w.WriteHeader(http.StatusNoContent)
 
 }

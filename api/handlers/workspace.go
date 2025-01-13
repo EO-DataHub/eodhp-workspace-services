@@ -11,11 +11,18 @@ import (
 )
 
 // CreateWorkspace handles HTTP requests for creating a new workspace.
-func CreateWorkspace(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher) http.HandlerFunc {
+func CreateWorkspace(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, keycloakClient *services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.CreateWorkspaceService(workspaceDB, publisher, w, r)
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
+		services.CreateWorkspaceService(workspaceDB, publisher, keycloakClient, w, r)
 	}
 }
 
@@ -60,5 +67,69 @@ func PatchWorkspace(workspaceDB *db.WorkspaceDB) http.HandlerFunc {
 
 		// placeholder for the implementation
 		http.Error(w, "Failed to patch workspace "+workspaceID, http.StatusInternalServerError)
+	}
+}
+
+// GetUsers handles HTTP requests for retrieving users that are members of a workspace
+func GetUsers(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
+		services.GetUsersService(workspaceDB, keycloakClient, w, r)
+	}
+}
+
+// GetUser handles HTTP requests for retrieving individual users that are members of a workspace
+func GetUser(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
+		services.GetUserService(workspaceDB, keycloakClient, w, r)
+	}
+}
+
+// AddUser handle HTTP requests for adding a user as a member of a workspace
+func AddUser(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
+		services.AddUserService(workspaceDB, keycloakClient, w, r)
+	}
+}
+
+// RemoveUser handle HTTP requests for removing a user as a member of a workspace
+func RemoveUser(workspaceDB *db.WorkspaceDB, keycloakClient *services.KeycloakClient) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := keycloakClient.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
+		services.RemoveUserService(workspaceDB, keycloakClient, w, r)
 	}
 }
