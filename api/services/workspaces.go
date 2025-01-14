@@ -34,10 +34,7 @@ func GetWorkspacesService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Send a success response with the retrieved workspaces data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.WorkspacesResponse{Workspaces: workspaces},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, workspaces, "")
 
 }
 
@@ -74,14 +71,11 @@ func GetWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *
 	}
 
 	// Send a success response with the retrieved workspaces data
-	HandleSuccessResponse(w, http.StatusOK, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.WorkspaceResponse{Workspace: *workspace},
-	}, "")
+	HandleSuccessResponse(w, http.StatusOK, nil, *workspace, "")
 }
 
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
-func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, w http.ResponseWriter, r *http.Request) {
+func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
 
 	// Decode the request body into a Workspace struct
 	var messagePayload ws_manager.WorkspaceSettings
@@ -115,7 +109,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	// Check that the account exists and the user is the account owner
 	account, err := workspaceDB.CheckAccountExists(messagePayload.Account)
 	if err != nil {
-		fmt.Println(err)
 		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -128,6 +121,20 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	}
 
 	messagePayload.Status = "creating"
+
+	// Create a group in Keycloak
+	statusCode, err := kc.CreateGroup(messagePayload.MemberGroup)
+
+	if err != nil {
+		if statusCode == http.StatusConflict {
+			HandleErrResponse(w, http.StatusConflict, err, fmt.Sprintf("MemberGroup %s already exists in Keycloak", messagePayload.MemberGroup))
+		} else {
+			HandleErrResponse(w, http.StatusInternalServerError, err)
+		}
+		return
+	}
+
+	log.Info().Msgf("Group %s created successfully", messagePayload.MemberGroup)
 
 	// Begin the workspace creation transaction
 	tx, err := workspaceDB.CreateWorkspace(&messagePayload)
@@ -156,9 +163,6 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
 
 	// Send a success response after creating the workspace and publishing the event
-	HandleSuccessResponse(w, http.StatusCreated, nil, ws_services.Response{
-		Success: 1,
-		Data:    ws_services.WorkspaceResponse{Workspace: messagePayload},
-	}, location)
+	HandleSuccessResponse(w, http.StatusCreated, nil, messagePayload, location)
 
 }

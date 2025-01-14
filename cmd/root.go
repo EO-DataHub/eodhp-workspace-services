@@ -28,6 +28,7 @@ var (
 type Config struct {
 	Database databaseConfig `yaml:"database"`
 	Pulsar   pulsarConfig   `yaml:"pulsar"`
+	Keycloak keycloakConfig `yaml:"keycloak"`
 }
 
 type databaseConfig struct {
@@ -40,6 +41,12 @@ type pulsarConfig struct {
 	TopicProducer string `yaml:"topicProducer"`
 	TopicConsumer string `yaml:"topicConsumer"`
 	Subscription  string `yaml:"subscription"`
+}
+
+type keycloakConfig struct {
+	ClientId string `yaml:"clientId"`
+	URL      string `yaml:"url"`
+	Realm    string `yaml:"realm"`
 }
 
 var rootCmd = &cobra.Command{
