@@ -158,7 +158,7 @@ func (kc *KeycloakClient) AddMemberToGroup(userID, groupID string) error {
 	return nil
 }
 
-// AddMemberToGroup adds a user to a group in Keycloak.
+// RemoveMemberFromGroup adds a user to a group in Keycloak.
 func (kc *KeycloakClient) RemoveMemberFromGroup(userID, groupID string) error {
 	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups/%s", kc.BaseURL, kc.Realm, userID, groupID)
 

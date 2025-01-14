@@ -31,7 +31,7 @@ var serveCmd = &cobra.Command{
 		defer publisher.Close()
 
 		// Iintialise KeyCloak client
-		keycloakClient, err := initializeKeycloakClient(config.Keycloak)
+		keycloakClient := initializeKeycloakClient(config.Keycloak)
 
 		// Create routes
 		r := mux.NewRouter()
@@ -86,11 +86,11 @@ func init() {
 }
 
 // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func initializeKeycloakClient(cfg keycloakConfig) (*services.KeycloakClient, error) {
+func initializeKeycloakClient(cfg keycloakConfig) (*services.KeycloakClient) {
 	keycloakClientSecret := os.Getenv("keycloakClientSecret")
 
 	// Create a new Keycloak client
 	keycloakClient := services.NewKeycloakClient(cfg.URL, cfg.ClientId, keycloakClientSecret, cfg.Realm)
 
-	return keycloakClient, nil
+	return keycloakClient
 }
