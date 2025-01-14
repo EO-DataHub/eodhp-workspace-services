@@ -86,8 +86,8 @@ func init() {
 }
 
 // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func initializeKeycloakClient(cfg keycloakConfig) (*services.KeycloakClient) {
-	keycloakClientSecret := os.Getenv("keycloakClientSecret")
+func initializeKeycloakClient(cfg keycloakConfig) *services.KeycloakClient {
+	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
 
 	// Create a new Keycloak client
 	keycloakClient := services.NewKeycloakClient(cfg.URL, cfg.ClientId, keycloakClientSecret, cfg.Realm)
