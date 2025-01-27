@@ -161,7 +161,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	}
 
 	// Begin the workspace creation transaction
-	messagePayload.Status = "Pending"
+	messagePayload.Status = "creating"
 
 	// Define default object and block stores
 	messagePayload.Stores = &[]ws_manager.Stores{
