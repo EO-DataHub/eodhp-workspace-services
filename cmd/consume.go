@@ -50,6 +50,9 @@ var consumeCmd = &cobra.Command{
 
 			if err != nil {
 				log.Error().Err(err).Str("workspace_name", workspaceStatus.Name).Msg("Workspace not found")
+
+				// Acknowledge the message if the workspace is not found to discard it to prevent redelivery
+				consumer.Ack(msg)
 				continue
 			}
 
