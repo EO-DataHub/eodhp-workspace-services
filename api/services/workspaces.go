@@ -77,6 +77,15 @@ func GetWorkspaceService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
 func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.EventPublisher, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
 
+	// Extract the claims to get the users KC ID
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		return
+	}
+
+	accountOwnerID := claims.Subject
+
 	// Decode the request body into a Workspace struct
 	var messagePayload ws_manager.WorkspaceSettings
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
@@ -109,6 +118,7 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 	// Check that the account exists and the user is the account owner
 	account, err := workspaceDB.CheckAccountExists(messagePayload.Account)
 	if err != nil {
+		fmt.Println("Error checking account exists")
 		HandleErrResponse(w, http.StatusInternalServerError, err)
 		return
 	}
@@ -120,9 +130,8 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 		return
 	}
 
-	messagePayload.Status = "creating"
-
-	// Create a group in Keycloak
+	// Create a group in Keycloak - the group name is the same as the workspace name
+	messagePayload.MemberGroup = messagePayload.Name
 	statusCode, err := kc.CreateGroup(messagePayload.MemberGroup)
 
 	if err != nil {
@@ -136,7 +145,35 @@ func CreateWorkspaceService(workspaceDB *db.WorkspaceDB, publisher *events.Event
 
 	log.Info().Msgf("Group %s created successfully", messagePayload.MemberGroup)
 
+	// Find the group ID just created from keycloak
+	group, err := kc.GetGroup(messagePayload.MemberGroup)
+
+	if err != nil {
+		HandleErrResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	err = kc.AddMemberToGroup(accountOwnerID, group.ID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to add member to group")
+		HandleErrResponse(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	// Begin the workspace creation transaction
+	messagePayload.Status = "creating"
+
+	// Define default object and block stores
+	messagePayload.Stores = &[]ws_manager.Stores{
+		{
+			Object: []ws_manager.ObjectStore{
+				{Name: messagePayload.Name + "-object-store"},
+			},
+			Block: []ws_manager.BlockStore{
+				{Name: messagePayload.Name + "-block-store"},
+			},
+		},
+	}
 	tx, err := workspaceDB.CreateWorkspace(&messagePayload)
 	if err != nil {
 		HandleErrResponse(w, http.StatusInternalServerError, err)

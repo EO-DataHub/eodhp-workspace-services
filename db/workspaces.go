@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/google/uuid"
@@ -78,6 +79,7 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 	// Insert into workspace_stores and then into object_stores/block_stores
 	if req.Stores != nil {
 		for _, store := range *req.Stores {
+
 			// Insert Object Stores
 			for _, object := range store.Object {
 				storeID := uuid.New()
@@ -306,26 +308,36 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 
 	// Update object_store table
 	for _, bucket := range status.AWS.S3.Buckets {
+
+		// Extract the top-level directory (store name) from the bucket path.
+		// The store name is assumed to be the first segment before the "/".
+		storeName := strings.Split(bucket.Path, "/")[0]
+
+		// Construct the full S3 path by combining the bucket name and the object path.
+		// This results in the format: "<bucket-name>/<key-path>".
+		storePath := fmt.Sprintf("%s/%s", bucket.Name, bucket.Path)
+
 		err = w.execQuery(tx, `
 			UPDATE object_stores
 			SET path = $1, env_var = $2, access_point_arn = $3
 			FROM workspace_stores
 			WHERE object_stores.store_id = workspace_stores.id
-			  AND workspace_stores.name = $4
+			AND workspace_stores.name = $4
 			  AND workspace_stores.workspace_id = $5`,
-			bucket.Path, bucket.EnvVar, bucket.AccessPointARN, bucket.Name, workspaceID)
+			storePath, bucket.EnvVar, bucket.AccessPointARN, storeName, workspaceID)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("error updating object store: %w", err)
 		}
+
 	}
 
 	// Update the workspaces table
 	err = w.execQuery(tx, `
         UPDATE workspaces
-        SET status = $1, role_name = $2, role_arn = $3, last_updated = CURRENT_TIMESTAMP
+        SET role_name = $1, role_arn = $2, status = $3, last_updated = CURRENT_TIMESTAMP
         WHERE id = $4`,
-		"ready", status.AWS.Role.Name, status.AWS.Role.ARN, workspaceID)
+		status.AWS.Role.Name, status.AWS.Role.ARN, status.State, workspaceID)
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error updating workspace status: %w", err)
