@@ -9,6 +9,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/aws"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
@@ -24,14 +25,14 @@ var serveCmd = &cobra.Command{
 		commonSetUp()
 
 		// Initialize event publisher
-		publisher, err := events.NewEventPublisher(config.Pulsar.URL, config.Pulsar.TopicProducer)
+		publisher, err := events.NewEventPublisher(appCfg.Pulsar.URL, appCfg.Pulsar.TopicProducer)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize event publisher")
 		}
 		defer publisher.Close()
 
 		// Iintialise KeyCloak client
-		keycloakClient := initializeKeycloakClient(config.Keycloak)
+		keycloakClient := initializeKeycloakClient(appCfg.Keycloak)
 
 		// Create routes
 		r := mux.NewRouter()
@@ -41,6 +42,13 @@ var serveCmd = &cobra.Command{
 			return middleware.WithLogger(middleware.JWTMiddleware(next))
 		}
 
+		service := &services.Service{
+			Config:    appCfg,
+			DB:        workspaceDB,
+			Publisher: publisher,
+			KC:        keycloakClient,
+		}
+
 		// Instance of real AWS STS Client
 		stsClient := &aws.DefaultSTSClient{}
 
@@ -48,24 +56,24 @@ var serveCmd = &cobra.Command{
 		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials(stsClient))).Methods(http.MethodGet)
 
 		// Workspace routes
-		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(workspaceDB, publisher, keycloakClient))).Methods(http.MethodPost)
-		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(workspaceDB))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.GetWorkspace(workspaceDB))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(workspaceDB))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(workspaceDB))).Methods(http.MethodPatch)
+		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
+		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(service))).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.GetWorkspace(service))).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(service))).Methods(http.MethodPut)
+		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(service))).Methods(http.MethodPatch)
 
 		// Workspace management routes
-		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.GetUsers(workspaceDB, keycloakClient))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.AddUser(workspaceDB, keycloakClient))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.GetUser(workspaceDB, keycloakClient))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.RemoveUser(workspaceDB, keycloakClient))).Methods(http.MethodDelete)
+		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.GetUsers(service))).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.AddUser(service))).Methods(http.MethodPut)
+		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.GetUser(service))).Methods(http.MethodGet)
+		r.HandleFunc("/api/workspaces/{workspace-id}/users/{user-id}", middleware(handlers.RemoveUser(service))).Methods(http.MethodDelete)
 
 		// Account routes
-		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(workspaceDB))).Methods(http.MethodPost)
-		r.HandleFunc("/api/accounts", middleware(handlers.GetAccounts(workspaceDB))).Methods(http.MethodGet)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.GetAccount(workspaceDB))).Methods(http.MethodGet)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.DeleteAccount(workspaceDB))).Methods(http.MethodDelete)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.UpdateAccount(workspaceDB))).Methods(http.MethodPut)
+		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(service))).Methods(http.MethodPost)
+		r.HandleFunc("/api/accounts", middleware(handlers.GetAccounts(service))).Methods(http.MethodGet)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.GetAccount(service))).Methods(http.MethodGet)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.DeleteAccount(service))).Methods(http.MethodDelete)
+		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.UpdateAccount(service))).Methods(http.MethodPut)
 
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
@@ -86,11 +94,11 @@ func init() {
 }
 
 // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func initializeKeycloakClient(cfg keycloakConfig) *services.KeycloakClient {
+func initializeKeycloakClient(kcCfg config.KeycloakConfig) *services.KeycloakClient {
 	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
 
 	// Create a new Keycloak client
-	keycloakClient := services.NewKeycloakClient(cfg.URL, cfg.ClientId, keycloakClientSecret, cfg.Realm)
+	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
 }

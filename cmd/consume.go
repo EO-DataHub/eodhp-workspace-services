@@ -19,7 +19,7 @@ var consumeCmd = &cobra.Command{
 		commonSetUp()
 
 		// Initialize event consumer
-		consumer, err := events.NewEventConsumer(config.Pulsar.URL, config.Pulsar.TopicConsumer, config.Pulsar.Subscription)
+		consumer, err := events.NewEventConsumer(appCfg.Pulsar.URL, appCfg.Pulsar.TopicConsumer, appCfg.Pulsar.Subscription)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize event consumer")
 		}

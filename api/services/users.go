@@ -3,146 +3,144 @@ package services
 import (
 	"net/http"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 )
 
 // GetUsersService retrieves all users associated with a workspace.
-func GetUsersService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
+func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 
 	// Get information about the workspace
-	workspace, err := workspaceDB.GetWorkspace(workspaceID)
+	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Find the group ID from keycloak
-	group, err := kc.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Get the members of the group
-	members, err := kc.GetGroupMembers(group.ID)
+	members, err := svc.KC.GetGroupMembers(group.ID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Return the members
-	HandleSuccessResponse(w, http.StatusOK, nil, members, "")
+	WriteResponse(w, http.StatusOK, members)
 }
 
 // GetUsersService retrieves all users associated with a workspace.
-func GetUserService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
+func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	userID := mux.Vars(r)["user-id"]
+
 	// Get information about the workspace
-	workspace, err := workspaceDB.GetWorkspace(workspaceID)
+	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Find the group ID from keycloak
-	group, err := kc.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Get the members of the group
-	member, err := kc.GetGroupMember(group.ID, userID)
+	member, err := svc.KC.GetGroupMember(group.ID, userID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Return the member
-	HandleSuccessResponse(w, http.StatusOK, nil, member, "")
+	WriteResponse(w, http.StatusOK, member)
 }
 
 // AddUserService adds a user to a workspace.
-func AddUserService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
+func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	userID := mux.Vars(r)["user-id"]
 
 	// Get the workspace member_group
-	workspace, err := workspaceDB.GetWorkspace(workspaceID)
+	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Find the group ID from keycloak
-	group, err := kc.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Add the user to the group in Keycloak
-	err = kc.AddMemberToGroup(userID, group.ID)
+	err = svc.KC.AddMemberToGroup(userID, group.ID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to add member to group")
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
-	// Set the status code to 204 and return without a body
-	w.WriteHeader(http.StatusNoContent)
+	WriteResponse(w, http.StatusNoContent, nil)
 }
 
 // RemoveUserService removes a user from a workspace.
-func RemoveUserService(workspaceDB *db.WorkspaceDB, kc *KeycloakClient, w http.ResponseWriter, r *http.Request) {
+func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	userID := mux.Vars(r)["user-id"]
 
 	// Get the workspace member_group
-	workspace, err := workspaceDB.GetWorkspace(workspaceID)
+	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Find the group ID from keycloak
-	group, err := kc.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Remove the user from the group in Keycloak
-	err = kc.RemoveMemberFromGroup(userID, group.ID)
+	err = svc.KC.RemoveMemberFromGroup(userID, group.ID)
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to remove member from group")
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
-	// Set the status code to 204 and return without a body
-	w.WriteHeader(http.StatusNoContent)
+	WriteResponse(w, http.StatusNoContent, nil)
 }

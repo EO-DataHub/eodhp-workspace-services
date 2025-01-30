@@ -1,19 +1,16 @@
 package cmd
 
 import (
-	"bytes"
-	"errors"
 	"fmt"
-	"html/template"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 )
 
 var (
@@ -21,33 +18,10 @@ var (
 	host        string
 	port        int
 	configPath  string
-	config      *Config
+	appCfg      *config.Config
 	workspaceDB *db.WorkspaceDB
+	logger      zerolog.Logger
 )
-
-type Config struct {
-	Database databaseConfig `yaml:"database"`
-	Pulsar   pulsarConfig   `yaml:"pulsar"`
-	Keycloak keycloakConfig `yaml:"keycloak"`
-}
-
-type databaseConfig struct {
-	Driver string `yaml:"driver"`
-	Source string `yaml:"source"`
-}
-
-type pulsarConfig struct {
-	URL           string `yaml:"url"`
-	TopicProducer string `yaml:"topicProducer"`
-	TopicConsumer string `yaml:"topicConsumer"`
-	Subscription  string `yaml:"subscription"`
-}
-
-type keycloakConfig struct {
-	ClientId string `yaml:"clientId"`
-	URL      string `yaml:"url"`
-	Realm    string `yaml:"realm"`
-}
 
 var rootCmd = &cobra.Command{
 	Use:   "workspace-services",
@@ -70,11 +44,11 @@ func init() {
 
 func commonSetUp() {
 
-	setLogging(logLevel)
+	logger = setLogging(logLevel)
 
 	// Load the config file
 	var err error
-	config, err = loadConfig(configPath)
+	appCfg, err = config.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
@@ -89,13 +63,13 @@ func commonSetUp() {
 
 func initializeDatabase() error {
 
-	err := os.Setenv("DATABASE_URL", config.Database.Source)
+	err := os.Setenv("DATABASE_URL", appCfg.Database.Source)
 	if err != nil {
 		fmt.Println("Error setting environment variable:", err)
 		return err
 	}
 
-	workspaceDB, err = db.NewWorkspaceDB()
+	workspaceDB, err = db.NewWorkspaceDB(appCfg.AWS)
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize WorkspaceDB")
 		return err
@@ -137,62 +111,4 @@ func setLogging(level string) zerolog.Logger {
 	logger := zerolog.New(consoleWriter).With().Timestamp().Logger()
 
 	return logger
-}
-
-func loadConfig(path string) (*Config, error) {
-	// Read the config file
-	if path == "" {
-		err := errors.New("--config flag is required")
-		log.Fatal().Err(err).Msg("config file not provided")
-		return nil, err
-	}
-
-	// Parse the template file
-	tmpl, err := template.ParseFiles(path)
-	if err != nil {
-		log.Fatal().Err(err).Msg("error parsing config file template")
-	}
-
-	// Create a map of environment variables
-	envVars := loadEnvVars()
-
-	// Execute the template with the environment variables
-	var buf bytes.Buffer
-	err = tmpl.Execute(&buf, envVars)
-	if err != nil {
-		log.Fatal().Err(err).Msg("error executing config file template")
-	}
-
-	// Load the config
-	c := &Config{}
-	if err := c.loadConfig(buf.Bytes()); err != nil {
-		log.Fatal().Err(err).Msg("failed to load config")
-		return nil, err
-	}
-
-	return c, nil
-}
-
-// loadConfig loads the config from the provided YAML data
-func (c *Config) loadConfig(data []byte) error {
-	// Unmarshal the YAML data into the config struct
-	err := yaml.Unmarshal(data, &c)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to unmarshal file")
-		return err
-	}
-
-	return nil
-}
-
-// loadEnvVars loads the environment variables into a map
-func loadEnvVars() map[string]string {
-	envVars := make(map[string]string)
-	for _, env := range os.Environ() {
-		kv := strings.Split(env, "=")
-		if len(kv) == 2 {
-			envVars[kv[0]] = kv[1]
-		}
-	}
-	return envVars
 }
