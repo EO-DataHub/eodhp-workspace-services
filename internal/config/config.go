@@ -46,8 +46,9 @@ type S3Config struct {
 }
 
 type AWSConfig struct {
-	Account string   `yaml:"account"`
-	S3      S3Config `yaml:"s3"`
+	Account         string   `yaml:"account"`
+	WorkspaceDomain string   `yaml:"workspace_domain"`
+	S3              S3Config `yaml:"s3"`
 }
 
 // LoadConfig loads and parses the configuration from a given file path

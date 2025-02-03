@@ -38,8 +38,6 @@ func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) 
 // GetWorkspaceService retrieves an individual workspace accessible to the authenticated user's groups.
 func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
-	// logger := log.Ctx(r.Context())
-	// logger.Info().Send()
 	// Extract groups the user is a member of from the claims
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
@@ -49,7 +47,6 @@ func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
-	// logger.Info().Str("workspace_id", workspaceID).Msg("Fetching workspace")
 
 	// Retrieve account associated with the user's username
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -80,24 +77,22 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	accountOwnerID := claims.Subject
-
 	// Decode the request body into a Workspace struct
-	var messagePayload ws_manager.WorkspaceSettings
-	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
+	var wsSettings ws_manager.WorkspaceSettings
+	if err := json.NewDecoder(r.Body).Decode(&wsSettings); err != nil {
 		log.Error().Err(err).Msg("Invalid request payload")
 		WriteResponse(w, http.StatusBadRequest, nil)
 		return
 	}
 
 	// Check the name is DNS-compatible
-	if !IsDNSCompatible(messagePayload.Name) {
+	if !IsDNSCompatible(wsSettings.Name) {
 		WriteResponse(w, http.StatusConflict, fmt.Errorf("invalid workspace name: must be DNS-compatible"))
 		return
 	}
 
 	// Check that the workspace name does not already exist
-	workspaceExists, err := svc.DB.CheckWorkspaceExists(messagePayload.Name)
+	workspaceExists, err := svc.DB.CheckWorkspaceExists(wsSettings.Name)
 	if err != nil {
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
@@ -105,13 +100,13 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 
 	// Return a conflict response if the workspace name already exists
 	if workspaceExists {
-		log.Error().Msgf("workspace with name %s already exists", messagePayload.Name)
-		WriteResponse(w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", messagePayload.Name))
+		log.Error().Msgf("workspace with name %s already exists", wsSettings.Name)
+		WriteResponse(w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", wsSettings.Name))
 		return
 	}
 
 	// Check that the account exists and the user is the account owner
-	account, err := svc.DB.CheckAccountExists(messagePayload.Account)
+	account, err := svc.DB.CheckAccountExists(wsSettings.Account)
 	if err != nil {
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
@@ -119,30 +114,31 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 
 	// Return a not found response if the account does not exist
 	if !account {
-		log.Error().Msgf("account with ID %s not found", messagePayload.Account)
+		log.Error().Msgf("account with ID %s not found", wsSettings.Account)
 		WriteResponse(w, http.StatusNotFound, fmt.Errorf("The account associated with this workspace does not exist"))
 		return
 	}
 
 	// Create a group in Keycloak - the group name is the same as the workspace name
-	messagePayload.MemberGroup = messagePayload.Name
-	statusCode, err := svc.KC.CreateGroup(messagePayload.MemberGroup)
+	wsSettings.MemberGroup = wsSettings.Name
+	statusCode, err := svc.KC.CreateGroup(wsSettings.MemberGroup)
 
 	if err != nil {
 		WriteResponse(w, statusCode, nil)
 		return
 	}
 
-	log.Info().Msgf("Group %s created successfully", messagePayload.MemberGroup)
+	log.Info().Msgf("Group %s created successfully", wsSettings.MemberGroup)
 
 	// Find the group ID just created from keycloak
-	group, err := svc.KC.GetGroup(messagePayload.MemberGroup)
+	group, err := svc.KC.GetGroup(wsSettings.MemberGroup)
 
 	if err != nil {
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
+	accountOwnerID := claims.Subject
 	err = svc.KC.AddMemberToGroup(accountOwnerID, group.ID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to add member to group")
@@ -151,35 +147,32 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	}
 
 	// Begin the workspace creation transaction
-	messagePayload.Status = "creating"
+	wsSettings.Status = "creating"
 
 	// Define default object and block stores
-	messagePayload.Stores = &[]ws_manager.Stores{
-		// {
-		// 	Object: []ws_manager.ObjectStore{
-		// 		{Name: messagePayload.Name + "-object-store"},
-		// 	},
-		// 	Block: []ws_manager.BlockStore{
-		// 		{Name: messagePayload.Name + "-block-store"},
-		// 	},
-		// },
+	wsSettings.Stores = &[]ws_manager.Stores{
 		{
 			Object: []ws_manager.ObjectStore{
-				{Name: messagePayload.Name + "-object-store"},
+				// Object store uses a shared bucket, so we must differentiate each workspace's
+				// data by using a unique prefix that includes the workspace name.
+				// This ensures isolation and prevents conflicts between different workspaces.
+				{Name: wsSettings.Name + "-object-store"},
 			},
 			Block: []ws_manager.BlockStore{
+				// Block store can use a directory structure under /workspaces/<workspace>/<block-store-name>,
+				// so no additional prefixing is needed.
 				{Name: "block-store"},
 			},
 		},
 	}
-	tx, err := svc.DB.CreateWorkspace(&messagePayload)
+	tx, err := svc.DB.CreateWorkspace(&wsSettings)
 	if err != nil {
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Publish a message for workspace creation
-	err = svc.Publisher.Publish(messagePayload)
+	err = svc.Publisher.Publish(wsSettings)
 	if err != nil {
 		// Rollback the transaction if publishing fails
 		log.Error().Err(err).Msg("Failed to publish event.")
@@ -195,9 +188,9 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	}
 
 	// Add location header
-	var location = fmt.Sprintf("%s/%s", r.URL.Path, messagePayload.ID)
+	var location = fmt.Sprintf("%s/%s", r.URL.Path, wsSettings.ID)
 
 	// Send a success response after creating the workspace and publishing the event
-	WriteResponse(w, http.StatusCreated, messagePayload, location)
+	WriteResponse(w, http.StatusCreated, wsSettings, location)
 
 }

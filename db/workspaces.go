@@ -234,10 +234,10 @@ func (db *WorkspaceDB) getBlockStores(workspaces []ws_manager.WorkspaceSettings)
 func (db *WorkspaceDB) getObjectStores(workspaces []ws_manager.WorkspaceSettings) (map[uuid.UUID][]ws_manager.ObjectStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `
-		SELECT ws.workspace_id, ws.name, os.store_id, os.path, os.env_var, os.access_point_arn
-		FROM workspace_stores ws
-		INNER JOIN object_stores os ON os.store_id = ws.id
-		WHERE ws.workspace_id = ANY($1)`
+	   SELECT ws.id, ws.name, wss.name, os.* from workspaces ws
+       INNER join workspace_stores wss on wss.workspace_id = ws.id
+       INNER join object_stores os on os.store_id = wss.id
+       WHERE ws.id = ANY($1)`
 	rows, err := db.DB.Query(query, pq.Array(workspaceIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving object stores: %w", err)
@@ -245,19 +245,28 @@ func (db *WorkspaceDB) getObjectStores(workspaces []ws_manager.WorkspaceSettings
 	defer rows.Close()
 
 	objectStores := make(map[uuid.UUID][]ws_manager.ObjectStore)
+
 	for rows.Next() {
+
+		var workspaceName string
 		var workspaceID uuid.UUID
 		var os ws_manager.ObjectStore
 
-		accessPointName := strings.Split(os.AccessPointArn, "/")[1]
-
-		if err := rows.Scan(&workspaceID, &os.Name, &os.StoreID, &os.Prefix, &os.EnvVar, &os.AccessPointArn); err != nil {
+		if err := rows.Scan(&workspaceID, &workspaceName, &os.Name, &os.StoreID, &os.Prefix, &os.EnvVar, &os.AccessPointArn); err != nil {
 			return nil, fmt.Errorf("error scanning object store: %w", err)
 		}
 
 		// Derived data
 		os.Bucket = db.AWSConfig.S3.Bucket
+		accessPointName := func() string {
+			parts := strings.Split(os.AccessPointArn, "/")
+			if len(parts) > 1 {
+				return parts[1]
+			}
+			return ""
+		}()
 		os.Host = fmt.Sprintf("%s-%s.%s", accessPointName, db.AWSConfig.Account, db.AWSConfig.S3.Host)
+		os.AccessURL = fmt.Sprintf("https://%s.%s/files/%s/%s", workspaceName, db.AWSConfig.WorkspaceDomain, os.Bucket, os.Prefix)
 
 		// Add object store to the map
 		objectStores[workspaceID] = append(objectStores[workspaceID], os)
