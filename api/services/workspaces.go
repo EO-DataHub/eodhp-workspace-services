@@ -30,6 +30,11 @@ func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Ensure workspaces is not nil, return an empty slice if no workspaces are found
+	if workspaces == nil {
+		workspaces = []ws_manager.WorkspaceSettings{}
+	}
+
 	// Send a success response with the retrieved workspaces data
 	WriteResponse(w, http.StatusOK, workspaces)
 
