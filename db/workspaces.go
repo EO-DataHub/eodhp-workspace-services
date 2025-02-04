@@ -98,7 +98,7 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 				err = w.execQuery(tx, `
                     INSERT INTO object_stores (store_id, path, env_var, access_point_arn)
                     VALUES ($1, $2, $3, $4)`,
-					storeID, object.Path, object.EnvVar, object.AccessPointArn)
+					storeID, object.Prefix, object.EnvVar, object.AccessPointArn)
 				if err != nil {
 					tx.Rollback()
 					return nil, fmt.Errorf("error inserting into object_stores: %w", err)
@@ -121,9 +121,9 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 
 				// Insert into `block_stores` using the generated store ID
 				err = w.execQuery(tx, `
-                    INSERT INTO block_stores (store_id, access_point_id, fs_id)
+                    INSERT INTO block_stores (store_id, access_point_id, mount_point)
                     VALUES ($1, $2, $3)`,
-					storeID, block.AccessPointID, block.FSID)
+					storeID, block.AccessPointID, block.MountPoint)
 				if err != nil {
 					tx.Rollback()
 					return nil, fmt.Errorf("error inserting into block_stores: %w", err)
@@ -144,6 +144,7 @@ func (db *WorkspaceDB) getWorkspaceStores(workspaces []ws_manager.WorkspaceSetti
 	}
 
 	objectStores, err := db.getObjectStores(workspaces)
+
 	if err != nil {
 		return nil, err
 	}
@@ -207,7 +208,7 @@ func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager
 func (db *WorkspaceDB) getBlockStores(workspaces []ws_manager.WorkspaceSettings) (map[uuid.UUID][]ws_manager.BlockStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `
-		SELECT ws.workspace_id, ws.name, bs.store_id, bs.access_point_id, bs.fs_id
+		SELECT ws.workspace_id, ws.name, bs.store_id, bs.access_point_id, bs.mount_point
 		FROM workspace_stores ws
 		INNER JOIN block_stores bs ON bs.store_id = ws.id
 		WHERE ws.workspace_id = ANY($1)`
@@ -221,7 +222,7 @@ func (db *WorkspaceDB) getBlockStores(workspaces []ws_manager.WorkspaceSettings)
 	for rows.Next() {
 		var workspaceID uuid.UUID
 		var bs ws_manager.BlockStore
-		if err := rows.Scan(&workspaceID, &bs.Name, &bs.StoreID, &bs.AccessPointID, &bs.FSID); err != nil {
+		if err := rows.Scan(&workspaceID, &bs.Name, &bs.StoreID, &bs.AccessPointID, &bs.MountPoint); err != nil {
 			return nil, fmt.Errorf("error scanning block store: %w", err)
 		}
 		blockStores[workspaceID] = append(blockStores[workspaceID], bs)
@@ -233,10 +234,10 @@ func (db *WorkspaceDB) getBlockStores(workspaces []ws_manager.WorkspaceSettings)
 func (db *WorkspaceDB) getObjectStores(workspaces []ws_manager.WorkspaceSettings) (map[uuid.UUID][]ws_manager.ObjectStore, error) {
 	workspaceIDs := extractWorkspaceIDs(workspaces)
 	query := `
-		SELECT ws.workspace_id, ws.name, os.store_id, os.path, os.env_var, os.access_point_arn
-		FROM workspace_stores ws
-		INNER JOIN object_stores os ON os.store_id = ws.id
-		WHERE ws.workspace_id = ANY($1)`
+	   SELECT ws.id, ws.name, wss.name, os.* from workspaces ws
+       INNER join workspace_stores wss on wss.workspace_id = ws.id
+       INNER join object_stores os on os.store_id = wss.id
+       WHERE ws.id = ANY($1)`
 	rows, err := db.DB.Query(query, pq.Array(workspaceIDs))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving object stores: %w", err)
@@ -244,12 +245,30 @@ func (db *WorkspaceDB) getObjectStores(workspaces []ws_manager.WorkspaceSettings
 	defer rows.Close()
 
 	objectStores := make(map[uuid.UUID][]ws_manager.ObjectStore)
+
 	for rows.Next() {
+
+		var workspaceName string
 		var workspaceID uuid.UUID
 		var os ws_manager.ObjectStore
-		if err := rows.Scan(&workspaceID, &os.Name, &os.StoreID, &os.Path, &os.EnvVar, &os.AccessPointArn); err != nil {
+
+		if err := rows.Scan(&workspaceID, &workspaceName, &os.Name, &os.StoreID, &os.Prefix, &os.EnvVar, &os.AccessPointArn); err != nil {
 			return nil, fmt.Errorf("error scanning object store: %w", err)
 		}
+
+		// Derived data
+		os.Bucket = db.AWSConfig.S3.Bucket
+		accessPointName := func() string {
+			parts := strings.Split(os.AccessPointArn, "/")
+			if len(parts) > 1 {
+				return parts[1]
+			}
+			return ""
+		}()
+		os.Host = fmt.Sprintf("%s-%s.%s", accessPointName, db.AWSConfig.Account, db.AWSConfig.S3.Host)
+		os.AccessURL = fmt.Sprintf("https://%s.%s/files/%s/%s", workspaceName, db.AWSConfig.WorkspaceDomain, os.Bucket, os.Prefix)
+
+		// Add object store to the map
 		objectStores[workspaceID] = append(objectStores[workspaceID], os)
 	}
 	return objectStores, nil
@@ -294,12 +313,12 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 	for _, efs := range status.AWS.EFS.AccessPoints {
 		err = w.execQuery(tx, `
 			UPDATE block_stores
-			SET access_point_id = $1, fs_id = $2
+			SET access_point_id = $1, mount_point = $2
 			FROM workspace_stores
 			WHERE block_stores.store_id = workspace_stores.id
 			  AND workspace_stores.name = $3
 			  AND workspace_stores.workspace_id = $4`,
-			efs.AccessPointID, efs.FSID, efs.Name, workspaceID)
+			efs.AccessPointID, efs.RootDirectory, efs.Name, workspaceID)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("error updating block store: %w", err)
@@ -313,10 +332,6 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 		// The store name is assumed to be the first segment before the "/".
 		storeName := strings.Split(bucket.Path, "/")[0]
 
-		// Construct the full S3 path by combining the bucket name and the object path.
-		// This results in the format: "<bucket-name>/<key-path>".
-		storePath := fmt.Sprintf("%s/%s", bucket.Name, bucket.Path)
-
 		err = w.execQuery(tx, `
 			UPDATE object_stores
 			SET path = $1, env_var = $2, access_point_arn = $3
@@ -324,7 +339,7 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 			WHERE object_stores.store_id = workspace_stores.id
 			AND workspace_stores.name = $4
 			  AND workspace_stores.workspace_id = $5`,
-			storePath, bucket.EnvVar, bucket.AccessPointARN, storeName, workspaceID)
+			bucket.Path, bucket.EnvVar, bucket.AccessPointARN, storeName, workspaceID)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("error updating object store: %w", err)

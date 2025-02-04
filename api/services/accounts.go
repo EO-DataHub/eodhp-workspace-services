@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
-	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
@@ -15,19 +14,19 @@ import (
 )
 
 // CreateAccountService creates a new account for the authenticated user.
-func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Retrieve claims from the request context to identify the user
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
-		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		WriteResponse(w, http.StatusUnauthorized, nil)
 		return
 	}
 
 	// Decode the request payload into an Account struct
 	var messagePayload ws_services.Account
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
-		HandleErrResponse(w, http.StatusBadRequest, err)
+		WriteResponse(w, http.StatusBadRequest, nil)
 		return
 	}
 
@@ -37,9 +36,9 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// Create the account in the database
-	account, err := workspaceDB.CreateAccount(&messagePayload)
+	account, err := svc.DB.CreateAccount(&messagePayload)
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
@@ -47,40 +46,40 @@ func CreateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, account.ID)
 
 	// Send a success response with the created account data
-	HandleSuccessResponse(w, http.StatusCreated, nil, *account, location)
+	WriteResponse(w, http.StatusCreated, *account, location)
 
 }
 
 // GetAccountsService retrieves all accounts for the authenticated user.
-func GetAccountsService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Extract claims from the request context to identify the user
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
-		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		WriteResponse(w, http.StatusUnauthorized, nil)
 		return
 	}
 
 	// Retrieve accounts associated with the user's username
-	accounts, err := workspaceDB.GetAccounts(claims.Username)
+	accounts, err := svc.DB.GetAccounts(claims.Username)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Send a success response with the retrieved accounts data
-	HandleSuccessResponse(w, http.StatusOK, nil, accounts, "")
+	WriteResponse(w, http.StatusOK, accounts)
 
 }
 
 // GetAccountService retrieves a single account all accounts for the authenticated user.
-func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+func GetAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Extract claims from the request context to identify the user
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
-		http.Error(w, "Unauthorized: invalid claims", http.StatusUnauthorized)
+		WriteResponse(w, http.StatusUnauthorized, nil)
 		return
 	}
 
@@ -88,77 +87,67 @@ func GetAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *ht
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusBadRequest, err)
+		WriteResponse(w, http.StatusBadRequest, nil)
 		return
 	}
 
 	// Retrieve account associated with the user's username
-	account, err := workspaceDB.GetAccount(accountID)
+	account, err := svc.DB.GetAccount(accountID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Handle non-existent account
 	if account == nil {
-		// Return 404 Not Found as if the account does not exist
-		HandleSuccessResponse(w, http.StatusNotFound, nil, ws_services.Response{
-			Success:      0,
-			ErrorCode:    "not_found",
-			ErrorDetails: "The requested account does not exist.",
-		}, "")
+		WriteResponse(w, http.StatusNotFound, nil)
 		return
 	}
 
 	// Check if the account owner matches the claims username
 	if account.AccountOwner != claims.Username {
-		// Return a success: 0 response to indicate unauthorized access without exposing details
-		HandleSuccessResponse(w, http.StatusForbidden, nil, ws_services.Response{
-			Success:      0,
-			ErrorCode:    "unauthorized",
-			ErrorDetails: "You do not have access to this account.",
-		}, "")
+		WriteResponse(w, http.StatusForbidden, nil)
 		return
 	}
 
 	// Send a success response with the retrieved accounts data
-	HandleSuccessResponse(w, http.StatusOK, nil, *account, "")
+	WriteResponse(w, http.StatusOK, *account)
 
 }
 
 // UpdateAccountService updates an account based on account ID from the URL path.
-func UpdateAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the account ID from the URL path
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusBadRequest, err)
+		WriteResponse(w, http.StatusBadRequest, nil)
 		return
 	}
 
 	// Decode the request payload into an Account struct
 	var updatePayload ws_services.Account
 	if err := json.NewDecoder(r.Body).Decode(&updatePayload); err != nil {
-		HandleErrResponse(w, http.StatusBadRequest, err)
+		WriteResponse(w, http.StatusBadRequest, nil)
 		return
 	}
 
 	// Call UpdateAccount to change the account fields in the database
-	updatedAccount, err := workspaceDB.UpdateAccount(accountID, updatePayload)
+	updatedAccount, err := svc.DB.UpdateAccount(accountID, updatePayload)
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	// Send a success response with the updated account data
-	HandleSuccessResponse(w, http.StatusOK, nil, *updatedAccount, "")
+	WriteResponse(w, http.StatusOK, *updatedAccount)
 
 }
 
 // DeleteAccountService deletes an account specified by the account ID from the URL path.
-func DeleteAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r *http.Request) {
+func DeleteAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 	if err != nil {
@@ -167,13 +156,12 @@ func DeleteAccountService(workspaceDB *db.WorkspaceDB, w http.ResponseWriter, r 
 	}
 
 	// TODO: Need to send a publish message to delete all workspaces associated with the account
-	err = workspaceDB.DeleteAccount(accountID)
+	err = svc.DB.DeleteAccount(accountID)
 
 	if err != nil {
-		HandleErrResponse(w, http.StatusInternalServerError, err)
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
-
+	WriteResponse(w, http.StatusNoContent, nil)
 }

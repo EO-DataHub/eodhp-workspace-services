@@ -7,16 +7,18 @@ import (
 	"os"
 	"time"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
 // WorkspaceDB wraps database, events, and logging functionalities.
 type WorkspaceDB struct {
-	DB *sql.DB
+	DB        *sql.DB
+	AWSConfig *config.AWSConfig
 }
 
 // NewWorkspaceDB initializes a WorkspaceDB instance with a database connection.
-func NewWorkspaceDB() (*WorkspaceDB, error) {
+func NewWorkspaceDB(awsConfig config.AWSConfig) (*WorkspaceDB, error) {
 
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
@@ -41,7 +43,8 @@ func NewWorkspaceDB() (*WorkspaceDB, error) {
 	}
 
 	return &WorkspaceDB{
-		DB: db,
+		DB:        db,
+		AWSConfig: &awsConfig,
 	}, nil
 }
 
@@ -100,7 +103,7 @@ func (w *WorkspaceDB) InitTables() error {
 		`CREATE TABLE IF NOT EXISTS block_stores (
 				store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
 				access_point_id VARCHAR(255) NOT NULL,
-				fs_id VARCHAR(255) NOT NULL
+				mount_point VARCHAR(255) NOT NULL
 			);`,
 	}
 
