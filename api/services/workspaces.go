@@ -92,7 +92,7 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 
 	// Check the name is DNS-compatible
 	if !IsDNSCompatible(wsSettings.Name) {
-		WriteResponse(w, http.StatusConflict, fmt.Errorf("invalid workspace name: must be DNS-compatible"))
+		WriteResponse(w, http.StatusBadRequest, fmt.Errorf("invalid workspace name: must contain only a-z and -, not start with - and be less than 63 characters"))
 		return
 	}
 

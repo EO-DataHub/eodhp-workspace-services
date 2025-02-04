@@ -30,20 +30,6 @@ func WriteResponse(w http.ResponseWriter, statusCode int, response interface{}, 
 	}
 }
 
-// writeErrResponse sends an error response as JSON with a specified status code.
-func writeErrResponse(w http.ResponseWriter, statusCode int, response interface{}) {
-
-	w.Header().Set("Content-Type", "application/json")
-
-	// We don't want to cache API responses so the client receives most curent data
-	w.Header().Set("Cache-Control", "max-age=0")
-
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-	}
-}
-
 // HasRole checks if a user has a specific role in the JWT claims.
 func HasRole(roles []string, role string) bool {
 	for _, userRole := range roles {
