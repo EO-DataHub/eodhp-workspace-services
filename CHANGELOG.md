@@ -1,5 +1,12 @@
 # Workspace Services
 
+## v0.6.3 (04-02-2025)
+
+- App is more RESTful
+- Removed implementation details in API response not needed (e.g. `fsID`)
+- Added `host`, `bucket`, `prefix` to the object store API response
+- Added `mount_point` to the block store API response
+
 ## v0.6.1 (27-01-2025)
 
 - Account owner of a workspace autoamtically added to the KC group
