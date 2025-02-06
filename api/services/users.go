@@ -67,7 +67,7 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	userID, err := svc.KC.GetUserID(username)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get user ID")
-		WriteResponse(w, http.StatusNotFound, "No user found")
+		WriteResponse(w, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -109,7 +109,7 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	userID, err := svc.KC.GetUserID(username)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get user ID")
-		WriteResponse(w, http.StatusNotFound, "No user found")
+		WriteResponse(w, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -150,7 +150,7 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	userID, err := svc.KC.GetUserID(username)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to get user ID")
-		WriteResponse(w, http.StatusNotFound, "No user found")
+		WriteResponse(w, http.StatusNotFound, err.Error())
 		return
 	}
 
