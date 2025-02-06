@@ -1,5 +1,9 @@
 # Workspace Services
 
+## v0.6.4 (06-02-2025)
+
+- Using `username` instead of `user-id` to add/remove users to/from a workspace
+
 ## v0.6.3 (04-02-2025)
 
 - App is more RESTful
