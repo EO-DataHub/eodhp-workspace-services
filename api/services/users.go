@@ -46,7 +46,7 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
-	userID := mux.Vars(r)["user-id"]
+	username := mux.Vars(r)["username"]
 
 	// Get information about the workspace
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -60,6 +60,13 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	userID, err := svc.KC.GetUserID(username)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get user ID")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -81,7 +88,7 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
-	userID := mux.Vars(r)["user-id"]
+	username := mux.Vars(r)["username"]
 
 	// Get the workspace member_group
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -95,6 +102,13 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	userID, err := svc.KC.GetUserID(username)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get user ID")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -115,7 +129,7 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
-	userID := mux.Vars(r)["user-id"]
+	username := mux.Vars(r)["username"]
 
 	// Get the workspace member_group
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -129,6 +143,13 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	userID, err := svc.KC.GetUserID(username)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get user ID")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
