@@ -174,6 +174,30 @@ func (kc *KeycloakClient) RemoveMemberFromGroup(userID, groupID string) error {
 	return nil
 }
 
+func (kc *KeycloakClient) GetUserID(username string) (string, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users?username=%s", kc.BaseURL, kc.Realm, username)
+
+	respBody, statusCode, err := kc.makeRequest(http.MethodGet, url, "application/json", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch user by username: %w", err)
+	}
+
+	if statusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to fetch user, status: %d", statusCode)
+	}
+
+	var users []models.User
+	if err := json.Unmarshal(respBody, &users); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if len(users) == 0 {
+		return "", fmt.Errorf("user '%s' not found", username)
+	}
+
+	return users[0].ID, nil
+}
+
 // Helper function for making HTTP requests to keycloak API.
 func (kc *KeycloakClient) makeRequest(method, url, contentType string, body []byte) ([]byte, int, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
