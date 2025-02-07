@@ -3,7 +3,7 @@
 # Variables
 VERSION ?= latest
 IMAGENAME = eodhp-workspace-services
-DOCKERREPO ?= public.ecr.aws/n1b3o1k2
+DOCKERREPO ?= public.ecr.aws/eodh
 
 # Docker build with BuildKit and build arguments for OS and architecture
 dockerbuild:
