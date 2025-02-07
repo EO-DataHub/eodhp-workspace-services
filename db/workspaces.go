@@ -58,6 +58,32 @@ func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]ws_manager.Wo
 	return workspaces, nil
 }
 
+// GetAllWorkspaces retrieves all workspaces.
+func (db *WorkspaceDB) GetAllWorkspaces() ([]string, error) {
+	// Query to select all workspaces without filtering by member group
+	query := `SELECT name FROM workspaces`
+
+	// Execute the query
+	rows, err := db.DB.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
+	}
+	defer rows.Close()
+
+	// Prepare the slice to store workspace data
+
+	var workspaceNames []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, fmt.Errorf("error scanning workspace name: %w", err)
+		}
+		workspaceNames = append(workspaceNames, name)
+	}
+
+	return workspaceNames, nil
+}
+
 // CreateWorkspace starts a transaction to insert a new workspace record.
 func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.Tx, error) {
 	tx, err := w.DB.Begin()
