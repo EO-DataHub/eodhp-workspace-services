@@ -1,5 +1,9 @@
 # Workspace Services
 
+## v0.6.5 (12-02-2025)
+
+- Revert to using workspace name as object/block store names
+
 ## v0.6.4 (06-02-2025)
 
 - Using `username` instead of `user-id` to add/remove users to/from a workspace

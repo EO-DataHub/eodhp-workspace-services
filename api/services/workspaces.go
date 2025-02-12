@@ -158,15 +158,10 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	wsSettings.Stores = &[]ws_manager.Stores{
 		{
 			Object: []ws_manager.ObjectStore{
-				// Object store uses a shared bucket, so we must differentiate each workspace's
-				// data by using a unique prefix that includes the workspace name.
-				// This ensures isolation and prevents conflicts between different workspaces.
-				{Name: wsSettings.Name + "-object-store"},
+				{Name: wsSettings.Name},
 			},
 			Block: []ws_manager.BlockStore{
-				// Block store can use a directory structure under /workspaces/<workspace>/<block-store-name>,
-				// so no additional prefixing is needed.
-				{Name: "block-store"},
+				{Name: wsSettings.Name},
 			},
 		},
 	}
