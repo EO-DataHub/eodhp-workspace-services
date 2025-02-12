@@ -38,6 +38,7 @@ func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 	// Create the account in the database
 	account, err := svc.DB.CreateAccount(&messagePayload)
 	if err != nil {
+		fmt.Println(err)
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}

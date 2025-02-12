@@ -40,11 +40,11 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, 
 
 // GetAccount retrieves a single account.
 func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*ws_services.Account, error) {
-	query := `SELECT id, name, account_owner FROM accounts WHERE id = $1`
+	query := `SELECT id, name, account_owner, billing_address, organization_name, account_opening_reason FROM accounts WHERE id = $1`
 	row := db.DB.QueryRow(query, accountID)
 
 	var ac ws_services.Account
-	if err := row.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
+	if err := row.Scan(&ac.ID, &ac.Name, &ac.AccountOwner, &ac.BillingAddress, &ac.OrganizationName, &ac.AccountOpeningReason); err != nil {
 		if err == sql.ErrNoRows {
 			// Account does not exist, return nil account and nil error
 			return nil, nil
@@ -76,9 +76,9 @@ func (w *WorkspaceDB) CreateAccount(req *ws_services.Account) (*ws_services.Acco
 
 	// Insert new account details
 	err = w.execQuery(tx, `
-		INSERT INTO accounts (id, created_at, name, account_owner)
-		VALUES ($1, $2, $3, $4)`,
-		accountID, created_at, req.Name, req.AccountOwner)
+		INSERT INTO accounts (id, created_at, name, account_owner, billing_address, organization_name, account_opening_reason)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		accountID, created_at, req.Name, req.AccountOwner, req.BillingAddress, req.OrganizationName, req.AccountOpeningReason)
 	if err != nil {
 		return nil, err
 	}
@@ -89,9 +89,12 @@ func (w *WorkspaceDB) CreateAccount(req *ws_services.Account) (*ws_services.Acco
 	}
 
 	account := ws_services.Account{
-		ID:           accountID,
-		Name:         req.Name,
-		AccountOwner: req.AccountOwner,
+		ID:                   accountID,
+		Name:                 req.Name,
+		AccountOwner:         req.AccountOwner,
+		BillingAddress:       req.BillingAddress,
+		OrganizationName:     req.OrganizationName,
+		AccountOpeningReason: req.AccountOpeningReason,
 	}
 
 	return &account, nil
@@ -108,8 +111,8 @@ func (w *WorkspaceDB) UpdateAccount(accountID uuid.UUID, account ws_services.Acc
 	// Update account fields in the database
 	err = w.execQuery(tx, `
 		UPDATE accounts 
-		SET name = $1, account_owner = $2 WHERE id = $3`,
-		account.Name, account.AccountOwner, accountID)
+		SET name = $1, account_owner = $2, billing_address = $3, organization_name = $4, account_opening_reason = $5 WHERE id = $6`,
+		account.Name, account.AccountOwner, account.BillingAddress, account.OrganizationName, account.AccountOpeningReason, accountID)
 	if err != nil {
 		tx.Rollback()
 		log.Error().Err(err).Msg("error updating account owner")
