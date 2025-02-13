@@ -4,11 +4,13 @@ import (
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 // GetUsersService retrieves all users associated with a workspace.
 func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
@@ -17,6 +19,7 @@ func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
+		logger.Error().Err(err).Msg("Database error retrieving workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -25,6 +28,7 @@ func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -33,16 +37,19 @@ func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	members, err := svc.KC.GetGroupMembers(group.ID)
 
 	if err != nil {
+		logger.Error().Err(err).Str("group_id", group.ID).Msg("Failed to retrieve group members")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
-	// Return the members
+	logger.Info().Int("user_count", len(members)).Msg("Successfully retrieved workspace users")
 	WriteResponse(w, http.StatusOK, members)
 }
 
 // GetUsersService retrieves all users associated with a workspace.
 func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
@@ -52,6 +59,7 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
+		logger.Error().Err(err).Msg("Database error retrieving workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -60,13 +68,14 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	userID, err := svc.KC.GetUserID(username)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get user ID")
+		logger.Warn().Err(err).Str("username", username).Msg("User ID not found")
 		WriteResponse(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -75,16 +84,19 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	member, err := svc.KC.GetGroupMember(group.ID, userID)
 
 	if err != nil {
+		logger.Error().Err(err).Str("group_id", group.ID).Str("user_id", userID).Msg("Failed to retrieve user membership")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
-	// Return the member
+	logger.Info().Str("user_id", userID).Msg("Successfully retrieved workspace user")
 	WriteResponse(w, http.StatusOK, member)
 }
 
 // AddUserService adds a user to a workspace.
 func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
 
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
@@ -94,6 +106,7 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
+		logger.Error().Err(err).Msg("Database error retrieving workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -102,13 +115,14 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	userID, err := svc.KC.GetUserID(username)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get user ID")
+		logger.Warn().Err(err).Str("username", username).Msg("User ID not found")
 		WriteResponse(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -116,16 +130,19 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	// Add the user to the group in Keycloak
 	err = svc.KC.AddMemberToGroup(userID, group.ID)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to add member to group")
+		logger.Error().Err(err).Str("user_id", userID).Str("group_id", group.ID).Msg("Failed to add user to group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
+	logger.Info().Str("username", username).Str("group", group.Name).Msg("User added to workspace group successfully")
 	WriteResponse(w, http.StatusNoContent, nil)
 }
 
 // RemoveUserService removes a user from a workspace.
 func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
 
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
@@ -135,6 +152,7 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
+		logger.Error().Err(err).Msg("Database error retrieving workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -143,13 +161,14 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	group, err := svc.KC.GetGroup(workspace.MemberGroup)
 
 	if err != nil {
+		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
 	userID, err := svc.KC.GetUserID(username)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get user ID")
+		logger.Warn().Err(err).Str("username", username).Msg("User ID not found")
 		WriteResponse(w, http.StatusNotFound, err.Error())
 		return
 	}
@@ -158,10 +177,11 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	err = svc.KC.RemoveMemberFromGroup(userID, group.ID)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to remove member from group")
+		logger.Error().Err(err).Str("user_id", userID).Str("group_id", group.ID).Msg("Failed to remove user from group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 
+	logger.Info().Str("username", username).Str("group", group.Name).Msg("User removed from workspace group successfully")
 	WriteResponse(w, http.StatusNoContent, nil)
 }

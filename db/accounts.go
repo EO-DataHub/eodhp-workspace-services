@@ -13,7 +13,7 @@ import (
 
 // GetAccounts retrieves all accounts owned by the specified account owner.
 func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, error) {
-	query := `SELECT id, name, account_owner FROM accounts WHERE account_owner = $1`
+	query := `SELECT * FROM accounts WHERE account_owner = $1`
 	rows, err := db.DB.Query(query, accountOwner)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving accounts: %w", err)
@@ -23,7 +23,7 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, 
 	var accounts []ws_services.Account
 	for rows.Next() {
 		var ac ws_services.Account
-		if err := rows.Scan(&ac.ID, &ac.Name, &ac.AccountOwner); err != nil {
+		if err := rows.Scan(&ac.ID, &ac.CreatedAt, &ac.Name, &ac.AccountOwner, &ac.BillingAddress, &ac.OrganizationName, &ac.AccountOpeningReason); err != nil {
 			return nil, fmt.Errorf("error scanning accounts: %w", err)
 		}
 
@@ -40,11 +40,18 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, 
 
 // GetAccount retrieves a single account.
 func (db *WorkspaceDB) GetAccount(accountID uuid.UUID) (*ws_services.Account, error) {
-	query := `SELECT id, name, account_owner, billing_address, organization_name, account_opening_reason FROM accounts WHERE id = $1`
+	query := `SELECT * FROM accounts WHERE id = $1`
 	row := db.DB.QueryRow(query, accountID)
 
 	var ac ws_services.Account
-	if err := row.Scan(&ac.ID, &ac.Name, &ac.AccountOwner, &ac.BillingAddress, &ac.OrganizationName, &ac.AccountOpeningReason); err != nil {
+	if err := row.Scan(
+		&ac.ID,
+		&ac.CreatedAt,
+		&ac.Name,
+		&ac.AccountOwner,
+		&ac.BillingAddress,
+		&ac.OrganizationName,
+		&ac.AccountOpeningReason); err != nil {
 		if err == sql.ErrNoRows {
 			// Account does not exist, return nil account and nil error
 			return nil, nil
