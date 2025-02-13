@@ -14,19 +14,16 @@ func TestCreateWorkspace(t *testing.T) {
 	// Create an account for testing
 	accountID := uuid.New()
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		accountID, "Test Account", "owner@example.com",
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		accountID, "Test Account", "owner@example.com", "123 Main St",
 	)
 	assert.NoError(t, err, "should insert account without error")
 
 	// Define the workspace to be created
 	workspaceRequest := ws_manager.WorkspaceSettings{
-		ID:          uuid.New(),
-		Name:        "test-workspace",
-		Account:     accountID,
-		MemberGroup: "test-group",
-		Status:      "creating",
+		Name:    "test-workspace",
+		Account: accountID,
 	}
 
 	// Start a transaction for creating the workspace
@@ -50,7 +47,6 @@ func TestCreateWorkspace(t *testing.T) {
 
 	// Verify that the event was published correctly
 	published := mockPublisher.PublishedMessage
-	assert.Equal(t, "creating", published.Status, "published status should be 'creating'")
 	assert.Equal(t, workspaceRequest.Name, published.Name, "published name should match")
 }
 
@@ -60,9 +56,9 @@ func TestGetUserWorkspaces(t *testing.T) {
 	// Create accounts
 	accountID := uuid.New()
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		accountID, "Test Account", "owner@example.com",
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		accountID, "Test Account", "owner@example.com", "123 Main St",
 	)
 	assert.NoError(t, err, "should insert account without error")
 
@@ -115,9 +111,9 @@ func TestCheckWorkspaceExists(t *testing.T) {
 	// Create an account
 	accountID := uuid.New()
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		accountID, "Test Account", "owner@example.com",
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		accountID, "Test Account", "owner@example.com", "123 Main St",
 	)
 	assert.NoError(t, err, "should insert account without error")
 

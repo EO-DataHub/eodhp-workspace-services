@@ -20,7 +20,6 @@ var (
 	configPath  string
 	appCfg      *config.Config
 	workspaceDB *db.WorkspaceDB
-	logger      zerolog.Logger
 )
 
 var rootCmd = &cobra.Command{
