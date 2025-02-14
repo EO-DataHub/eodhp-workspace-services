@@ -15,8 +15,7 @@ import (
 func GetS3Credentials(stsClient aws.STSClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger := zerolog.Ctx(r.Context()).With().
-			Str("handler", "GetS3Credentials").Logger()
+		logger := zerolog.Ctx(r.Context())
 
 		// Get the username name from the claims
 		// TODO: replace username with the workspace name
@@ -33,6 +32,7 @@ func GetS3Credentials(stsClient aws.STSClient) http.HandlerFunc {
 
 		creds, err := stsClient.AssumeRoleWithWebIdentity(workspaceName)
 		if err != nil {
+			logger.Err(err).Msg("Failed to retrieve S3 credentials")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
