@@ -8,6 +8,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
@@ -76,6 +77,11 @@ func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
 		logger.Error().Err(err).Msg("Failed to retrieve accounts from database")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
+	}
+
+	// Ensure workspaces is not nil, return an empty slice if no workspaces are found
+	if accounts == nil {
+		accounts = []models.Account{}
 	}
 
 	logger.Info().Int("account_count", len(accounts)).Msg("Successfully retrieved accounts")
