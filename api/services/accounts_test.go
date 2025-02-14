@@ -39,39 +39,42 @@ func TestGetAccounts(t *testing.T) {
 
 	// Insert accounts
 	account1 := models.Account{
-		ID:           uuid.New(),
-		Name:         "Account One",
-		AccountOwner: "user1@example.com",
+		ID:             uuid.New(),
+		Name:           "Account One",
+		AccountOwner:   "user1@example.com",
+		BillingAddress: "123 Main St",
 	}
 	account2 := models.Account{
-		ID:           uuid.New(),
-		Name:         "Account Two",
-		AccountOwner: "user1@example.com",
+		ID:             uuid.New(),
+		Name:           "Account Two",
+		AccountOwner:   "user1@example.com",
+		BillingAddress: "456 Elm St",
 	}
 	account3 := models.Account{
-		ID:           uuid.New(),
-		Name:         "Account Three",
-		AccountOwner: "user2@example.com",
+		ID:             uuid.New(),
+		Name:           "Account Three",
+		AccountOwner:   "user2@example.com",
+		BillingAddress: "789 Oak St",
 	}
 
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		account1.ID, account1.Name, account1.AccountOwner,
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		account1.ID, account1.Name, account1.AccountOwner, account1.BillingAddress,
 	)
 	assert.NoError(t, err, "should insert account one without error")
 
 	_, err = workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		account2.ID, account2.Name, account2.AccountOwner,
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		account2.ID, account2.Name, account2.AccountOwner, account2.BillingAddress,
 	)
 	assert.NoError(t, err, "should insert account two without error")
 
 	_, err = workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		account3.ID, account3.Name, account3.AccountOwner,
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		account3.ID, account3.Name, account3.AccountOwner, account2.BillingAddress,
 	)
 	assert.NoError(t, err, "should insert account three without error")
 
@@ -97,15 +100,16 @@ func TestGetAccount(t *testing.T) {
 	// Insert an account
 	accountOwner := "owner@example.com"
 	account := models.Account{
-		ID:           uuid.New(),
-		Name:         "Owner's Account",
-		AccountOwner: accountOwner,
+		ID:             uuid.New(),
+		Name:           "Owner's Account",
+		AccountOwner:   accountOwner,
+		BillingAddress: "123 Main St",
 	}
 
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		account.ID, account.Name, account.AccountOwner,
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		account.ID, account.Name, account.AccountOwner, account.BillingAddress,
 	)
 	assert.NoError(t, err, "should insert account without error")
 
@@ -132,15 +136,16 @@ func TestUpdateAccount(t *testing.T) {
 	// Insert an account to be updated
 	accountOwner := "owner@example.com"
 	account := models.Account{
-		ID:           uuid.New(),
-		Name:         "Original Account Name",
-		AccountOwner: accountOwner,
+		ID:             uuid.New(),
+		Name:           "Original Account Name",
+		AccountOwner:   accountOwner,
+		BillingAddress: "123 Main St",
 	}
 
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		account.ID, account.Name, account.AccountOwner,
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		account.ID, account.Name, account.AccountOwner, account.BillingAddress,
 	)
 	assert.NoError(t, err, "should insert account without error")
 
@@ -177,15 +182,16 @@ func TestDeleteAccount(t *testing.T) {
 	// Insert an account to be deleted
 	accountOwner := "owner@example.com"
 	account := models.Account{
-		ID:           uuid.New(),
-		Name:         "Account To Delete",
-		AccountOwner: accountOwner,
+		ID:             uuid.New(),
+		Name:           "Account To Delete",
+		AccountOwner:   accountOwner,
+		BillingAddress: "123 Main St",
 	}
 
 	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner)
-		VALUES ($1, $2, $3)`,
-		account.ID, account.Name, account.AccountOwner,
+		INSERT INTO accounts (id, name, account_owner, billing_address)
+		VALUES ($1, $2, $3, $4)`,
+		account.ID, account.Name, account.AccountOwner, account.BillingAddress,
 	)
 	assert.NoError(t, err, "should insert account without error")
 

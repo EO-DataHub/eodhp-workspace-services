@@ -76,7 +76,10 @@ func (w *WorkspaceDB) InitTables() error {
 				id UUID PRIMARY KEY,
 				created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 				name VARCHAR(255) NOT NULL,
-				account_owner TEXT NOT NULL
+				account_owner TEXT NOT NULL,
+				billing_address TEXT NOT NULL,
+				organization_name TEXT NULL,
+				account_opening_reason TEXT NULL
 			);`,
 		`CREATE TABLE IF NOT EXISTS workspaces (
 				id UUID PRIMARY KEY,

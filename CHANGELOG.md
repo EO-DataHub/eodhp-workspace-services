@@ -1,5 +1,10 @@
 # Workspace Services
 
+## v0.6.6 (14-02-2025)
+
+- Added more logging
+- Added new columns to billing accounts
+
 ## v0.6.5 (12-02-2025)
 
 - Revert to using workspace name as object/block store names

@@ -20,7 +20,6 @@ var (
 	configPath  string
 	appCfg      *config.Config
 	workspaceDB *db.WorkspaceDB
-	logger      zerolog.Logger
 )
 
 var rootCmd = &cobra.Command{
@@ -44,7 +43,7 @@ func init() {
 
 func commonSetUp() {
 
-	logger = setLogging(logLevel)
+	setLogging(logLevel)
 
 	// Load the config file
 	var err error
@@ -84,7 +83,7 @@ func initializeDatabase() error {
 	return nil
 }
 
-func setLogging(level string) zerolog.Logger {
+func setLogging(level string) {
 	zerolog.TimestampFunc = func() time.Time {
 		return time.Now().UTC()
 	}
@@ -108,7 +107,5 @@ func setLogging(level string) zerolog.Logger {
 
 	// Initialize logger
 	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout}
-	logger := zerolog.New(consoleWriter).With().Timestamp().Logger()
-
-	return logger
+	zerolog.New(consoleWriter).With().Timestamp().Logger()
 }
