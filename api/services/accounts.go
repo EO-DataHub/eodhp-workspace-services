@@ -79,7 +79,7 @@ func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure workspaces is not nil, return an empty slice if no workspaces are found
+	// Ensure accounts is not nil, return an empty slice if no accounts are found
 	if accounts == nil {
 		accounts = []models.Account{}
 	}
