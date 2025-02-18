@@ -42,6 +42,8 @@ func RequestS3Credentials(roleArn string, c STSClient) http.HandlerFunc {
 			return
 		}
 
+		logger.Debug().Str("token", token).Msg("Token retrieved")
+
 		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 		if !ok {
 			err := "Invalid claims"
