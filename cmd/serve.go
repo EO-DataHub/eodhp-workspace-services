@@ -56,7 +56,7 @@ var serveCmd = &cobra.Command{
 		})
 
 		// Register the routes
-		r.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", middleware(handlers.RequestS3Credentials(appCfg.AWS.S3.RoleArn, sts_client))).Methods(http.MethodPost)
+		r.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", middleware(handlers.RequestS3Credentials(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient))).Methods(http.MethodPost)
 
 		// Workspace routes
 		r.HandleFunc("/workspaces", middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
