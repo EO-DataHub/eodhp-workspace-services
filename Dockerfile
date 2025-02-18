@@ -9,7 +9,6 @@ RUN go mod download
 COPY main.go .
 COPY cmd/ cmd/
 COPY api/ api/
-COPY aws/ aws/
 COPY internal/ internal/
 COPY db/ db/
 COPY models/ models/
