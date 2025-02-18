@@ -8,9 +8,9 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/handlers"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
-	"github.com/EO-DataHub/eodhp-workspace-services/aws"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -49,31 +49,34 @@ var serveCmd = &cobra.Command{
 			KC:        keycloakClient,
 		}
 
-		// Instance of real AWS STS Client
-		stsClient := &aws.DefaultSTSClient{}
+		// Create AWS STS client
+		log.Info().Str("region", appCfg.AWS.Region).Msg("Creating AWS STS client...")
+		sts_client := sts.New(sts.Options{
+			Region: appCfg.AWS.Region,
+		})
 
 		// Register the routes
-		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials(stsClient))).Methods(http.MethodGet)
+		r.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", middleware(handlers.RequestS3Credentials(appCfg.AWS.S3.RoleArn, sts_client))).Methods(http.MethodPost)
 
 		// Workspace routes
-		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
-		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.GetWorkspace(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(service))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(service))).Methods(http.MethodPatch)
+		r.HandleFunc("/workspaces", middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
+		r.HandleFunc("/workspaces", middleware(handlers.GetWorkspaces(service))).Methods(http.MethodGet)
+		r.HandleFunc("/workspaces/{workspace-id}", middleware(handlers.GetWorkspace(service))).Methods(http.MethodGet)
+		r.HandleFunc("/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(service))).Methods(http.MethodPut)
+		r.HandleFunc("/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(service))).Methods(http.MethodPatch)
 
 		// Workspace management routes
-		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.GetUsers(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{username}", middleware(handlers.AddUser(service))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{username}", middleware(handlers.GetUser(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{username}", middleware(handlers.RemoveUser(service))).Methods(http.MethodDelete)
+		r.HandleFunc("/workspaces/{workspace-id}/users", middleware(handlers.GetUsers(service))).Methods(http.MethodGet)
+		r.HandleFunc("/workspaces/{workspace-id}/users/{username}", middleware(handlers.AddUser(service))).Methods(http.MethodPut)
+		r.HandleFunc("/workspaces/{workspace-id}/users/{username}", middleware(handlers.GetUser(service))).Methods(http.MethodGet)
+		r.HandleFunc("/workspaces/{workspace-id}/users/{username}", middleware(handlers.RemoveUser(service))).Methods(http.MethodDelete)
 
 		// Account routes
-		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(service))).Methods(http.MethodPost)
-		r.HandleFunc("/api/accounts", middleware(handlers.GetAccounts(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.GetAccount(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.DeleteAccount(service))).Methods(http.MethodDelete)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.UpdateAccount(service))).Methods(http.MethodPut)
+		r.HandleFunc("/accounts", middleware(handlers.CreateAccount(service))).Methods(http.MethodPost)
+		r.HandleFunc("/accounts", middleware(handlers.GetAccounts(service))).Methods(http.MethodGet)
+		r.HandleFunc("/accounts/{account-id}", middleware(handlers.GetAccount(service))).Methods(http.MethodGet)
+		r.HandleFunc("/accounts/{account-id}", middleware(handlers.DeleteAccount(service))).Methods(http.MethodDelete)
+		r.HandleFunc("/accounts/{account-id}", middleware(handlers.UpdateAccount(service))).Methods(http.MethodPut)
 
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
