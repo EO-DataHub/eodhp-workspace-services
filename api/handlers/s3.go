@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go/aws"
@@ -24,7 +25,8 @@ type STSClient interface {
 }
 
 // Request s3 credentials for assumed role
-func RequestS3Credentials(roleArn string, c STSClient) http.HandlerFunc {
+func RequestS3Credentials(roleArn string, c STSClient,
+	k services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -56,10 +58,26 @@ func RequestS3Credentials(roleArn string, c STSClient) http.HandlerFunc {
 
 		if tokenExchangeRequired(claims, workspaceID, userID) {
 			logger.Info().Msg("Token exchange required")
-			// TODO: Exchange token for workspace scoped token
-			http.Error(w, "Token exchange not currently supported",
-				http.StatusBadRequest) // Temporary guard until TODO implemented
-			return
+
+			// Exchange user scoped token for workspace scoped token
+			// TODO: Exchange Token will never change the user the token is for,
+			// to do this we need to implement a Keycloak Impersonate User API.
+			workspaceToken, err := k.ExchangeToken(token, fmt.Sprintf(
+				"workspace:%s", workspaceID))
+			if err != nil {
+				var errStatus int
+				if err, ok := err.(*services.HTTPError); ok {
+					errStatus = err.Status
+				} else {
+					errStatus = http.StatusInternalServerError
+				}
+				logger.Error().Err(err).Msg("Failed to get offline token")
+				http.Error(w, err.Error(), errStatus)
+				return
+			}
+
+			// Replace user scoped token with workspace scoped token
+			token = workspaceToken.Access
 		}
 
 		resp, err := c.AssumeRoleWithWebIdentity(r.Context(),
