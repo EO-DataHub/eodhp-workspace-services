@@ -1,4 +1,4 @@
-.PHONY: dockerbuild dockerpush test lint format setup clean
+.PHONY: dockerbuild dockerpush test lint format setup clean docs
 
 # Variables
 VERSION ?= latest
@@ -49,4 +49,8 @@ build:
 testdocker: test dockerbuild
 
 # Default target to build, test, and push Docker image
-all: test dockerbuild dockerpush
+all: docs test dockerbuild dockerpush
+
+# Generate Swagger docs
+docs:
+	swag init -g cmd/serve.go

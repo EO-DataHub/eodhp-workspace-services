@@ -13,6 +13,9 @@ import (
 
 // Config holds all configuration details
 type Config struct {
+	Host     string         `yaml:"host"`
+	BasePath string         `yaml:"basePath"`
+	DocsPath string         `yaml:"docsPath"`
 	Database DatabaseConfig `yaml:"database"`
 	Pulsar   PulsarConfig   `yaml:"pulsar"`
 	Keycloak KeycloakConfig `yaml:"keycloak"`

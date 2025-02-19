@@ -67,7 +67,7 @@ func TestGetS3Credentials_WorkspaceScopedRequest(t *testing.T) {
 	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
 
 	w := httptest.NewRecorder()
-	handler := RequestS3Credentials("arn:aws:iam::123456789012:role/test-role", sts_client, *kc)
+	handler := RequestS3CredentialsHandler("arn:aws:iam::123456789012:role/test-role", sts_client, *kc)
 	handler.ServeHTTP(w, r.WithContext(ctx))
 
 	assert.Equal(t, http.StatusOK, w.Code, "handler returned wrong status code")
@@ -131,7 +131,7 @@ func TestGetS3Credentials_UserScopedRequest(t *testing.T) {
 	ctx = context.WithValue(ctx, middleware.ClaimsKey, claims)
 
 	w := httptest.NewRecorder()
-	handler := RequestS3Credentials("arn:aws:iam::123456789012:role/test-role", sts_client, *kc)
+	handler := RequestS3CredentialsHandler("arn:aws:iam::123456789012:role/test-role", sts_client, *kc)
 	handler.ServeHTTP(w, r.WithContext(ctx))
 
 	assert.Equal(t, http.StatusOK, w.Code, "handler returned wrong status code")

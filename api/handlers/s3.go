@@ -24,8 +24,19 @@ type STSClient interface {
 		*sts.AssumeRoleWithWebIdentityOutput, error)
 }
 
-// Request s3 credentials for assumed role
-func RequestS3Credentials(roleArn string, c STSClient,
+// @Summary Request S3 session credentials
+// @Description Request S3 session credentials for user access to a single workspace
+// @Tags s3 credentials auth
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param user-id path string true "User ID"
+// @Success 200 {object} S3Credentials
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/users/{user-id}/s3-tokens [get]
+func RequestS3CredentialsHandler(roleArn string, c STSClient,
 	k services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +116,7 @@ func RequestS3Credentials(roleArn string, c STSClient,
 
 type S3Credentials struct {
 	AccessKeyId     string `json:"accessKeyId"`
-	SecretAccessKey string `json:"secret"`
+	SecretAccessKey string `json:"secretAccessKey"`
 	SessionToken    string `json:"sessionToken"`
 	Expiration      string `json:"expiration"`
 }
