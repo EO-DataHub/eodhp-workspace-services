@@ -74,6 +74,7 @@ func (kc *KeycloakClient) CreateGroup(groupName string) (int, error) {
 	return statusCode, nil
 }
 
+// GetGroup retrieves a group by name from Keycloak.
 func (kc *KeycloakClient) GetGroup(groupName string) (*models.Group, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/groups?search=%s", kc.BaseURL, kc.Realm, groupName)
 
@@ -102,6 +103,7 @@ func (kc *KeycloakClient) GetGroup(groupName string) (*models.Group, error) {
 	return nil, fmt.Errorf("group with name %s not found", groupName)
 }
 
+// GetGroupMembers retrieves a list of members of a group in Keycloak.
 func (kc *KeycloakClient) GetGroupMembers(groupID string) ([]models.User, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s/members", kc.BaseURL, kc.Realm, groupID)
 
@@ -124,6 +126,7 @@ func (kc *KeycloakClient) GetGroupMembers(groupID string) ([]models.User, error)
 	return members, nil
 }
 
+// GetGroupMember retrieves a specific member of a group in Keycloak.
 func (kc *KeycloakClient) GetGroupMember(groupID, userID string) (*models.User, error) {
 
 	members, err := kc.GetGroupMembers(groupID)
@@ -174,6 +177,7 @@ func (kc *KeycloakClient) RemoveMemberFromGroup(userID, groupID string) error {
 	return nil
 }
 
+// GetUserID retrieves a user ID by username from Keycloak.
 func (kc *KeycloakClient) GetUserID(username string) (string, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/users?username=%s", kc.BaseURL, kc.Realm, username)
 
@@ -196,6 +200,33 @@ func (kc *KeycloakClient) GetUserID(username string) (string, error) {
 	}
 
 	return users[0].ID, nil
+}
+
+// GetUserGroups retrieves a list of group names that a user is a member of.
+func (kc *KeycloakClient) GetUserGroups(userID string) ([]string, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups", kc.BaseURL, kc.Realm, userID)
+
+	respBody, statusCode, err := kc.makeRequest(http.MethodGet, url, "application/json", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user groups: %w", err)
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch user groups, status: %d", statusCode)
+	}
+
+	var groups []models.Group
+	if err := json.Unmarshal(respBody, &groups); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Extract group names into a string slice
+	var groupNames []string
+	for _, group := range groups {
+		groupNames = append(groupNames, group.Name)
+	}
+
+	return groupNames, nil
 }
 
 // Helper function for making HTTP requests to keycloak API.
