@@ -28,6 +28,14 @@ func CreateWorkspace(svc *services.Service) http.HandlerFunc {
 func GetWorkspaces(svc *services.Service) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
 		services.GetWorkspacesService(svc, w, r)
 	}
 }
@@ -36,6 +44,14 @@ func GetWorkspaces(svc *services.Service) http.HandlerFunc {
 func GetWorkspace(svc *services.Service) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
 		services.GetWorkspaceService(svc, w, r)
 	}
 }
