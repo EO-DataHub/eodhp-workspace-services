@@ -13,6 +13,9 @@ import (
 
 // Config holds all configuration details
 type Config struct {
+	Host     string         `yaml:"host"`
+	BasePath string         `yaml:"basePath"`
+	DocsPath string         `yaml:"docsPath"`
 	Database DatabaseConfig `yaml:"database"`
 	Pulsar   PulsarConfig   `yaml:"pulsar"`
 	Keycloak KeycloakConfig `yaml:"keycloak"`
@@ -41,12 +44,14 @@ type KeycloakConfig struct {
 }
 
 type S3Config struct {
-	Bucket string `yaml:"bucket"`
-	Host   string `yaml:"host"`
+	Bucket  string `yaml:"bucket"`
+	Host    string `yaml:"host"`
+	RoleArn string `yaml:"roleArn"`
 }
 
 type AWSConfig struct {
 	Account         string   `yaml:"account"`
+	Region          string   `yaml:"region"`
 	WorkspaceDomain string   `yaml:"workspace_domain"`
 	S3              S3Config `yaml:"s3"`
 }

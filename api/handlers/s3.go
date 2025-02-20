@@ -1,36 +1,102 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
-	"github.com/EO-DataHub/eodhp-workspace-services/aws"
+	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 )
 
-// GetS3Credentials handles HTTP requests for retreiving s3 STS credentials from AWS
-func GetS3Credentials(stsClient aws.STSClient) http.HandlerFunc {
+const TimeFormat string = "2006-01-02T15:04:05Z"
+
+type STSClient interface {
+	AssumeRoleWithWebIdentity(ctx context.Context,
+		params *sts.AssumeRoleWithWebIdentityInput, optFns ...func(*sts.Options)) (
+		*sts.AssumeRoleWithWebIdentityOutput, error)
+}
+
+// @Summary Request S3 session credentials
+// @Description Request S3 session credentials for user access to a single workspace
+// @Tags s3 credentials auth
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param user-id path string true "User ID"
+// @Success 200 {object} S3Credentials
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/users/{user-id}/s3-tokens [get]
+func RequestS3CredentialsHandler(roleArn string, c STSClient,
+	k services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		logger := zerolog.Ctx(r.Context())
+		vars := mux.Vars(r)
+		workspaceID := vars["workspace-id"]
+		userID := vars["user-id"]
 
-		// Get the username name from the claims
-		// TODO: replace username with the workspace name
+		logger := zerolog.Ctx(r.Context()).With().Str("workspace", workspaceID).
+			Str("user", userID).Str("role arn", roleArn).Logger()
 
-		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
-
+		token, ok := r.Context().Value(middleware.TokenKey).(string)
 		if !ok {
-			http.Error(w, "Invalid claims or missing authorization token", http.StatusUnauthorized)
-			logger.Error().Msg("Invalid claims or missing authorization")
+			err := "Invalid token"
+			http.Error(w, err, http.StatusUnauthorized)
+			logger.Error().Msg(err)
 			return
 		}
 
-		workspaceName := claims.Username
+		logger.Debug().Str("token", token).Msg("Token retrieved")
 
-		creds, err := stsClient.AssumeRoleWithWebIdentity(workspaceName)
+		claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+		if !ok {
+			err := "Invalid claims"
+			http.Error(w, err, http.StatusUnauthorized)
+			logger.Error().Msg(err)
+			return
+		}
+
+		logger = logger.With().Str("claims user", claims.Username).Logger()
+
+		if tokenExchangeRequired(claims, workspaceID, userID) {
+			logger.Info().Msg("Token exchange required")
+
+			// Exchange user scoped token for workspace scoped token
+			// TODO: Exchange Token will never change the user the token is for,
+			// to do this we need to implement a Keycloak Impersonate User API.
+			workspaceToken, err := k.ExchangeToken(token, fmt.Sprintf(
+				"workspace:%s", workspaceID))
+			if err != nil {
+				var errStatus int
+				if err, ok := err.(*services.HTTPError); ok {
+					errStatus = err.Status
+				} else {
+					errStatus = http.StatusInternalServerError
+				}
+				logger.Error().Err(err).Msg("Failed to get offline token")
+				http.Error(w, err.Error(), errStatus)
+				return
+			}
+
+			// Replace user scoped token with workspace scoped token
+			token = workspaceToken.Access
+		}
+
+		resp, err := c.AssumeRoleWithWebIdentity(r.Context(),
+			&sts.AssumeRoleWithWebIdentityInput{
+				RoleArn:          &roleArn,
+				WebIdentityToken: &token,
+				RoleSessionName:  aws.String(fmt.Sprintf("%s-%s", workspaceID, userID)),
+			})
 		if err != nil {
 			logger.Err(err).Msg("Failed to retrieve S3 credentials")
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -38,10 +104,25 @@ func GetS3Credentials(stsClient aws.STSClient) http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(creds)
-
+		json.NewEncoder(w).Encode(S3Credentials{
+			AccessKeyId:     *resp.Credentials.AccessKeyId,
+			SecretAccessKey: *resp.Credentials.SecretAccessKey,
+			SessionToken:    *resp.Credentials.SessionToken,
+			Expiration:      resp.Credentials.Expiration.UTC().Format(TimeFormat),
+		})
 		logger.Info().Msg("S3 credentials retrieved")
-
 	}
+}
 
+type S3Credentials struct {
+	AccessKeyId     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
+	SessionToken    string `json:"sessionToken"`
+	Expiration      string `json:"expiration"`
+}
+
+func tokenExchangeRequired(claims authn.Claims, workspaceID string,
+	userID string) bool {
+
+	return workspaceID != claims.Workspace || userID != claims.Username
 }

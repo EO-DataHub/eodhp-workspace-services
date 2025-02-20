@@ -109,3 +109,28 @@ func TestRemoveMemberFromGroup(t *testing.T) {
 	err := client.RemoveMemberFromGroup("user-id", "group-id")
 	assert.NoError(t, err)
 }
+
+func TestExchangeToken(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/realms/test-realm/protocol/openid-connect/token", r.URL.Path)
+		assert.Equal(t, http.MethodPost, r.Method)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`
+			{
+				"access_token": "new_access", 
+				"refresh_token": "new_refresh", 
+				"expires_in": 3600
+			}
+		`))
+	}))
+	defer server.Close()
+
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
+	client.Token = "mocked-token"
+
+	resp, err := client.ExchangeToken("access-token", "openid test")
+	assert.NoError(t, err)
+	assert.Equal(t, "new_access", resp.Access)
+	assert.Equal(t, "new_refresh", resp.Refresh)
+	assert.Equal(t, 3600, resp.ExpiresIn)
+}

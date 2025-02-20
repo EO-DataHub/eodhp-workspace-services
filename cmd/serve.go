@@ -4,18 +4,24 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/handlers"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
-	"github.com/EO-DataHub/eodhp-workspace-services/aws"
+	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
+// @title EODHP Workspace Services API
+// @version v1
+// @description This is the API for the EODHP Workspace Services.
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Run the HTTP server for handling API requests",
@@ -49,31 +55,46 @@ var serveCmd = &cobra.Command{
 			KC:        keycloakClient,
 		}
 
-		// Instance of real AWS STS Client
-		stsClient := &aws.DefaultSTSClient{}
+		// Create AWS STS client
+		log.Info().Str("region", appCfg.AWS.Region).Msgf("Creating AWS STS client in region '%s'...", appCfg.AWS.Region)
+		sts_client := sts.New(sts.Options{
+			Region: appCfg.AWS.Region,
+		})
 
 		// Register the routes
-		r.HandleFunc("/api/workspaces/s3/credentials", middleware(handlers.GetS3Credentials(stsClient))).Methods(http.MethodGet)
 
 		// Workspace routes
-		r.HandleFunc("/api/workspaces", middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
-		r.HandleFunc("/api/workspaces", middleware(handlers.GetWorkspaces(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.GetWorkspace(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.UpdateWorkspace(service))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}", middleware(handlers.PatchWorkspace(service))).Methods(http.MethodPatch)
+		r.HandleFunc(appendPath("/workspaces"), middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
+		r.HandleFunc(appendPath("/workspaces"), middleware(handlers.GetWorkspaces(service))).Methods(http.MethodGet)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}"), middleware(handlers.GetWorkspace(service))).Methods(http.MethodGet)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}"), middleware(handlers.UpdateWorkspace(service))).Methods(http.MethodPut)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}"), middleware(handlers.PatchWorkspace(service))).Methods(http.MethodPatch)
 
 		// Workspace management routes
-		r.HandleFunc("/api/workspaces/{workspace-id}/users", middleware(handlers.GetUsers(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{username}", middleware(handlers.AddUser(service))).Methods(http.MethodPut)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{username}", middleware(handlers.GetUser(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/workspaces/{workspace-id}/users/{username}", middleware(handlers.RemoveUser(service))).Methods(http.MethodDelete)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users"), middleware(handlers.GetUsers(service))).Methods(http.MethodGet)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users/{username}"), middleware(handlers.AddUser(service))).Methods(http.MethodPut)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users/{username}"), middleware(handlers.GetUser(service))).Methods(http.MethodGet)
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users/{username}"), middleware(handlers.RemoveUser(service))).Methods(http.MethodDelete)
 
 		// Account routes
-		r.HandleFunc("/api/accounts", middleware(handlers.CreateAccount(service))).Methods(http.MethodPost)
-		r.HandleFunc("/api/accounts", middleware(handlers.GetAccounts(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.GetAccount(service))).Methods(http.MethodGet)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.DeleteAccount(service))).Methods(http.MethodDelete)
-		r.HandleFunc("/api/accounts/{account-id}", middleware(handlers.UpdateAccount(service))).Methods(http.MethodPut)
+		r.HandleFunc(appendPath("/accounts"), middleware(handlers.CreateAccount(service))).Methods(http.MethodPost)
+		r.HandleFunc(appendPath("/accounts"), middleware(handlers.GetAccounts(service))).Methods(http.MethodGet)
+		r.HandleFunc(appendPath("/accounts/{account-id}"), middleware(handlers.GetAccount(service))).Methods(http.MethodGet)
+		r.HandleFunc(appendPath("/accounts/{account-id}"), middleware(handlers.DeleteAccount(service))).Methods(http.MethodDelete)
+		r.HandleFunc(appendPath("/accounts/{account-id}"), middleware(handlers.UpdateAccount(service))).Methods(http.MethodPut)
+
+		// S3 token routes
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}/{user-id}/s3-tokens"), middleware(handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient))).Methods(http.MethodPost)
+
+		// Docs
+		docs.SwaggerInfo.Host = appCfg.Host
+		docs.SwaggerInfo.BasePath = appCfg.BasePath
+		r.PathPrefix(appCfg.DocsPath).Handler(httpSwagger.Handler(
+			httpSwagger.URL(path.Join(appCfg.DocsPath, "/doc.json")),
+			httpSwagger.DeepLinking(true),
+			httpSwagger.DocExpansion("none"),
+			httpSwagger.DomID("swagger-ui"),
+		)).Methods(http.MethodGet)
 
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
@@ -82,7 +103,7 @@ var serveCmd = &cobra.Command{
 
 			log.Error().Err(err).Msg("could not start server")
 		}
-		log.Info().Msg(fmt.Sprintf("Server running on http://localhost:%d", port))
+		log.Info().Msg(fmt.Sprintf("Server running on http://%s:%d", host, port))
 	},
 }
 
@@ -101,4 +122,8 @@ func initializeKeycloakClient(kcCfg config.KeycloakConfig) *services.KeycloakCli
 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
+}
+
+func appendPath(p string) string {
+	return path.Join(appCfg.BasePath, p)
 }

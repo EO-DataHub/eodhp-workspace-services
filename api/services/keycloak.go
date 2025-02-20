@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 )
@@ -18,6 +19,28 @@ type KeycloakClient struct {
 	Realm        string
 	Token        string
 	HTTPClient   *http.Client
+}
+
+type TokenResponse struct {
+	Access    string `json:"access_token"`
+	Refresh   string `json:"refresh_token"`
+	ExpiresIn int    `json:"expires_in"`
+}
+
+type KeycloakError struct {
+	Error            string `json:"error"`
+	ErrorDescription string `json:"error_description"`
+}
+
+type KeycloakResponse = map[string]any
+
+type HTTPError struct {
+	Message string
+	Status  int
+}
+
+func (e *HTTPError) Error() string {
+	return e.Message
 }
 
 // NewKeycloakClient creates a new instance of KeycloakClient.
@@ -227,6 +250,52 @@ func (kc *KeycloakClient) GetUserGroups(userID string) ([]string, error) {
 	}
 
 	return groupNames, nil
+}
+
+func (kc KeycloakClient) ExchangeToken(accessToken, scope string) (*TokenResponse,
+	error) {
+
+	data := url.Values{}
+	data.Set("client_id", kc.ClientID)
+	data.Set("client_secret", kc.ClientSecret)
+	data.Set("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange")
+	data.Set("subject_token", accessToken)
+	data.Set("scope", scope)
+
+	resp, err := kc.HTTPClient.PostForm(
+		fmt.Sprintf("%s/realms/%s/protocol/openid-connect/token",
+			kc.BaseURL, kc.Realm), data)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+
+		// Detect invalid token (Bad Request) and convert to Unauthorized error
+		// for redirection to login page
+		var body KeycloakError
+		if err := json.Unmarshal(bodyBytes, &body); err != nil {
+			body.Error = resp.Status
+			body.ErrorDescription = string(bodyBytes)
+		}
+		var errStatus int
+		if resp.StatusCode == http.StatusBadRequest && body.ErrorDescription == "Invalid token" {
+			errStatus = http.StatusUnauthorized
+		} else {
+			errStatus = resp.StatusCode
+		}
+
+		return nil, &HTTPError{Message: body.ErrorDescription, Status: errStatus}
+	}
+
+	var tokenResponse TokenResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
+		return nil, err
+	}
+
+	return &tokenResponse, nil
 }
 
 // Helper function for making HTTP requests to keycloak API.
