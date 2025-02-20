@@ -1,5 +1,11 @@
 # Workspace Services
 
+## v0.6.9 (20-02-2025)
+
+- Getting group membership from keycloak API instead of claims
+- Added OpenAPI doc generation and endpoint to view them (s3 only)
+- Get S3 credentials from user scoped token
+
 ## v0.6.6 (14-02-2025)
 
 - Added more logging
