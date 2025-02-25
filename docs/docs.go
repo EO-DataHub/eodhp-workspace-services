@@ -16,8 +16,8 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/workspaces/{workspace-id}/users/{user-id}/s3-tokens": {
-            "get": {
-                "description": "Request S3 session credentials for user access to a single workspace",
+            "post": {
+                "description": "Request S3 session credentials for user access to a single workspace. {user-id} can be set to \"me\" to use the token owner's user id.",
                 "consumes": [
                     "application/json"
                 ],
@@ -31,6 +31,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
+                        "example": "my-workspace",
                         "description": "Workspace ID",
                         "name": "workspace-id",
                         "in": "path",
@@ -38,6 +39,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
+                        "example": "me",
                         "description": "User ID",
                         "name": "user-id",
                         "in": "path",

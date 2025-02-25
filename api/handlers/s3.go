@@ -25,17 +25,17 @@ type STSClient interface {
 }
 
 // @Summary Request S3 session credentials
-// @Description Request S3 session credentials for user access to a single workspace
+// @Description Request S3 session credentials for user access to a single workspace. {user-id} can be set to "me" to use the token owner's user id.
 // @Tags s3 credentials auth
 // @Accept json
 // @Produce json
-// @Param workspace-id path string true "Workspace ID"
-// @Param user-id path string true "User ID"
+// @Param workspace-id path string true "Workspace ID" example(my-workspace)
+// @Param user-id path string true "User ID" example(me)
 // @Success 200 {object} S3Credentials
 // @Failure 400 {object} string
 // @Failure 401 {object} string
 // @Failure 500 {object} string
-// @Router /workspaces/{workspace-id}/users/{user-id}/s3-tokens [get]
+// @Router /workspaces/{workspace-id}/users/{user-id}/s3-tokens [post]
 func RequestS3CredentialsHandler(roleArn string, c STSClient,
 	k services.KeycloakClient) http.HandlerFunc {
 
@@ -66,6 +66,10 @@ func RequestS3CredentialsHandler(roleArn string, c STSClient,
 		}
 
 		logger = logger.With().Str("claims user", claims.Username).Logger()
+
+		if userID == "me" {
+			userID = claims.Username
+		}
 
 		if tokenExchangeRequired(claims, workspaceID, userID) {
 			logger.Info().Msg("Token exchange required")

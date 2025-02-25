@@ -17,17 +17,20 @@ info:
   version: v1
 paths:
   /workspaces/{workspace-id}/users/{user-id}/s3-tokens:
-    get:
+    post:
       consumes:
       - application/json
-      description: Request S3 session credentials for user access to a single workspace
+      description: Request S3 session credentials for user access to a single workspace.
+        {user-id} can be set to "me" to use the token owner's user id.
       parameters:
       - description: Workspace ID
+        example: my-workspace
         in: path
         name: workspace-id
         required: true
         type: string
       - description: User ID
+        example: me
         in: path
         name: user-id
         required: true
