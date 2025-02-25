@@ -35,7 +35,7 @@ type STSClient interface {
 // @Failure 400 {object} string
 // @Failure 401 {object} string
 // @Failure 500 {object} string
-// @Router /workspaces/{workspace-id}/users/{user-id}/s3-tokens [post]
+// @Router /workspaces/{workspace-id}/{user-id}/s3-tokens [post]
 func RequestS3CredentialsHandler(roleArn string, c STSClient,
 	k services.KeycloakClient) http.HandlerFunc {
 
