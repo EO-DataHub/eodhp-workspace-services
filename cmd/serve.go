@@ -86,6 +86,9 @@ var serveCmd = &cobra.Command{
 		// S3 token routes
 		r.HandleFunc(appendPath("/workspaces/{workspace-id}/{user-id}/s3-tokens"), middleware(handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient))).Methods(http.MethodPost)
 
+		// Linked account routes
+		r.HandleFunc(appendPath("/workspaces/{workspace-id}/linked-accounts"), middleware(handlers.CreateLinkedAccount(service))).Methods(http.MethodPost)
+
 		// Docs
 		docs.SwaggerInfo.Host = appCfg.Host
 		docs.SwaggerInfo.BasePath = appCfg.BasePath
