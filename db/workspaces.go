@@ -292,7 +292,7 @@ func (db *WorkspaceDB) getObjectStores(workspaces []ws_manager.WorkspaceSettings
 			return ""
 		}()
 		os.Host = fmt.Sprintf("%s-%s.%s", accessPointName, db.AWSConfig.Account, db.AWSConfig.S3.Host)
-		os.AccessURL = fmt.Sprintf("https://%s.%s/files/%s/%s", workspaceName, db.AWSConfig.WorkspaceDomain, os.Bucket, os.Prefix)
+		os.AccessURL = fmt.Sprintf("https://%s.%s/files/%s/", workspaceName, db.AWSConfig.WorkspaceDomain, os.Bucket)
 
 		// Add object store to the map
 		objectStores[workspaceID] = append(objectStores[workspaceID], os)
