@@ -1,5 +1,9 @@
 # Workspace Services
 
+## v0.7.0 (20-02-2025)
+
+- Added `POST /workspaces/<workspace>/linked-accounts
+
 ## v0.6.9 (20-02-2025)
 
 - Getting group membership from keycloak API instead of claims
