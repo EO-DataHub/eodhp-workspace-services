@@ -43,11 +43,6 @@ var serveCmd = &cobra.Command{
 		// Create routes
 		r := mux.NewRouter()
 
-		// The CRUD routes all use the same middleware
-		var middleware = func(next http.HandlerFunc) http.HandlerFunc {
-			return middleware.WithLogger(middleware.JWTMiddleware(next))
-		}
-
 		service := &services.Service{
 			Config:    appCfg,
 			DB:        workspaceDB,
@@ -62,29 +57,34 @@ var serveCmd = &cobra.Command{
 		})
 
 		// Register the routes
+		api := r.PathPrefix(appCfg.BasePath).Subrouter()
+
+		// Apply the middleware to the API routes
+		api.Use(middleware.WithLogger)
+		api.Use(middleware.JWTMiddleware)
 
 		// Workspace routes
-		r.HandleFunc(appendPath("/workspaces"), middleware(handlers.CreateWorkspace(service))).Methods(http.MethodPost)
-		r.HandleFunc(appendPath("/workspaces"), middleware(handlers.GetWorkspaces(service))).Methods(http.MethodGet)
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}"), middleware(handlers.GetWorkspace(service))).Methods(http.MethodGet)
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}"), middleware(handlers.UpdateWorkspace(service))).Methods(http.MethodPut)
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}"), middleware(handlers.PatchWorkspace(service))).Methods(http.MethodPatch)
+		api.HandleFunc("/workspaces", handlers.CreateWorkspace(service)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces", handlers.GetWorkspaces(service)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.GetWorkspace(service)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(service)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(service)).Methods(http.MethodPatch)
 
 		// Workspace management routes
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users"), middleware(handlers.GetUsers(service))).Methods(http.MethodGet)
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users/{username}"), middleware(handlers.AddUser(service))).Methods(http.MethodPut)
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users/{username}"), middleware(handlers.GetUser(service))).Methods(http.MethodGet)
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}/users/{username}"), middleware(handlers.RemoveUser(service))).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(service)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.AddUser(service)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.GetUser(service)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(service)).Methods(http.MethodDelete)
 
 		// Account routes
-		r.HandleFunc(appendPath("/accounts"), middleware(handlers.CreateAccount(service))).Methods(http.MethodPost)
-		r.HandleFunc(appendPath("/accounts"), middleware(handlers.GetAccounts(service))).Methods(http.MethodGet)
-		r.HandleFunc(appendPath("/accounts/{account-id}"), middleware(handlers.GetAccount(service))).Methods(http.MethodGet)
-		r.HandleFunc(appendPath("/accounts/{account-id}"), middleware(handlers.DeleteAccount(service))).Methods(http.MethodDelete)
-		r.HandleFunc(appendPath("/accounts/{account-id}"), middleware(handlers.UpdateAccount(service))).Methods(http.MethodPut)
+		api.HandleFunc("/accounts", handlers.CreateAccount(service)).Methods(http.MethodPost)
+		api.HandleFunc("/accounts", handlers.GetAccounts(service)).Methods(http.MethodGet)
+		api.HandleFunc("/accounts/{account-id}", handlers.GetAccount(service)).Methods(http.MethodGet)
+		api.HandleFunc("/accounts/{account-id}", handlers.DeleteAccount(service)).Methods(http.MethodDelete)
+		api.HandleFunc("/accounts/{account-id}", handlers.UpdateAccount(service)).Methods(http.MethodPut)
 
 		// S3 token routes
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}/{user-id}/s3-tokens"), middleware(handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient))).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
 		// Linked account routes
 		r.HandleFunc(appendPath("/workspaces/{workspace-id}/linked-accounts"), middleware(handlers.CreateLinkedAccount(service))).Methods(http.MethodPost)
@@ -125,8 +125,4 @@ func initializeKeycloakClient(kcCfg config.KeycloakConfig) *services.KeycloakCli
 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
-}
-
-func appendPath(p string) string {
-	return path.Join(appCfg.BasePath, p)
 }
