@@ -16,7 +16,7 @@ info:
   title: EODHP Workspace Services API
   version: v1
 paths:
-  /workspaces/{workspace-id}/users/{user-id}/s3-tokens:
+  /workspaces/{workspace-id}/{user-id}/s3-tokens:
     post:
       consumes:
       - application/json

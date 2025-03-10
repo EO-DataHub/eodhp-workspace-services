@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/workspaces/{workspace-id}/users/{user-id}/s3-tokens": {
+        "/workspaces/{workspace-id}/{user-id}/s3-tokens": {
             "post": {
                 "description": "Request S3 session credentials for user access to a single workspace. {user-id} can be set to \"me\" to use the token owner's user id.",
                 "consumes": [
