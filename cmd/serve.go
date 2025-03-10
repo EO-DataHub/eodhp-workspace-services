@@ -123,7 +123,3 @@ func initializeKeycloakClient(kcCfg config.KeycloakConfig) *services.KeycloakCli
 
 	return keycloakClient
 }
-
-func appendPath(p string) string {
-	return path.Join(appCfg.BasePath, p)
-}
