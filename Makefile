@@ -1,7 +1,7 @@
-.PHONY: dockerbuild dockerpush test lint format setup clean docs
+.PHONY: dockerbuild dockerpush test lint format setup clean docs publish
 
 # Variables
-VERSION ?= latest
+VERSION ?= 0.7.0
 IMAGENAME = eodhp-workspace-services
 DOCKERREPO ?= public.ecr.aws/eodh
 
@@ -50,6 +50,9 @@ testdocker: test dockerbuild
 
 # Default target to build, test, and push Docker image
 all: docs test dockerbuild dockerpush
+
+# Default target to build, test, and push Docker image
+publish: docs dockerbuild dockerpush
 
 # Generate Swagger docs
 docs:
