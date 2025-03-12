@@ -17,8 +17,10 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -116,11 +118,27 @@ func encryptWithOTP(plaintext string) (string, string, error) {
 // storeOTPKeyInK8sSecret securely stores the OTP key in a Kubernetes secret.
 // The OTP key is required to decrypt the corresponding ciphertext stored in AWS.
 func storeOTPInK8sSecret(otpKey, secretName, namespace string) error {
-	config, err := clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-	if err != nil {
-		return fmt.Errorf("failed to load kubeconfig: %v", err)
+	var config *rest.Config
+	var err error
+
+	// Check if running inside a Kubernetes pod
+	if _, exists := os.LookupEnv("KUBERNETES_SERVICE_HOST"); exists {
+		// Inside Kubernetes, use in-cluster config
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return fmt.Errorf("failed to load in-cluster Kubernetes config: %v", err)
+		}
+		fmt.Println("Using in-cluster Kubernetes authentication")
+	} else {
+		// Running locally, use kubeconfig
+		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+		if err != nil {
+			return fmt.Errorf("failed to load kubeconfig: %v", err)
+		}
+		fmt.Println("Using local kubeconfig file")
 	}
 
+	// Create Kubernetes client
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return fmt.Errorf("failed to create Kubernetes client: %v", err)
@@ -132,28 +150,34 @@ func storeOTPInK8sSecret(otpKey, secretName, namespace string) error {
 		return fmt.Errorf("failed to decode OTP before storing: %v", err)
 	}
 
+	// Create Kubernetes secret object
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: secretName,
 		},
 		Data: map[string][]byte{
-			"otp": []byte(decodedOTPKey),
+			"otp": decodedOTPKey,
 		},
 	}
 
+	// Try creating the secret
 	_, err = clientset.CoreV1().Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 	if err != nil {
-		if os.IsExist(err) {
+		// If secret already exists, update it instead
+		if errors.IsAlreadyExists(err) {
 			_, err = clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
 			if err != nil {
-				return fmt.Errorf("failed to update Kubernetes secret: %v", err)
+				return fmt.Errorf("failed to update existing Kubernetes secret: %v", err)
 			}
 		} else {
 			return fmt.Errorf("failed to create Kubernetes secret: %v", err)
 		}
 	}
+
+	fmt.Println("OTP successfully stored in Kubernetes Secret:", secretName)
 	return nil
 }
+
 
 // storeCiphertextInAWSSecrets securely stores the OTP-encrypted ciphertext in AWS Secrets Manager.
 // Unlike Kubernetes, AWS Secrets Manager stores only the ciphertext, while the OTP key remains in Kubernetes.
