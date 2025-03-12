@@ -14,3 +14,21 @@ func CreateLinkedAccount(svc *services.Service) http.HandlerFunc {
 		services.CreateLinkedAccountService(svc, w, r)
 	}
 }
+
+// GetAccounts handles HTTP requests for retrieving accounts.
+func GetLinkedAccounts(svc *services.Service) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		services.GetLinkedAccountsService(svc, w, r)
+	}
+}
+
+// DeleteAccount handles HTTP requests for deleting an account.
+func DeleteLinkedAccount(svc *services.Service) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		services.DeleteLinkedAccountService(svc, w, r)
+	}
+}

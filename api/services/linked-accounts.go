@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -28,6 +30,71 @@ import (
 type Payload struct {
 	Name string `json:"name"`
 	Key  string `json:"key"`
+}
+
+// GetLinkedAccountsService handles the retrieval of linked accounts from AWS Secrets Manager.
+// The linked account secrets are stored as key-value pairs, where the key is the provider name and the value is the encrypted API key.
+func GetLinkedAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	// Extract the workspace ID from the request URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+	namespace := "ws-" + workspaceID
+
+	providers, err := getSecretKeysFromAWS(svc.Config.AWS.Region, namespace)
+
+	logger.Info().Strs("providers", providers).Msg("Successfully retrieved providers from AWS")
+
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to get linked accounts")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+	}
+
+	WriteResponse(w, http.StatusOK, providers)
+
+}
+
+func DeleteLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	logger.Info().Str("username", claims.Username).Msg("Authenticated user")
+
+	// Extract the workspace ID from the request URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+	provider := mux.Vars(r)["provider"]
+	namespace := "ws-" + workspaceID
+
+	// Delete the OTP secret from Kubernetes
+	k8sSecretName := "otp-" + provider
+	err := deleteOTPSecret(k8sSecretName, namespace)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Str("provider", provider).Msg("Failed to delete OTP secret")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Delete the encrypted key from AWS Secrets Manager
+	err = deleteSecretKeyFromAWS(svc.Config.AWS.Region, namespace, provider)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Str("provider", provider).Msg("Failed to delete encrypted key from AWS Secrets Manager")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	logger.Info().Str("workspace_id", workspaceID).Str("provider", provider).Msg("Successfully deleted linked account")
+
+	WriteResponse(w, http.StatusNoContent, nil)
+
 }
 
 // CreateLinkedAccountService handles the creation of a linked account, encrypts the API key using OTP,
@@ -74,15 +141,14 @@ func CreateLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 
 	// Store OTP in Kubernetes
 	k8sSecretName := "otp-" + payload.Name
-	if err := storeOTPInK8sSecret(otp, k8sSecretName, namespace); err != nil {
+	if err := storeOTPSecret(otp, k8sSecretName, namespace); err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Failed to store OTP in Kubernetes: %v", err))
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store OTP in Kubernetes: %v", err))
 		return
 	}
-
 	// Store the ciphertext in AWS Secrets Manager
 	awsSecretName := "ws-" + workspaceID // We want to differentiate general secrets in AWS with workspace specific secrets
-	if err := storeCiphertextInAWSSecrets(ciphertext, awsSecretName, payload.Name); err != nil {
+	if err := storeCiphertextInAWSSecrets(svc.Config.AWS.Region, ciphertext, awsSecretName, payload.Name); err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Failed to store encrypted key in AWS: %v", err))
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store encrypted key in AWS: %v", err))
 		return
@@ -115,9 +181,9 @@ func encryptWithOTP(plaintext string) (string, string, error) {
 	return encodedOTPKey, encodedCiphertext, nil
 }
 
-// storeOTPKeyInK8sSecret securely stores the OTP key in a Kubernetes secret.
+// storeOTPSecret securely stores the OTP key in a Kubernetes secret.
 // The OTP key is required to decrypt the corresponding ciphertext stored in AWS.
-func storeOTPInK8sSecret(otpKey, secretName, namespace string) error {
+func storeOTPSecret(otpKey, secretName, namespace string) error {
 	var config *rest.Config
 	var err error
 
@@ -176,9 +242,9 @@ func storeOTPInK8sSecret(otpKey, secretName, namespace string) error {
 
 // storeCiphertextInAWSSecrets securely stores the OTP-encrypted ciphertext in AWS Secrets Manager.
 // Unlike Kubernetes, AWS Secrets Manager stores only the ciphertext, while the OTP key remains in Kubernetes.
-func storeCiphertextInAWSSecrets(ciphertext string, secretName, payloadName string) error {
+func storeCiphertextInAWSSecrets(region string, ciphertext string, secretName, payloadName string) error {
 	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String("eu-west-2"),
+		Region: aws.String(region),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create AWS session: %v", err)
@@ -234,5 +300,126 @@ func storeCiphertextInAWSSecrets(ciphertext string, secretName, payloadName stri
 			return fmt.Errorf("failed to create AWS secret: %v", err)
 		}
 	}
+	return nil
+}
+
+func getSecretKeysFromAWS(region string, secretName string) ([]string, error) {
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create AWS session: %v", err)
+	}
+
+	svc := secretsmanager.New(sess)
+
+	// Fetch existing secret
+	getResult, err := svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(secretName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get secret: %v", err)
+	}
+
+	if getResult.SecretString == nil {
+		return nil, fmt.Errorf("secret is empty or missing")
+	}
+
+	// Parse the secret JSON
+	var existingKeys map[string]interface{}
+	if err := json.Unmarshal([]byte(*getResult.SecretString), &existingKeys); err != nil {
+		return nil, fmt.Errorf("failed to parse secret: %v", err)
+	}
+
+	// Extract the keys from the map
+	keys := make([]string, 0, len(existingKeys))
+	for key := range existingKeys {
+		keys = append(keys, key)
+	}
+
+	return keys, nil
+}
+
+func deleteOTPSecret(secretName, namespace string) error {
+	var config *rest.Config
+	var err error
+
+	// Check if running inside a Kubernetes pod
+	if _, exists := os.LookupEnv("KUBERNETES_SERVICE_HOST"); exists {
+		// Inside Kubernetes, use in-cluster config
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return fmt.Errorf("failed to load in-cluster Kubernetes config: %v", err)
+		}
+	} else {
+		// Running locally, use kubeconfig
+		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+		if err != nil {
+			return fmt.Errorf("failed to load kubeconfig: %v", err)
+		}
+	}
+
+	// Create Kubernetes client
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create Kubernetes client: %v", err)
+	}
+
+	// Attempt to delete the secret
+	err = clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete Kubernetes secret: %v", err)
+	}
+
+	return nil
+}
+
+// removeKeyFromAWSSecret removes a specific key from an existing AWS secret.
+func deleteSecretKeyFromAWS(region, secretName, keyToRemove string) error {
+	sess, err := session.NewSession(&aws.Config{
+		Region: aws.String(region),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create AWS session: %v", err)
+	}
+
+	svc := secretsmanager.New(sess)
+
+	// Fetch the existing secret
+	getResult, err := svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
+		SecretId: aws.String(secretName),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get secret: %v", err)
+	}
+
+	if getResult.SecretString == nil {
+		return fmt.Errorf("secret is empty or missing")
+	}
+
+	// Parse the secret JSON
+	var secretData map[string]string
+	if err := json.Unmarshal([]byte(*getResult.SecretString), &secretData); err != nil {
+		return fmt.Errorf("failed to parse secret: %v", err)
+	}
+
+	// Remove the specified key
+	delete(secretData, keyToRemove)
+
+	// Marshal the updated secret back to JSON
+	updatedSecret, err := json.Marshal(secretData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal updated secret: %v", err)
+	}
+
+	// Update the secret in AWS
+	_, err = svc.UpdateSecret(&secretsmanager.UpdateSecretInput{
+		SecretId:     aws.String(secretName),
+		SecretString: aws.String(string(updatedSecret)),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update AWS secret: %v", err)
+	}
+
 	return nil
 }

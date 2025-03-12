@@ -88,6 +88,8 @@ var serveCmd = &cobra.Command{
 
 		// Linked account routes
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(service)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(service)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(service)).Methods(http.MethodDelete)
 
 		// Docs
 		docs.SwaggerInfo.Host = appCfg.Host
