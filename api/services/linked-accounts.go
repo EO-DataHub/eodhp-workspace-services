@@ -128,14 +128,12 @@ func storeOTPInK8sSecret(otpKey, secretName, namespace string) error {
 		if err != nil {
 			return fmt.Errorf("failed to load in-cluster Kubernetes config: %v", err)
 		}
-		fmt.Println("Using in-cluster Kubernetes authentication")
 	} else {
 		// Running locally, use kubeconfig
 		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
 		if err != nil {
 			return fmt.Errorf("failed to load kubeconfig: %v", err)
 		}
-		fmt.Println("Using local kubeconfig file")
 	}
 
 	// Create Kubernetes client
@@ -173,11 +171,8 @@ func storeOTPInK8sSecret(otpKey, secretName, namespace string) error {
 			return fmt.Errorf("failed to create Kubernetes secret: %v", err)
 		}
 	}
-
-	fmt.Println("OTP successfully stored in Kubernetes Secret:", secretName)
 	return nil
 }
-
 
 // storeCiphertextInAWSSecrets securely stores the OTP-encrypted ciphertext in AWS Secrets Manager.
 // Unlike Kubernetes, AWS Secrets Manager stores only the ciphertext, while the OTP key remains in Kubernetes.
