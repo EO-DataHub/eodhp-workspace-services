@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,12 +11,15 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -37,8 +41,14 @@ var serveCmd = &cobra.Command{
 		}
 		defer publisher.Close()
 
-		// Iintialise KeyCloak client
+		// Initialise KeyCloak client
 		keycloakClient := initializeKeycloakClient(appCfg.Keycloak)
+
+		// Initialize secrets manager client
+		secretsManagerClient, err := initializeSecretsManagerClient(appCfg.AWS.Region)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize secrets manager client")
+		}
 
 		// Create routes
 		r := mux.NewRouter()
@@ -48,6 +58,12 @@ var serveCmd = &cobra.Command{
 			DB:        workspaceDB,
 			Publisher: publisher,
 			KC:        keycloakClient,
+		}
+
+		linkedAccountService := &services.LinkedAccountService{
+			Config:         appCfg,
+			DB:             workspaceDB,
+			SecretsManager: secretsManagerClient,
 		}
 
 		// Create AWS STS client
@@ -88,7 +104,7 @@ var serveCmd = &cobra.Command{
 
 		// Linked account routes
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(service)).Methods(http.MethodPost)
-		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(service)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(service)).Methods(http.MethodDelete)
 
 		// Docs
@@ -120,11 +136,22 @@ func init() {
 }
 
 // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func initializeKeycloakClient(kcCfg config.KeycloakConfig) *services.KeycloakClient {
+func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.KeycloakClient {
 	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
 
 	// Create a new Keycloak client
 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
+}
+
+// InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
+func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	if err != nil {
+		return nil, fmt.Errorf("unable to load SDK config, %v", err)
+	}
+
+	svc := secretsmanager.NewFromConfig(cfg)
+	return svc, nil
 }

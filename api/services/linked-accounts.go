@@ -12,10 +12,10 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/secretsmanager"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	corev1 "k8s.io/api/core/v1"
@@ -34,17 +34,43 @@ type Payload struct {
 
 // GetLinkedAccountsService handles the retrieval of linked accounts from AWS Secrets Manager.
 // The linked account secrets are stored as key-value pairs, where the key is the provider name and the value is the encrypted API key.
-func GetLinkedAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *LinkedAccountService) GetLinkedAccounts(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
+
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
 
 	// Extract the workspace ID from the request URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	namespace := "ws-" + workspaceID
 
+	// Check if the user can access the workspace
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
 	providers, err := getSecretKeysFromAWS(svc.Config.AWS.Region, namespace)
 
 	logger.Info().Strs("providers", providers).Msg("Successfully retrieved providers from AWS")
+
+	// Return an empty array if no providers are found
+	if providers == nil {
+		providers = []string{}
+	}
 
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to get linked accounts")
@@ -67,16 +93,27 @@ func DeleteLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	logger.Info().Str("username", claims.Username).Msg("Authenticated user")
-
 	// Extract the workspace ID from the request URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	provider := mux.Vars(r)["provider"]
 	namespace := "ws-" + workspaceID
 
+	// Check if the user is the account owner
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
 	// Delete the OTP secret from Kubernetes
 	k8sSecretName := "otp-" + provider
-	err := deleteOTPSecret(k8sSecretName, namespace)
+	err = deleteOTPSecret(k8sSecretName, namespace)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Str("provider", provider).Msg("Failed to delete OTP secret")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -103,9 +140,30 @@ func CreateLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 
 	logger := zerolog.Ctx(r.Context())
 
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Extract the workspace ID from the request URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	namespace := "ws-" + workspaceID
+
+	// Check if the user is the account owner
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
 
 	// Read the request body
 	body, err := io.ReadAll(r.Body)
@@ -135,7 +193,7 @@ func CreateLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 	otp, ciphertext, err := encryptWithOTP(payload.Key)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Encryption failed: %v", err))
-		WriteResponse(w, http.StatusBadRequest, fmt.Sprintf("Encryption failed: %v", err))
+		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Encryption failed: %v", err))
 		return
 	}
 
@@ -254,11 +312,11 @@ func storeCiphertextInAWSSecrets(region string, ciphertext string, secretName, p
 
 	// Try to get existing secret
 	var existingKeys map[string]string
-	getResult, err := svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
+	getResult, err := svc.GetSecretValue(context.Background(), &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == secretsmanager.ErrCodeResourceNotFoundException {
+		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == secretsmanager {
 			existingKeys = make(map[string]string)
 		} else {
 			return fmt.Errorf("failed to get existing secret: %v", err)
@@ -303,18 +361,18 @@ func storeCiphertextInAWSSecrets(region string, ciphertext string, secretName, p
 	return nil
 }
 
-func getSecretKeysFromAWS(region string, secretName string) ([]string, error) {
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create AWS session: %v", err)
-	}
+func (svc *LinkedAccountService) getSecretKeysFromAWS(region string, secretName string) ([]string, error) {
+	// sess, err := session.NewSession(&aws.Config{
+	// 	Region: aws.String(region),
+	// })
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to create AWS session: %v", err)
+	// }
 
-	svc := secretsmanager.New(sess)
+	// svc := secretsmanager.New(sess)
 
 	// Fetch existing secret
-	getResult, err := svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
+	getResult, err := svc.SecretsManager.GetSecretValue(context.Background(), &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {

@@ -16,11 +16,10 @@ func CreateLinkedAccount(svc *services.Service) http.HandlerFunc {
 }
 
 // GetAccounts handles HTTP requests for retrieving accounts.
-func GetLinkedAccounts(svc *services.Service) http.HandlerFunc {
+func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		services.GetLinkedAccountsService(svc, w, r)
+		svc.GetLinkedAccounts(w, r)
 	}
 }
 

@@ -3,6 +3,8 @@ package services
 import (
 	"net/http"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 )
@@ -12,8 +14,29 @@ func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
+
+	// Check if the user can access the workspace
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
 
 	// Get information about the workspace
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -51,9 +74,30 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	username := mux.Vars(r)["username"]
+
+	// Check if the user can access the workspace
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
 
 	// Get information about the workspace
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -98,9 +142,30 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	username := mux.Vars(r)["username"]
+
+	// Only account owners can remove users from a workspace
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
 
 	// Get the workspace member_group
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
@@ -144,9 +209,30 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Parse the workspace ID and user ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 	username := mux.Vars(r)["username"]
+
+	// Only account owners can remove users from a workspace
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
 
 	// Get the workspace member_group
 	workspace, err := svc.DB.GetWorkspace(workspaceID)

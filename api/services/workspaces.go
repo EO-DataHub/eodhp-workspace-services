@@ -26,14 +26,8 @@ func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Retrieve groups the user is a member of
-	memberGroups, err := svc.KC.GetUserGroups(claims.Subject)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", claims.Subject).Msg("Failed to retrieve user groups")
-	}
-
 	// Retrieve workspaces assigned to these groups
-	workspaces, err := svc.DB.GetUserWorkspaces(memberGroups)
+	workspaces, err := svc.DB.GetUserWorkspaces(claims.MemberGroups)
 	if err != nil {
 		logger.Error().Err(err).Msg("Database error retrieving workspaces")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -76,14 +70,8 @@ func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Retrieve groups the user is a member of
-	memberGroups, err := svc.KC.GetUserGroups(claims.Subject)
-	if err != nil {
-		logger.Error().Err(err).Str("user_id", claims.Subject).Msg("Failed to retrieve user groups")
-	}
-
 	// Check if the account owner matches any of the claims member groups
-	if !isMemberGroupAuthorized(workspace.MemberGroup, memberGroups) {
+	if !isMemberGroupAuthorized(workspace.MemberGroup, claims.MemberGroups) {
 		logger.Warn().Str("workspace_id", workspaceID).Str("user", claims.Username).Msg("Access denied: user not in authorized groups")
 		WriteResponse(w, http.StatusForbidden, nil)
 		return
