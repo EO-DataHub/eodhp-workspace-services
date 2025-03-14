@@ -68,12 +68,6 @@ var serveCmd = &cobra.Command{
 			KC:        keycloakClient,
 		}
 
-		linkedAccountService := &services.LinkedAccountService{
-			DB:             workspaceDB,
-			SecretsManager: secretsManagerClient,
-			K8sClient:      k8sClient,
-		}
-
 		// Create AWS STS client
 		log.Info().Str("region", appCfg.AWS.Region).Msgf("Creating AWS STS client in region '%s'...", appCfg.AWS.Region)
 		sts_client := sts.New(sts.Options{
@@ -111,6 +105,11 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
 		// Linked account routes
+		linkedAccountService := &services.LinkedAccountService{
+			DB:             workspaceDB,
+			SecretsManager: secretsManagerClient,
+			K8sClient:      k8sClient,
+		}
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)

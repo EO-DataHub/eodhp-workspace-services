@@ -59,14 +59,14 @@ func IsDNSCompatible(name string) bool {
 }
 
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
-func isUserWorkspaceAuthorized(db *db.WorkspaceDB, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
+func isUserWorkspaceAuthorized(svc *db.WorkspaceDB, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
 
 	// Check if the user is an account owner
 	if mustBeAccountOwner {
 		if isMemberGroupAuthorized(workspace, claims.MemberGroups) {
 
 			// Do they own the workspace
-			isAccountOwner, err := db.IsUserAccountOwner(claims.Username, workspace)
+			isAccountOwner, err := svc.IsUserAccountOwner(claims.Username, workspace)
 
 			// Check for errors
 			if err != nil {
