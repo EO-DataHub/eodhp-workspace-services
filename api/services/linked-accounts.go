@@ -5,31 +5,39 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	"strings"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/smithy-go"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // Payload represents the expected JSON structure
 type Payload struct {
 	Name string `json:"name"`
 	Key  string `json:"key"`
+}
+
+type LinkedAccountServiceInterface interface {
+	GetLinkedAccounts(w http.ResponseWriter, r *http.Request)
+	DeleteLinkedAccountService(w http.ResponseWriter, r *http.Request)
+	CreateLinkedAccountService(w http.ResponseWriter, r *http.Request)
+	storeOTPSecret(otpKey, secretName, namespace string) error
+	storeCiphertextInAWSSecrets(ciphertext, secretName, payloadName string) error
+	getSecretKeysFromAWS(secretName string) ([]string, error)
+	deleteOTPSecret(secretName, namespace string) error
+	deleteSecretKeyFromAWS(secretName, keyToRemove string) error
 }
 
 // GetLinkedAccountsService handles the retrieval of linked accounts from AWS Secrets Manager.
@@ -63,9 +71,7 @@ func (svc *LinkedAccountService) GetLinkedAccounts(w http.ResponseWriter, r *htt
 		return
 	}
 
-	providers, err := getSecretKeysFromAWS(svc.Config.AWS.Region, namespace)
-
-	logger.Info().Strs("providers", providers).Msg("Successfully retrieved providers from AWS")
+	providers, err := svc.getSecretKeysFromAWS(namespace)
 
 	// Return an empty array if no providers are found
 	if providers == nil {
@@ -81,7 +87,7 @@ func (svc *LinkedAccountService) GetLinkedAccounts(w http.ResponseWriter, r *htt
 
 }
 
-func DeleteLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *LinkedAccountService) DeleteLinkedAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -113,7 +119,7 @@ func DeleteLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 
 	// Delete the OTP secret from Kubernetes
 	k8sSecretName := "otp-" + provider
-	err = deleteOTPSecret(k8sSecretName, namespace)
+	err = svc.deleteOTPSecret(k8sSecretName, namespace)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Str("provider", provider).Msg("Failed to delete OTP secret")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -121,7 +127,7 @@ func DeleteLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 	}
 
 	// Delete the encrypted key from AWS Secrets Manager
-	err = deleteSecretKeyFromAWS(svc.Config.AWS.Region, namespace, provider)
+	err = svc.deleteSecretKeyFromAWS(namespace, provider)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Str("provider", provider).Msg("Failed to delete encrypted key from AWS Secrets Manager")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -136,7 +142,7 @@ func DeleteLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 
 // CreateLinkedAccountService handles the creation of a linked account, encrypts the API key using OTP,
 // and securely stores it in both Kubernetes (for the OTP key) and AWS Secrets Manager (for the encrypted key).
-func CreateLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -199,14 +205,14 @@ func CreateLinkedAccountService(svc *Service, w http.ResponseWriter, r *http.Req
 
 	// Store OTP in Kubernetes
 	k8sSecretName := "otp-" + payload.Name
-	if err := storeOTPSecret(otp, k8sSecretName, namespace); err != nil {
+	if err := svc.storeOTPSecret(otp, k8sSecretName, namespace); err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Failed to store OTP in Kubernetes: %v", err))
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store OTP in Kubernetes: %v", err))
 		return
 	}
 	// Store the ciphertext in AWS Secrets Manager
 	awsSecretName := "ws-" + workspaceID // We want to differentiate general secrets in AWS with workspace specific secrets
-	if err := storeCiphertextInAWSSecrets(svc.Config.AWS.Region, ciphertext, awsSecretName, payload.Name); err != nil {
+	if err := svc.storeCiphertextInAWSSecrets(ciphertext, awsSecretName, payload.Name); err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Failed to store encrypted key in AWS: %v", err))
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store encrypted key in AWS: %v", err))
 		return
@@ -241,30 +247,7 @@ func encryptWithOTP(plaintext string) (string, string, error) {
 
 // storeOTPSecret securely stores the OTP key in a Kubernetes secret.
 // The OTP key is required to decrypt the corresponding ciphertext stored in AWS.
-func storeOTPSecret(otpKey, secretName, namespace string) error {
-	var config *rest.Config
-	var err error
-
-	// Check if running inside a Kubernetes pod
-	if _, exists := os.LookupEnv("KUBERNETES_SERVICE_HOST"); exists {
-		// Inside Kubernetes, use in-cluster config
-		config, err = rest.InClusterConfig()
-		if err != nil {
-			return fmt.Errorf("failed to load in-cluster Kubernetes config: %v", err)
-		}
-	} else {
-		// Running locally, use kubeconfig
-		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-		if err != nil {
-			return fmt.Errorf("failed to load kubeconfig: %v", err)
-		}
-	}
-
-	// Create Kubernetes client
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %v", err)
-	}
+func (svc *LinkedAccountService) storeOTPSecret(otpKey, secretName, namespace string) error {
 
 	// Decode OTP if it's already Base64-encoded
 	decodedOTPKey, err := base64.StdEncoding.DecodeString(otpKey)
@@ -283,11 +266,11 @@ func storeOTPSecret(otpKey, secretName, namespace string) error {
 	}
 
 	// Try creating the secret
-	_, err = clientset.CoreV1().Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+	_, err = svc.K8sClient.CoreV1().Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
 	if err != nil {
 		// If secret already exists, update it instead
-		if errors.IsAlreadyExists(err) {
-			_, err = clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
+		if k8sErrors.IsAlreadyExists(err) {
+			_, err = svc.K8sClient.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
 			if err != nil {
 				return fmt.Errorf("failed to update existing Kubernetes secret: %v", err)
 			}
@@ -298,83 +281,75 @@ func storeOTPSecret(otpKey, secretName, namespace string) error {
 	return nil
 }
 
-// storeCiphertextInAWSSecrets securely stores the OTP-encrypted ciphertext in AWS Secrets Manager.
-// Unlike Kubernetes, AWS Secrets Manager stores only the ciphertext, while the OTP key remains in Kubernetes.
-func storeCiphertextInAWSSecrets(region string, ciphertext string, secretName, payloadName string) error {
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create AWS session: %v", err)
-	}
-
-	svc := secretsmanager.New(sess)
-
-	// Try to get existing secret
+// storeCiphertextInAWSSecrets stores a key-value pair in AWS Secrets Manager
+func (svc *LinkedAccountService) storeCiphertextInAWSSecrets(ciphertext, secretName, payloadName string) error {
+	ctx := context.Background()
 	var existingKeys map[string]string
-	getResult, err := svc.GetSecretValue(context.Background(), &secretsmanager.GetSecretValueInput{
+
+	// Try to get the existing secret
+	getResult, err := svc.SecretsManager.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == secretsmanager {
-			existingKeys = make(map[string]string)
-		} else {
-			return fmt.Errorf("failed to get existing secret: %v", err)
+		var opErr *smithy.OperationError
+		if errors.As(err, &opErr) {
+			if strings.Contains(opErr.Unwrap().Error(), "ResourceNotFoundException") {
+				existingKeys = make(map[string]string) // Initialize new secret
+			} else {
+				return fmt.Errorf("failed to retrieve secret: %v", err)
+			}
 		}
+
 	} else if getResult.SecretString != nil {
-		if err := json.Unmarshal([]byte(*getResult.SecretString), &existingKeys); err != nil {
-			return fmt.Errorf("failed to parse existing secret: %v", err)
-		}
-	} else {
+		// Parse existing secret JSON
 		existingKeys = make(map[string]string)
+		if err := json.Unmarshal([]byte(*getResult.SecretString), &existingKeys); err != nil {
+			return fmt.Errorf("failed to parse existing secret JSON: %v", err)
+		}
 	}
 
-	// Store the OTP-encrypted ciphertext in AWS
+	// Add/Update key-value pair
 	existingKeys[payloadName] = ciphertext
-
-	// Marshal updated keys to JSON
 	updatedSecret, err := json.Marshal(existingKeys)
 	if err != nil {
-		return fmt.Errorf("failed to marshal secret: %v", err)
+		return fmt.Errorf("failed to marshal secret JSON: %v", err)
 	}
 
-	// Create or update the secret
-	input := &secretsmanager.CreateSecretInput{
-		Name:         aws.String(secretName),
+	// Store the secret (Create or Update)
+	_, err = svc.SecretsManager.PutSecretValue(ctx, &secretsmanager.PutSecretValueInput{
+		SecretId:     aws.String(secretName),
 		SecretString: aws.String(string(updatedSecret)),
-	}
-
-	_, err = svc.CreateSecret(input)
+	})
 	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == secretsmanager.ErrCodeResourceExistsException {
-			_, err = svc.UpdateSecret(&secretsmanager.UpdateSecretInput{
-				SecretId:     aws.String(secretName),
-				SecretString: aws.String(string(updatedSecret)),
-			})
-			if err != nil {
-				return fmt.Errorf("failed to update AWS secret: %v", err)
+
+		var opErr *smithy.OperationError
+		if errors.As(err, &opErr) {
+			if strings.Contains(opErr.Unwrap().Error(), "ResourceNotFoundException") {
+
+				// Secret doesn't exist, create a new one
+				_, err = svc.SecretsManager.CreateSecret(ctx, &secretsmanager.CreateSecretInput{
+					Name:         aws.String(secretName),
+					SecretString: aws.String(string(updatedSecret)),
+				})
+				if err != nil {
+					return fmt.Errorf("failed to create secret: %v", err)
+				}
+			} else {
+				return fmt.Errorf("failed to store/update secret: %v", err)
 			}
-		} else {
-			return fmt.Errorf("failed to create AWS secret: %v", err)
 		}
+		return nil
 	}
 	return nil
 }
 
-func (svc *LinkedAccountService) getSecretKeysFromAWS(region string, secretName string) ([]string, error) {
-	// sess, err := session.NewSession(&aws.Config{
-	// 	Region: aws.String(region),
-	// })
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to create AWS session: %v", err)
-	// }
-
-	// svc := secretsmanager.New(sess)
+func (svc *LinkedAccountService) getSecretKeysFromAWS(secretName string) ([]string, error) {
 
 	// Fetch existing secret
 	getResult, err := svc.SecretsManager.GetSecretValue(context.Background(), &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get secret: %v", err)
 	}
@@ -398,33 +373,10 @@ func (svc *LinkedAccountService) getSecretKeysFromAWS(region string, secretName 
 	return keys, nil
 }
 
-func deleteOTPSecret(secretName, namespace string) error {
-	var config *rest.Config
-	var err error
-
-	// Check if running inside a Kubernetes pod
-	if _, exists := os.LookupEnv("KUBERNETES_SERVICE_HOST"); exists {
-		// Inside Kubernetes, use in-cluster config
-		config, err = rest.InClusterConfig()
-		if err != nil {
-			return fmt.Errorf("failed to load in-cluster Kubernetes config: %v", err)
-		}
-	} else {
-		// Running locally, use kubeconfig
-		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
-		if err != nil {
-			return fmt.Errorf("failed to load kubeconfig: %v", err)
-		}
-	}
-
-	// Create Kubernetes client
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %v", err)
-	}
+func (svc *LinkedAccountService) deleteOTPSecret(secretName, namespace string) error {
 
 	// Attempt to delete the secret
-	err = clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	err := svc.K8sClient.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to delete Kubernetes secret: %v", err)
 	}
@@ -433,18 +385,10 @@ func deleteOTPSecret(secretName, namespace string) error {
 }
 
 // removeKeyFromAWSSecret removes a specific key from an existing AWS secret.
-func deleteSecretKeyFromAWS(region, secretName, keyToRemove string) error {
-	sess, err := session.NewSession(&aws.Config{
-		Region: aws.String(region),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create AWS session: %v", err)
-	}
-
-	svc := secretsmanager.New(sess)
+func (svc *LinkedAccountService) deleteSecretKeyFromAWS(secretName, keyToRemove string) error {
 
 	// Fetch the existing secret
-	getResult, err := svc.GetSecretValue(&secretsmanager.GetSecretValueInput{
+	getResult, err := svc.SecretsManager.GetSecretValue(context.Background(), &secretsmanager.GetSecretValueInput{
 		SecretId: aws.String(secretName),
 	})
 	if err != nil {
@@ -471,7 +415,7 @@ func deleteSecretKeyFromAWS(region, secretName, keyToRemove string) error {
 	}
 
 	// Update the secret in AWS
-	_, err = svc.UpdateSecret(&secretsmanager.UpdateSecretInput{
+	_, err = svc.SecretsManager.UpdateSecret(context.Background(), &secretsmanager.UpdateSecretInput{
 		SecretId:     aws.String(secretName),
 		SecretString: aws.String(string(updatedSecret)),
 	})
