@@ -351,7 +351,14 @@ func (svc *LinkedAccountService) getSecretKeysFromAWS(secretName string) ([]stri
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to get secret: %v", err)
+		var opErr *smithy.OperationError
+		if errors.As(err, &opErr) {
+			if strings.Contains(opErr.Unwrap().Error(), "ResourceNotFoundException") {
+				return []string{}, nil
+			} else {
+				return nil, fmt.Errorf("failed to get secret: %v", err)
+			}
+		}
 	}
 
 	if getResult.SecretString == nil {
