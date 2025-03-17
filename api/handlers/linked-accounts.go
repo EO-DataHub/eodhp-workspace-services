@@ -7,10 +7,27 @@ import (
 )
 
 // CreateAccount handles HTTP requests for creating a new account.
-func CreateLinkedAccount(svc *services.Service) http.HandlerFunc {
+func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.CreateLinkedAccountService(svc, w, r)
+		svc.CreateLinkedAccountService(w, r)
+	}
+}
+
+// GetAccounts handles HTTP requests for retrieving accounts.
+func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		svc.GetLinkedAccounts(w, r)
+	}
+}
+
+// DeleteAccount handles HTTP requests for deleting an account.
+func DeleteLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		svc.DeleteLinkedAccountService(w, r)
 	}
 }

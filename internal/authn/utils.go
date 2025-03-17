@@ -15,7 +15,8 @@ type Claims struct {
 	RealmAccess struct {
 		Roles []string `json:"roles"`
 	} `json:"realm_access"`
-	Workspace string `json:"workspace"`
+	Workspace    string   `json:"workspace"`
+	MemberGroups []string `json:"member_groups"`
 }
 
 func ParseClaims(token string) (Claims, error) {

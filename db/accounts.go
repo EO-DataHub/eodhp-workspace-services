@@ -200,3 +200,30 @@ func (db *WorkspaceDB) CheckAccountExists(accountID uuid.UUID) (bool, error) {
 	}
 	return exists, nil
 }
+
+func (db *WorkspaceDB) IsUserAccountOwner(username, workspaceID string) (bool, error) {
+
+	// Get information about the workspace
+	workspace, err := db.GetWorkspace(workspaceID)
+
+	// Check for errors
+	if err != nil {
+		return false, fmt.Errorf("Database error retrieving workspace: %w", err)
+	}
+
+	// Get account information
+	account, err := db.GetAccount(workspace.Account)
+
+	// Check for errors
+	if err != nil {
+		return false, fmt.Errorf("Database error retrieving account: %w", err)
+	}
+
+	// Check if the user is the account owner
+	if username == account.AccountOwner {
+		return true, nil
+	} 
+
+	// Return false if the user is not the account owner
+	return false, nil
+}

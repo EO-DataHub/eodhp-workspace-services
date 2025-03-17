@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -18,7 +18,7 @@ var (
 	host        string
 	port        int
 	configPath  string
-	appCfg      *config.Config
+	appCfg      *appconfig.Config
 	workspaceDB *db.WorkspaceDB
 )
 
@@ -47,7 +47,7 @@ func commonSetUp() {
 
 	// Load the config file
 	var err error
-	appCfg, err = config.LoadConfig(configPath)
+	appCfg, err = appconfig.LoadConfig(configPath)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}

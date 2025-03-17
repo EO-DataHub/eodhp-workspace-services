@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,12 +11,18 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -37,8 +44,19 @@ var serveCmd = &cobra.Command{
 		}
 		defer publisher.Close()
 
-		// Iintialise KeyCloak client
+		// Initialise KeyCloak client
 		keycloakClient := initializeKeycloakClient(appCfg.Keycloak)
+
+		// Initialize secrets manager client
+		secretsManagerClient, err := initializeSecretsManagerClient(appCfg.AWS.Region)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize secrets manager client")
+		}
+
+		k8sClient, err := initializeK8sClient()
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize Kubernetes client")
+		}
 
 		// Create routes
 		r := mux.NewRouter()
@@ -87,7 +105,14 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
 		// Linked account routes
-		r.HandleFunc(appendPath("/workspaces/{workspace-id}/linked-accounts"), middleware(handlers.CreateLinkedAccount(service))).Methods(http.MethodPost)
+		linkedAccountService := &services.LinkedAccountService{
+			DB:             workspaceDB,
+			SecretsManager: secretsManagerClient,
+			K8sClient:      k8sClient,
+		}
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
 
 		// Docs
 		docs.SwaggerInfo.Host = appCfg.Host
@@ -118,11 +143,50 @@ func init() {
 }
 
 // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func initializeKeycloakClient(kcCfg config.KeycloakConfig) *services.KeycloakClient {
+func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.KeycloakClient {
 	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
 
 	// Create a new Keycloak client
 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
+}
+
+// InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
+func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	if err != nil {
+		return nil, fmt.Errorf("unable to load SDK config, %v", err)
+	}
+
+	svc := secretsmanager.NewFromConfig(cfg)
+	return svc, nil
+}
+
+func initializeK8sClient() (*kubernetes.Clientset, error) {
+	var config *rest.Config
+	var err error
+
+	// Check if running inside a Kubernetes pod
+	if _, exists := os.LookupEnv("KUBERNETES_SERVICE_HOST"); exists {
+		// Inside Kubernetes, use in-cluster config
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load in-cluster Kubernetes config: %v", err)
+		}
+	} else {
+		// Running locally, use kubeconfig
+		config, err = clientcmd.BuildConfigFromFlags("", clientcmd.RecommendedHomeFile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load kubeconfig: %v", err)
+		}
+	}
+
+	// Create Kubernetes client
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Kubernetes client: %v", err)
+	}
+
+	return clientset, nil
 }

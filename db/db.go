@@ -7,18 +7,18 @@ import (
 	"os"
 	"time"
 
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/config"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/rs/zerolog/log"
 )
 
 // WorkspaceDB wraps database, events, and logging functionalities.
 type WorkspaceDB struct {
 	DB        *sql.DB
-	AWSConfig *config.AWSConfig
+	AWSConfig *appconfig.AWSConfig
 }
 
 // NewWorkspaceDB initializes a WorkspaceDB instance with a database connection.
-func NewWorkspaceDB(awsConfig config.AWSConfig) (*WorkspaceDB, error) {
+func NewWorkspaceDB(awsConfig appconfig.AWSConfig) (*WorkspaceDB, error) {
 
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
