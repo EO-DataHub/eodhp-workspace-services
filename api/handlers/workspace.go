@@ -56,6 +56,23 @@ func GetWorkspace(svc *services.Service) http.HandlerFunc {
 	}
 }
 
+// DeleteWorkspace handles HTTP requests for deleting a workspace
+func DeleteWorkspace(svc *services.Service) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
+		services.DeleteWorkspaceService(svc, w, r)
+	}
+}
+
+
 // UpdateWorkspace handles HTTP requests for updating a specific workspace by ID.
 // This is a placeholder for the actual implementation.
 func UpdateWorkspace(svc *services.Service) http.HandlerFunc {

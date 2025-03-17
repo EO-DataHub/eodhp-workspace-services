@@ -34,12 +34,26 @@ func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// If using a workspace scoped token, only return the workspace the token is scoped to
+	if claims.Workspace != "" {
+		var scopedWorkspaces []ws_manager.WorkspaceSettings
+		for _, ws := range workspaces {
+			if ws.Name == claims.Workspace {
+				scopedWorkspaces = []ws_manager.WorkspaceSettings{ws}
+				WriteResponse(w, http.StatusOK, scopedWorkspaces)
+				return
+			}
+		}
+		// If the workspace is not found, return unauthorized
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Ensure workspaces is not nil, return an empty slice if no workspaces are found
 	if workspaces == nil {
 		workspaces = []ws_manager.WorkspaceSettings{}
 	}
 
-	logger.Info().Int("workspace_count", len(workspaces)).Msg("Successfully retrieved workspaces")
 	WriteResponse(w, http.StatusOK, workspaces)
 
 }
@@ -77,7 +91,18 @@ func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logger.Info().Str("workspace_name", workspace.Name).Msg("Successfully retrieved workspace")
+	// If using a workspace scoped token, only return the workspace the token is scoped to
+	if claims.Workspace != "" {
+		if claims.Workspace == workspace.Name {
+			WriteResponse(w, http.StatusOK, workspace)
+			return
+		}
+
+		// If the workspace is not found, return unauthorized
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
 	WriteResponse(w, http.StatusOK, *workspace)
 }
 
@@ -90,6 +115,13 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
 		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	// Workspace Scoped tokens not authorized to create a workspace
+	if claims.Workspace != "" {
+		logger.Warn().Msg("Unauthorized request: workspace scoped token")
 		WriteResponse(w, http.StatusUnauthorized, nil)
 		return
 	}
@@ -214,5 +246,41 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	// Send response
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, wsSettings.ID)
 	WriteResponse(w, http.StatusCreated, wsSettings, location)
+
+}
+
+// Deletes a workspace and its associated resources.
+func DeleteWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	// // Extract the claims to get the users KC ID
+	// claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	// if !ok {
+	// 	logger.Warn().Msg("Unauthorized request: missing claims")
+	// 	WriteResponse(w, http.StatusUnauthorized, nil)
+	// 	return
+	// }
+
+	// Parse the workspace ID from the URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+
+	var wsSettings ws_manager.WorkspaceSettings
+	wsSettings.Name = workspaceID
+	wsSettings.Status = "deleting"
+
+	// Publish a message for workspace creation
+	err := svc.Publisher.Publish(wsSettings)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to publish workspace deletion event")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	WriteResponse(w, http.StatusNoContent, nil)
+
+	// delete group by keycloak
+	// delete workspace by db
+	// send delete to pulsar
 
 }

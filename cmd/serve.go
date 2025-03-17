@@ -53,6 +53,7 @@ var serveCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("Failed to initialize secrets manager client")
 		}
 
+		// Initialize Kubernetes client
 		k8sClient, err := initializeK8sClient()
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize Kubernetes client")
@@ -87,6 +88,8 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.GetWorkspace(service)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(service)).Methods(http.MethodPut)
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(service)).Methods(http.MethodPatch)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(service)).Methods(http.MethodDelete)
+
 
 		// Workspace management routes
 		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(service)).Methods(http.MethodGet)
