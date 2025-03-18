@@ -22,9 +22,11 @@ type KeycloakClient struct {
 }
 
 type TokenResponse struct {
-	Access    string `json:"access_token"`
-	Refresh   string `json:"refresh_token"`
-	ExpiresIn int    `json:"expires_in"`
+	Access           string `json:"access_token"`
+	Refresh          string `json:"refresh_token"`
+	ExpiresIn        int    `json:"expires_in"`
+	RefreshExpiresIn int    `json:"refresh_expires_in"`
+	Scope            string `json:"scope"`
 }
 
 type KeycloakError struct {

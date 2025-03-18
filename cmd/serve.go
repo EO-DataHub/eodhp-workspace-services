@@ -101,6 +101,9 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/accounts/{account-id}", handlers.DeleteAccount(service)).Methods(http.MethodDelete)
 		api.HandleFunc("/accounts/{account-id}", handlers.UpdateAccount(service)).Methods(http.MethodPut)
 
+		// Workspace scoped session routes
+		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/sessions", handlers.CreateWorkspaceSession(keycloakClient)).Methods(http.MethodPost)
+
 		// S3 token routes
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
