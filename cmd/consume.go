@@ -107,22 +107,20 @@ var consumeCmd = &cobra.Command{
 				// Discard the message if incoming status is older
 				consumer.Ack(msg)
 			}
-
 		}
-
 	},
 }
 
+// deleteWorkspace deletes a workspace from the database, Keycloak and AWS Secrets Manager
 func deleteWorkspace(wsStatus ws_manager.WorkspaceStatus) error {
 
-	//Remove workspace record from database
+	// Remove workspace record from database
 	err := workspaceDB.DeleteWorkspace(wsStatus.Name)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to delete workspace")
 		return err
 	}
 
-	// Remove Keycloak Group
 	// Get a token from keycloak so we can interact with it's API
 	err = keycloakClient.GetToken()
 	if err != nil {
