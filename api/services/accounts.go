@@ -28,13 +28,6 @@ func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Workspace Scoped tokens not authorized to access account information
-	if claims.Workspace != "" {
-		logger.Warn().Msg("Unauthorized request: workspace scoped token")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
-
 	// Decode the request payload into an Account struct
 	var messagePayload ws_services.Account
 	if err := json.NewDecoder(r.Body).Decode(&messagePayload); err != nil {
@@ -77,13 +70,6 @@ func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Workspace Scoped tokens not authorized to access account information
-	if claims.Workspace != "" {
-		logger.Warn().Msg("Unauthorized request: workspace scoped token")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
-
 	// Retrieve accounts associated with the user's username
 	accounts, err := svc.DB.GetAccounts(claims.Username)
 
@@ -112,13 +98,6 @@ func GetAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
 	if !ok {
 		logger.Warn().Msg("Unauthorized request: missing claims")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
-
-	// Workspace Scoped tokens not authorized to access account information
-	if claims.Workspace != "" {
-		logger.Warn().Msg("Unauthorized request: workspace scoped token")
 		WriteResponse(w, http.StatusUnauthorized, nil)
 		return
 	}
@@ -164,21 +143,6 @@ func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 
 	logger := zerolog.Ctx(r.Context())
 
-	// Extract claims from the request context to identify the user
-	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
-	if !ok {
-		logger.Warn().Msg("Unauthorized request: missing claims")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
-
-	// Workspace Scoped tokens not authorized to access account information
-	if claims.Workspace != "" {
-		logger.Warn().Msg("Unauthorized request: workspace scoped token")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
-
 	// Parse the account ID from the URL path
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 
@@ -213,21 +177,6 @@ func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 func DeleteAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
-
-	// Extract claims from the request context to identify the user
-	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
-	if !ok {
-		logger.Warn().Msg("Unauthorized request: missing claims")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
-
-	// Workspace Scoped tokens not authorized to access account information
-	if claims.Workspace != "" {
-		logger.Warn().Msg("Unauthorized request: workspace scoped token")
-		WriteResponse(w, http.StatusUnauthorized, nil)
-		return
-	}
 
 	accountID, err := uuid.Parse(mux.Vars(r)["account-id"])
 	if err != nil {

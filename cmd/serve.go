@@ -84,11 +84,15 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(service)).Methods(http.MethodDelete)
 
 		// Account routes
-		api.HandleFunc("/accounts", handlers.CreateAccount(service)).Methods(http.MethodPost)
-		api.HandleFunc("/accounts", handlers.GetAccounts(service)).Methods(http.MethodGet)
-		api.HandleFunc("/accounts/{account-id}", handlers.GetAccount(service)).Methods(http.MethodGet)
-		api.HandleFunc("/accounts/{account-id}", handlers.DeleteAccount(service)).Methods(http.MethodDelete)
-		api.HandleFunc("/accounts/{account-id}", handlers.UpdateAccount(service)).Methods(http.MethodPut)
+		// Deny workspace-scoped tokens for /accounts routes
+		accountRouter := api.PathPrefix("/accounts").Subrouter()
+		accountRouter.Use(middleware.DenyWorkspaceScopedTokens)
+
+		accountRouter.HandleFunc("", handlers.CreateAccount(service)).Methods(http.MethodPost)
+		accountRouter.HandleFunc("", handlers.GetAccounts(service)).Methods(http.MethodGet)
+		accountRouter.HandleFunc("/{account-id}", handlers.GetAccount(service)).Methods(http.MethodGet)
+		accountRouter.HandleFunc("/{account-id}", handlers.DeleteAccount(service)).Methods(http.MethodDelete)
+		accountRouter.HandleFunc("/{account-id}", handlers.UpdateAccount(service)).Methods(http.MethodPut)
 
 		// S3 token routes
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
@@ -130,27 +134,6 @@ func init() {
 	serveCmd.Flags().IntVar(&port, "port", 8080, "port to run the server on")
 
 }
-
-// // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-// func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.KeycloakClient {
-// 	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
-
-// 	// Create a new Keycloak client
-// 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
-
-// 	return keycloakClient
-// }
-
-// // InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
-// func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
-// 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-// 	if err != nil {
-// 		return nil, fmt.Errorf("unable to load SDK config, %v", err)
-// 	}
-
-// 	svc := secretsmanager.NewFromConfig(cfg)
-// 	return svc, nil
-// }
 
 func initializeK8sClient() (*kubernetes.Clientset, error) {
 	var config *rest.Config
