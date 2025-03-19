@@ -65,9 +65,94 @@
                     }
                 }
             }
+        },
+        "/workspaces/{workspace-id}/{user-id}/session": {
+            "post": {
+                "description": "Request workspace scoped session credentials for user access to a single workspace. {user-id} can be set to \"me\" to use the token owner's user id.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "workspace session credentials auth"
+                ],
+                "summary": "Request workspace scoped session credentials",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "my-workspace",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "me",
+                        "description": "User ID",
+                        "name": "user-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.AuthSessionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
+        "handlers.AuthSessionResponse": {
+            "type": "object",
+            "properties": {
+                "access": {
+                    "type": "string"
+                },
+                "accessExpiry": {
+                    "type": "string"
+                },
+                "refresh": {
+                    "type": "string"
+                },
+                "refreshExpiry": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.S3Credentials": {
             "type": "object",
             "properties": {

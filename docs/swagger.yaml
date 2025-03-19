@@ -1,4 +1,17 @@
 definitions:
+  handlers.AuthSessionResponse:
+    properties:
+      access:
+        type: string
+      accessExpiry:
+        type: string
+      refresh:
+        type: string
+      refreshExpiry:
+        type: string
+      scope:
+        type: string
+    type: object
   handlers.S3Credentials:
     properties:
       accessKeyId:
@@ -57,4 +70,50 @@ paths:
       summary: Request S3 session credentials
       tags:
       - s3 credentials auth
+  /workspaces/{workspace-id}/{user-id}/session:
+    post:
+      consumes:
+      - application/json
+      description: Request workspace scoped session credentials for user access to
+        a single workspace. {user-id} can be set to "me" to use the token owner's
+        user id.
+      parameters:
+      - description: Workspace ID
+        example: my-workspace
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: User ID
+        example: me
+        in: path
+        name: user-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.AuthSessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Request workspace scoped session credentials
+      tags:
+      - workspace session credentials auth
 swagger: "2.0"

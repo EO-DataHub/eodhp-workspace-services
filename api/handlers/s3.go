@@ -16,7 +16,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const TimeFormat string = "2006-01-02T15:04:05Z"
 
 type STSClient interface {
 	AssumeRoleWithWebIdentity(ctx context.Context,

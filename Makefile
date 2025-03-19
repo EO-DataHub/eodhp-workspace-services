@@ -1,7 +1,7 @@
 .PHONY: dockerbuild dockerpush test lint format setup clean docs publish
 
 # Variables
-VERSION ?= 0.7.0
+VERSION ?= 0.7.2
 IMAGENAME = eodhp-workspace-services
 DOCKERREPO ?= public.ecr.aws/eodh
 
