@@ -59,6 +59,34 @@ func JWTMiddleware(next http.Handler) http.Handler {
 	)
 }
 
+// DenyWorkspaceScopedTokens is a middleware that denies workspace-scoped tokens
+func DenyWorkspaceScopedTokens(next http.Handler) http.Handler {
+	return http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			logger := zerolog.Ctx(r.Context()).With().
+				Str("handler", "DenyWorkspaceScopedTokens").Logger()
+
+			// Get the claims from the context
+			claims, ok := r.Context().Value(ClaimsKey).(authn.Claims)
+			if !ok {
+				logger.Warn().Msg("missing claims in context")
+				http.Error(w, "missing claims in context", http.StatusUnauthorized)
+				return
+			}
+
+			// Deny workspace-scoped tokens (if Workspace claim is set)
+			if claims.Workspace != "" {
+				logger.Warn().Str("workspace", claims.Workspace).Msg("Unauthorized request: workspace scoped token")
+				http.Error(w, "unauthorized: workspace scoped tokens not allowed", http.StatusUnauthorized)
+				return
+			}
+
+			// Continue with the next handler if token is valid and not workspace-scoped
+			next.ServeHTTP(w, r)
+		},
+	)
+}
+
 // WithLogger adds a logger to the context and logs request information.
 func WithLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(

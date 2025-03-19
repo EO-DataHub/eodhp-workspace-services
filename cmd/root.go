@@ -1,25 +1,31 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 var (
-	logLevel    string
-	host        string
-	port        int
-	configPath  string
-	appCfg      *appconfig.Config
-	workspaceDB *db.WorkspaceDB
+	logLevel             string
+	host                 string
+	port                 int
+	configPath           string
+	appCfg               *appconfig.Config
+	workspaceDB          *db.WorkspaceDB
+	keycloakClient       *services.KeycloakClient
+	secretsManagerClient *secretsmanager.Client
 )
 
 var rootCmd = &cobra.Command{
@@ -58,6 +64,16 @@ func commonSetUp() {
 		fmt.Println("Failed to initialize database", err)
 		return
 	}
+
+	// Initialise KeyCloak client
+	keycloakClient = initializeKeycloakClient(appCfg.Keycloak)
+
+	// Initialize secrets manager client
+	secretsManagerClient, err = initializeSecretsManagerClient(appCfg.AWS.Region)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize secrets manager client")
+	}
+
 }
 
 func initializeDatabase() error {
@@ -81,6 +97,27 @@ func initializeDatabase() error {
 	}
 
 	return nil
+}
+
+// InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
+func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.KeycloakClient {
+	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
+
+	// Create a new Keycloak client
+	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
+
+	return keycloakClient
+}
+
+// InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
+func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+	if err != nil {
+		return nil, fmt.Errorf("unable to load SDK config, %v", err)
+	}
+
+	svc := secretsmanager.NewFromConfig(cfg)
+	return svc, nil
 }
 
 func setLogging(level string) {
