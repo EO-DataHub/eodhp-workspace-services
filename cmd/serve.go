@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,10 +10,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
-	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
@@ -34,7 +30,7 @@ var serveCmd = &cobra.Command{
 	Short: "Run the HTTP server for handling API requests",
 	Run: func(cmd *cobra.Command, args []string) {
 
-		// Load the config, initialize the database and set up logging
+		// Load the config, initialize the database, keycloak, AWS Secrets Manager and set up logging
 		commonSetUp()
 
 		// Initialize event publisher
@@ -43,15 +39,6 @@ var serveCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("Failed to initialize event publisher")
 		}
 		defer publisher.Close()
-
-		// Initialise KeyCloak client
-		keycloakClient := initializeKeycloakClient(appCfg.Keycloak)
-
-		// Initialize secrets manager client
-		secretsManagerClient, err := initializeSecretsManagerClient(appCfg.AWS.Region)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to initialize secrets manager client")
-		}
 
 		// Initialize Kubernetes client
 		k8sClient, err := initializeK8sClient()
@@ -89,7 +76,6 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(service)).Methods(http.MethodPut)
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(service)).Methods(http.MethodPatch)
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(service)).Methods(http.MethodDelete)
-
 
 		// Workspace management routes
 		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(service)).Methods(http.MethodGet)
@@ -145,26 +131,26 @@ func init() {
 
 }
 
-// InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
-func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.KeycloakClient {
-	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
+// // InitializeKeycloakClient initializes the Keycloak client and retrieves the access token.
+// func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.KeycloakClient {
+// 	keycloakClientSecret := os.Getenv("KEYCLOAK_CLIENT_SECRET")
 
-	// Create a new Keycloak client
-	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
+// 	// Create a new Keycloak client
+// 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
-	return keycloakClient
-}
+// 	return keycloakClient
+// }
 
-// InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
-func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-	if err != nil {
-		return nil, fmt.Errorf("unable to load SDK config, %v", err)
-	}
+// // InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
+// func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
+// 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
+// 	if err != nil {
+// 		return nil, fmt.Errorf("unable to load SDK config, %v", err)
+// 	}
 
-	svc := secretsmanager.NewFromConfig(cfg)
-	return svc, nil
-}
+// 	svc := secretsmanager.NewFromConfig(cfg)
+// 	return svc, nil
+// }
 
 func initializeK8sClient() (*kubernetes.Clientset, error) {
 	var config *rest.Config

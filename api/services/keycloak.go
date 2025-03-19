@@ -97,6 +97,30 @@ func (kc *KeycloakClient) CreateGroup(groupName string) (int, error) {
 	return statusCode, nil
 }
 
+// DeleteGroup deletes a group in Keycloak
+func (kc *KeycloakClient) DeleteGroup(groupName string) (int, error) {
+
+	// Find the group ID from keycloak
+	group, err := kc.GetGroup(groupName)
+
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	url := fmt.Sprintf("%s/admin/realms/%s/groups/%s", kc.BaseURL, kc.Realm, group.ID)
+	respBody, statusCode, err := kc.makeRequest(http.MethodDelete, url, "", nil)
+
+	if err != nil {
+		return statusCode, err
+	}
+
+	if statusCode != http.StatusNoContent {
+		return statusCode, fmt.Errorf("failed to delete group, status: %d, response: %s", statusCode, respBody)
+	}
+
+	return statusCode, nil
+}
+
 // GetGroup retrieves a group by name from Keycloak.
 func (kc *KeycloakClient) GetGroup(groupName string) (*models.Group, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/groups?search=%s", kc.BaseURL, kc.Realm, groupName)
@@ -280,7 +304,10 @@ func (kc *KeycloakClient) makeRequest(method, url, contentType string, body []by
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", kc.Token))
-	req.Header.Set("Content-Type", contentType)
+
+	if method != http.MethodDelete {
+		req.Header.Set("Content-Type", contentType)
+	}
 
 	resp, err := kc.HTTPClient.Do(req)
 	if err != nil {

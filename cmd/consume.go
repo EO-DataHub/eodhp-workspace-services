@@ -3,9 +3,12 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -45,6 +48,18 @@ var consumeCmd = &cobra.Command{
 				continue
 			}
 
+			if workspaceStatus.State == "Deleting" {
+				err := deleteWorkspace(workspaceStatus)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to delete workspace")
+
+					// Nack the message if there is an error and attempt redelivery
+					consumer.Nack(msg)
+					continue
+				}
+				consumer.Ack(msg)
+			}
+
 			// Get the workspace from the database and check if the incoming status is newer
 			workspaceInDB, err := workspaceDB.GetWorkspace(workspaceStatus.Name)
 
@@ -61,7 +76,8 @@ var consumeCmd = &cobra.Command{
 
 				// If the namespace is empty, delete the workspace
 				if workspaceStatus.Namespace == "" {
-					err = workspaceDB.DeleteWorkspace(workspaceStatus.Name)
+
+					err := deleteWorkspace(workspaceStatus)
 					if err != nil {
 						log.Error().Err(err).Msg("Failed to delete workspace")
 
@@ -95,6 +111,42 @@ var consumeCmd = &cobra.Command{
 		}
 
 	},
+}
+
+func deleteWorkspace(wsStatus ws_manager.WorkspaceStatus) error {
+
+	//Remove workspace record from database
+	err := workspaceDB.DeleteWorkspace(wsStatus.Name)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to delete workspace")
+		return err
+	}
+
+	// Remove Keycloak Group
+	// Get a token from keycloak so we can interact with it's API
+	err = keycloakClient.GetToken()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to Authenticate with Keycloak")
+		return err
+	}
+
+	_, err = keycloakClient.DeleteGroup(wsStatus.Name)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to delete Keycloak group")
+		return err
+	}
+
+	// Remove any lingering secret from AWS Secrets Manager
+	_, err = secretsManagerClient.DeleteSecret(context.Background(), &secretsmanager.DeleteSecretInput{
+		SecretId:                   aws.String(fmt.Sprintf("ws-%s", wsStatus.Name)),
+		ForceDeleteWithoutRecovery: aws.Bool(true),
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to delete AWS Secret manager secret")
+		return err
+	}
+
+	return nil
 }
 
 func init() {

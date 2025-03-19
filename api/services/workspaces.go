@@ -254,13 +254,20 @@ func DeleteWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 
 	logger := zerolog.Ctx(r.Context())
 
-	// // Extract the claims to get the users KC ID
-	// claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
-	// if !ok {
-	// 	logger.Warn().Msg("Unauthorized request: missing claims")
-	// 	WriteResponse(w, http.StatusUnauthorized, nil)
-	// 	return
-	// }
+	// Extract the claims to get the users KC ID
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	// Workspace Scoped tokens not authorized to delete workspace
+	if claims.Workspace != "" {
+		logger.Warn().Msg("Unauthorized request: workspace scoped token")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
 
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
@@ -278,9 +285,5 @@ func DeleteWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	}
 
 	WriteResponse(w, http.StatusNoContent, nil)
-
-	// delete group by keycloak
-	// delete workspace by db
-	// send delete to pulsar
 
 }
