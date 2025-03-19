@@ -1,5 +1,14 @@
 # Workspace Services
 
+## v0.7.3 (19-03-2025)
+
+- Added access control for workspace scoped tokens
+- Added `DELETE` endpoint for workspaces
+
+## v0.7.2 (19-03-2025)
+
+- Added temporary workspace scoped session endpoint
+
 ## v0.7.0 (20-02-2025)
 
 - Added `POST /workspaces/<workspace>/linked-accounts
