@@ -157,13 +157,6 @@ func TestMain(m *testing.M) {
 		DB: sharedDB,
 	}
 
-	// Initialize database tables for the tests
-	err = workspaceDB.InitTables()
-	if err != nil {
-		fmt.Printf("Could not initialize tables: %v\n", err)
-		os.Exit(1)
-	}
-
 	// Run all tests
 	code := m.Run()
 	os.Exit(code)

@@ -1,8 +1,11 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"time"
 
 	"net/http"
 
@@ -10,13 +13,16 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 )
 
 // CreateAccountService creates a new account for the authenticated user.
-func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -51,6 +57,8 @@ func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 
 	logger.Info().Str("account_id", account.ID.String()).Msg("Account created successfully")
 
+	svc.SendEmailAPI(account)
+
 	// Send response
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, account.ID)
 	WriteResponse(w, http.StatusCreated, *account, location)
@@ -58,7 +66,7 @@ func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 }
 
 // GetAccountsService retrieves all accounts for the authenticated user.
-func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) GetAccountsService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -85,12 +93,13 @@ func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info().Int("account_count", len(accounts)).Msg("Successfully retrieved accounts")
+
 	WriteResponse(w, http.StatusOK, accounts)
 
 }
 
 // GetAccountService retrieves a single account all accounts for the authenticated user.
-func GetAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) GetAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -139,7 +148,7 @@ func GetAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateAccountService updates an account based on account ID from the URL path.
-func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) UpdateAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -174,7 +183,7 @@ func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 }
 
 // DeleteAccountService deletes an account specified by the account ID from the URL path.
-func DeleteAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) DeleteAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -196,4 +205,68 @@ func DeleteAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 
 	logger.Info().Str("account_id", accountID.String()).Msg("Account deleted successfully")
 	WriteResponse(w, http.StatusNoContent, nil)
+}
+
+func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account) {
+
+	// Email details
+	from := "support@account-verification.dev.eodatahub.org.uk" // Must be verified in SES
+	to := "jonny.langstone@telespazio.com"
+	subject := "Account Verification Required"
+	activationLink := "https://dev.eodatahub.org.uk/api/accounts/" + account.ID.String() + "/activate"
+
+	bodyText := fmt.Sprintf(`
+	A new billing account has been requested:
+
+	Account Owner: %s
+	Account Name: %s
+	Organization Name: %s
+	Billing Address: %s
+	Account Opening Reason: %s
+		
+	Choose one of the following options:
+
+	To approve the account, click the following link:
+
+	%s
+
+	To deny the account, click the following link:
+
+	%s
+	`, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason, activationLink, activationLink)
+
+	// Prepare the email input
+	input := &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(from),
+		Destination: &types.Destination{
+			ToAddresses: []string{to},
+		},
+		Content: &types.EmailContent{
+			Simple: &types.Message{
+				Subject: &types.Content{
+					Data:    aws.String(subject),
+					Charset: aws.String("UTF-8"),
+				},
+				Body: &types.Body{
+					Text: &types.Content{
+						Data:    aws.String(bodyText),
+						Charset: aws.String("UTF-8"),
+					},
+				},
+			},
+		},
+	}
+
+	// Add a timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Send the email
+	fmt.Println("Attempting to send email via SES API...")
+	output, err := svc.AWSEmailClient.SendEmail(ctx, input)
+	if err != nil {
+		fmt.Println("Failed to send email: %v", err)
+	}
+
+	log.Printf("Email sent successfully! Message ID: %s", *output.MessageId)
 }

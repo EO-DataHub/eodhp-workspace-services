@@ -13,7 +13,7 @@ import (
 
 // GetAccounts retrieves all accounts owned by the specified account owner.
 func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, error) {
-	query := `SELECT id, created_at, name, account_owner, billing_address, organization_name, account_opening_reason FROM accounts WHERE account_owner = $1`
+	query := `SELECT id, created_at, name, account_owner, billing_address, organization_name, account_opening_reason, status FROM accounts WHERE account_owner = $1`
 	rows, err := db.DB.Query(query, accountOwner)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving accounts: %w", err)
@@ -29,7 +29,8 @@ func (db *WorkspaceDB) GetAccounts(accountOwner string) ([]ws_services.Account, 
 			&ac.AccountOwner,
 			&ac.BillingAddress,
 			&ac.OrganizationName,
-			&ac.AccountOpeningReason); err != nil {
+			&ac.AccountOpeningReason,
+			&ac.Status); err != nil {
 			return nil, fmt.Errorf("error scanning accounts: %w", err)
 		}
 
@@ -190,9 +191,9 @@ func (db *WorkspaceDB) getAccountWorkspaces(accountID uuid.UUID) ([]ws_manager.W
 	return workspaces, nil
 }
 
-// CheckAccountExists checks if an account exists in the database.
-func (db *WorkspaceDB) CheckAccountExists(accountID uuid.UUID) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1)`
+// CheckAccountIsVerified checks if an account is verified and approved to use.
+func (db *WorkspaceDB) CheckAccountIsVerified(accountID uuid.UUID) (bool, error) {
+	query := `SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1 and status = 'APPROVED')`
 	var exists bool
 	err := db.DB.QueryRow(query, accountID).Scan(&exists)
 	if err != nil {
@@ -222,7 +223,7 @@ func (db *WorkspaceDB) IsUserAccountOwner(username, workspaceID string) (bool, e
 	// Check if the user is the account owner
 	if username == account.AccountOwner {
 		return true, nil
-	} 
+	}
 
 	// Return false if the user is not the account owner
 	return false, nil

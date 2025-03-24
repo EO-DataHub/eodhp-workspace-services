@@ -134,12 +134,25 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logger.Info().Str("workspace_name", wsSettings.Name).Msg("Validating workspace name")
+	// Check that the account exists and the user is the account owner
+	account, err := svc.DB.CheckAccountIsVerified(wsSettings.Account)
+	if err != nil {
+		logger.Error().Err(err).Msg("Database error checking account existence")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Return a not found response if the account does not exist
+	if !account {
+		logger.Warn().Str("account_id", wsSettings.Account.String()).Msg("Unable to create a workspace - account has not been approved")
+		WriteResponse(w, http.StatusNotFound, "Unable to create a workspace - account has not been approved")
+		return
+	}
 
 	// Check the name is DNS-compatible
 	if !IsDNSCompatible(wsSettings.Name) {
 		logger.Warn().Str("workspace_name", wsSettings.Name).Msg("Invalid workspace name. Not DNS compatible")
-		WriteResponse(w, http.StatusBadRequest, fmt.Errorf("invalid workspace name: must contain only a-z and -, not start with - and be less than 63 characters"))
+		WriteResponse(w, http.StatusBadRequest, "invalid workspace name: must contain only a-z and -, not start with - and be less than 63 characters")
 		return
 	}
 
@@ -154,22 +167,7 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	// Return a conflict response if the workspace name already exists
 	if workspaceExists {
 		logger.Warn().Str("workspace_name", wsSettings.Name).Msg("Workspace name already exists")
-		WriteResponse(w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", wsSettings.Name))
-		return
-	}
-
-	// Check that the account exists and the user is the account owner
-	account, err := svc.DB.CheckAccountExists(wsSettings.Account)
-	if err != nil {
-		logger.Error().Err(err).Msg("Database error checking account existence")
-		WriteResponse(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	// Return a not found response if the account does not exist
-	if !account {
-		logger.Warn().Str("account_id", wsSettings.Account.String()).Msg("Account does not exist")
-		WriteResponse(w, http.StatusNotFound, fmt.Errorf("The account associated with this workspace does not exist"))
+		WriteResponse(w, http.StatusConflict, "workspace with name %s already exists", wsSettings.Name)
 		return
 	}
 

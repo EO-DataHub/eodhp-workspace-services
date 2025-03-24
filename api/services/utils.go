@@ -28,7 +28,7 @@ func WriteResponse(w http.ResponseWriter, statusCode int, response interface{}, 
 	if response != nil {
 		if err := json.NewEncoder(w).Encode(response); err != nil {
 			http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-			return // **Return immediately to avoid multiple WriteHeader calls**
+			return
 		}
 	}
 }

@@ -16,5 +16,6 @@ type Account struct {
 	BillingAddress       string                         `json:"billingAddress"`
 	OrganizationName     *string                        `json:"organizationName"`
 	AccountOpeningReason *string                        `json:"accountOpeningReason"`
+	Status               string                         `json:"status"`
 	Workspaces           []ws_manager.WorkspaceSettings `json:"workspaces"`
 }

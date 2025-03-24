@@ -12,6 +12,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -26,6 +27,7 @@ var (
 	workspaceDB          *db.WorkspaceDB
 	keycloakClient       *services.KeycloakClient
 	secretsManagerClient *secretsmanager.Client
+	awsEmailClient       *sesv2.Client
 )
 
 var rootCmd = &cobra.Command{
@@ -90,11 +92,11 @@ func initializeDatabase() error {
 		return err
 	}
 
-	// Create database tables if they don't exist
-	err = workspaceDB.InitTables()
-	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize database tables")
-	}
+	// // Create database tables if they don't exist
+	// err = workspaceDB.InitTables()
+	// if err != nil {
+	// 	log.Fatal().Err(err).Msg("Failed to initialize database tables")
+	// }
 
 	return nil
 }

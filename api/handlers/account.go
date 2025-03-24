@@ -8,46 +8,46 @@ import (
 )
 
 // CreateAccount handles HTTP requests for creating a new account.
-func CreateAccount(svc *services.Service) http.HandlerFunc {
+func CreateAccount(svc *services.BillingAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.CreateAccountService(svc, w, r)
+		svc.CreateAccountService(w, r)
 	}
 }
 
 // GetAccounts handles HTTP requests for retrieving accounts.
-func GetAccounts(svc *services.Service) http.HandlerFunc {
+func GetAccounts(svc *services.BillingAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.GetAccountsService(svc, w, r)
+		svc.GetAccountsService(w, r)
 	}
 }
 
 // GetAccount handles HTTP requests for retrieving a single account.
-func GetAccount(svc *services.Service) http.HandlerFunc {
+func GetAccount(svc *services.BillingAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.GetAccountService(svc, w, r)
+		svc.GetAccountService(w, r)
 	}
 }
 
 // DeleteAccount handles HTTP requests for deleting an account.
-func DeleteAccount(svc *services.Service) http.HandlerFunc {
+func DeleteAccount(svc *services.BillingAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.DeleteAccountService(svc, w, r)
+		svc.DeleteAccountService(w, r)
 	}
 }
 
 // UpdateAccount handles HTTP requests for updating an account.
-func UpdateAccount(svc *services.Service) http.HandlerFunc {
+func UpdateAccount(svc *services.BillingAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		services.UpdateAccountService(svc, w, r)
+		svc.UpdateAccountService(w, r)
 	}
 }
