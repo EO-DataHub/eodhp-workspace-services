@@ -107,6 +107,12 @@ var serveCmd = &cobra.Command{
 		accountRouter.HandleFunc("/{account-id}", handlers.DeleteAccount(billingAccountService)).Methods(http.MethodDelete)
 		accountRouter.HandleFunc("/{account-id}", handlers.UpdateAccount(billingAccountService)).Methods(http.MethodPut)
 
+		accountAdminRouter := r.PathPrefix("/accounts/admin").Subrouter()
+		accountAdminRouter.Use(middleware.WithLogger)
+		accountAdminRouter.Use(middleware.JWTMiddleware)
+		accountAdminRouter.HandleFunc("/approve", handlers.AccountStatusRequests(billingAccountService, services.AccountStatusApproved)).Methods(http.MethodPatch)
+		accountAdminRouter.HandleFunc("/deny", handlers.AccountStatusRequests(billingAccountService, services.AccountStatusDenied)).Methods(http.MethodPatch)
+
 		// Workspace scoped session routes
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/sessions", handlers.CreateWorkspaceSession(keycloakClient)).Methods(http.MethodPost)
 

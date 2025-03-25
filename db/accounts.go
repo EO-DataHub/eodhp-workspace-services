@@ -6,6 +6,7 @@ import (
 	"time"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -193,7 +194,7 @@ func (db *WorkspaceDB) getAccountWorkspaces(accountID uuid.UUID) ([]ws_manager.W
 
 // CheckAccountIsVerified checks if an account is verified and approved to use.
 func (db *WorkspaceDB) CheckAccountIsVerified(accountID uuid.UUID) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1 and status = 'APPROVED')`
+	query := `SELECT EXISTS(SELECT 1 FROM accounts WHERE id = $1 and status = 'Approved')`
 	var exists bool
 	err := db.DB.QueryRow(query, accountID).Scan(&exists)
 	if err != nil {
@@ -227,4 +228,77 @@ func (db *WorkspaceDB) IsUserAccountOwner(username, workspaceID string) (bool, e
 
 	// Return false if the user is not the account owner
 	return false, nil
+}
+
+// CreateAccountApproval stores an approval request in the database
+func (w *WorkspaceDB) CreateAccountApprovalToken(accountID uuid.UUID) (string, error) {
+
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return "", fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	token, err := authn.GenerateToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	// Token valid for 30 days
+	expiry := time.Now().Add(30 * 24 * time.Hour)
+
+	err = w.execQuery(tx, `
+		INSERT INTO account_approvals (id, account_id, approval_token, token_expires_at, created_at)
+		VALUES ($1, $2, $3, $4, $5)`,
+		uuid.New(), accountID, token, expiry, time.Now().UTC())
+	if err != nil {
+		return "", err
+	}
+
+	// Commit transaction after insertion
+	if err := w.CommitTransaction(tx); err != nil {
+		return "", fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return token, nil
+}
+
+// ValidateApprovalToken checks if the token is valid and retrieves the account ID
+func (w *WorkspaceDB) ValidateApprovalToken(token string) (string, error) {
+	var accountID string
+	var expiresAt time.Time
+
+	query := `SELECT account_id, token_expires_at FROM dev.account_approvals WHERE approval_token = $1`
+	err := w.DB.QueryRow(query, token).Scan(&accountID, &expiresAt)
+	if err != nil {
+		return "", fmt.Errorf("invalid or expired token")
+	}
+
+	// Check if the token has expired
+	if time.Now().After(expiresAt) {
+		return "", fmt.Errorf("token has expired")
+	}
+
+	return accountID, nil
+}
+
+// UpdateAccountStatus changes the status of an account
+func (w *WorkspaceDB) UpdateAccountStatus(accountID, status string) error {
+
+	tx, err := w.DB.Begin()
+	if err != nil {
+		return fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	err = w.execQuery(tx, `UPDATE accounts SET status = $1 WHERE id = $2`, status, accountID)
+	if err != nil {
+		tx.Rollback()
+		log.Error().Err(err).Msg("error updating account owner")
+		return fmt.Errorf("error updating account owner: %w", err)
+	}
+	
+	if err := w.CommitTransaction(tx); err != nil {
+		return fmt.Errorf("error committing transaction: %w", err)
+	}
+
+	return nil
 }

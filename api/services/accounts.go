@@ -21,6 +21,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
+var (
+	AccountStatusApproved = "Approved"
+	AccountStatusDenied   = "Denied"
+	AccountStatusPending  = "Pending"
+)
+
+
 // CreateAccountService creates a new account for the authenticated user.
 func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r *http.Request) {
 
@@ -55,9 +62,16 @@ func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r 
 		return
 	}
 
-	logger.Info().Str("account_id", account.ID.String()).Msg("Account created successfully")
+	token, err := svc.DB.CreateAccountApprovalToken(account.ID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create account approval token")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
 
-	svc.SendEmailAPI(account)
+	svc.SendEmailAPI(account, token)
+
+	logger.Info().Str("account_id", account.ID.String()).Msg(fmt.Sprintf("Account %s has been created by %s and is awaiting approval", account.Name, account.AccountOwner))
 
 	// Send response
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, account.ID)
@@ -207,14 +221,14 @@ func (svc *BillingAccountService) DeleteAccountService(w http.ResponseWriter, r 
 	WriteResponse(w, http.StatusNoContent, nil)
 }
 
-func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account) {
+func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account, token string) {
 
 	// Email details
 	from := "support@account-verification.dev.eodatahub.org.uk" // Must be verified in SES
 	to := "jonny.langstone@telespazio.com"
-	subject := "Account Verification Required"
-	activationLink := "https://dev.eodatahub.org.uk/api/accounts/" + account.ID.String() + "/activate"
-
+	subject := "EO DataHub Account Verification Required"
+	approvalLink := fmt.Sprintf("https://dev.eodatahub.org.uk/accounts/%s/approve?token=%s", account.ID.String(), token)
+	denialLink := fmt.Sprintf("https://dev.eodatahub.org.uk/accounts/%s/deny?token=%s", account.ID.String(), token)
 	bodyText := fmt.Sprintf(`
 	A new billing account has been requested:
 
@@ -233,7 +247,7 @@ func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account) {
 	To deny the account, click the following link:
 
 	%s
-	`, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason, activationLink, activationLink)
+	`, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason, approvalLink, denialLink)
 
 	// Prepare the email input
 	input := &sesv2.SendEmailInput{
