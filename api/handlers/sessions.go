@@ -25,7 +25,7 @@ import (
 // @Failure 401 {object} string
 // @Failure 403 {object} string
 // @Failure 500 {object} string
-// @Router /workspaces/{workspace-id}/{user-id}/session [post]
+// @Router /workspaces/{workspace-id}/{user-id}/sessions [post]
 func CreateWorkspaceSession(kc KeycloakClient) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)

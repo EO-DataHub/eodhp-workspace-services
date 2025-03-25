@@ -74,7 +74,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/workspaces/{workspace-id}/{user-id}/session": {
+        "/workspaces/{workspace-id}/{user-id}/sessions": {
             "post": {
                 "description": "Request workspace scoped session credentials for user access to a single workspace. {user-id} can be set to \"me\" to use the token owner's user id.",
                 "consumes": [

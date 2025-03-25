@@ -70,7 +70,7 @@ paths:
       summary: Request S3 session credentials
       tags:
       - s3 credentials auth
-  /workspaces/{workspace-id}/{user-id}/session:
+  /workspaces/{workspace-id}/{user-id}/sessions:
     post:
       consumes:
       - application/json
