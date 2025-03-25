@@ -281,21 +281,29 @@ func (w *WorkspaceDB) ValidateApprovalToken(token string) (string, error) {
 	return accountID, nil
 }
 
-// UpdateAccountStatus changes the status of an account
-func (w *WorkspaceDB) UpdateAccountStatus(accountID, status string) error {
+// UpdateAccountStatus changes the status of an account and removes the token from being used again
+func (w *WorkspaceDB) UpdateAccountStatus(token, accountID, status string) error {
 
 	tx, err := w.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("error starting transaction: %w", err)
 	}
 
+	// Change the status
 	err = w.execQuery(tx, `UPDATE accounts SET status = $1 WHERE id = $2`, status, accountID)
 	if err != nil {
 		tx.Rollback()
 		log.Error().Err(err).Msg("error updating account owner")
 		return fmt.Errorf("error updating account owner: %w", err)
 	}
-	
+
+	// Remove the approval token to make it one time use
+	err = w.execQuery(tx, `DELETE FROM account_approvals WHERE approval_token = $1`, token)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error executing delete query: %w", err)
+	}
+
 	if err := w.CommitTransaction(tx); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	services "github.com/EO-DataHub/eodhp-workspace-services/api/services"
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
@@ -55,11 +56,12 @@ func UpdateAccount(svc *services.BillingAccountService) http.HandlerFunc {
 }
 
 // ApproveAccount handles account approval requests
-func AccountStatusRequests(svc *services.BillingAccountService, accountStatusRequest string) http.HandlerFunc {
+func AccountStatusHandler(svc *services.BillingAccountService, accountStatusRequest string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		// Get token from query params
-		token := r.URL.Query().Get("token")
+		vars := mux.Vars(r)
+		token := vars["token"]
+
 		if token == "" {
 			http.Error(w, "Token is required", http.StatusBadRequest)
 			return
@@ -72,7 +74,7 @@ func AccountStatusRequests(svc *services.BillingAccountService, accountStatusReq
 			return
 		}
 
-		if err := svc.DB.UpdateAccountStatus(accountID, accountStatusRequest); err != nil {
+		if err := svc.DB.UpdateAccountStatus(token, accountID, accountStatusRequest); err != nil {
 			http.Error(w, "Failed to approve account", http.StatusInternalServerError)
 			return
 		}

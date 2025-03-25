@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	"net/http"
@@ -26,7 +25,6 @@ var (
 	AccountStatusDenied   = "Denied"
 	AccountStatusPending  = "Pending"
 )
-
 
 // CreateAccountService creates a new account for the authenticated user.
 func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r *http.Request) {
@@ -69,7 +67,7 @@ func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r 
 		return
 	}
 
-	svc.SendEmailAPI(account, token)
+	svc.SendAccountRequestEmail(account, token)
 
 	logger.Info().Str("account_id", account.ID.String()).Msg(fmt.Sprintf("Account %s has been created by %s and is awaiting approval", account.Name, account.AccountOwner))
 
@@ -221,14 +219,16 @@ func (svc *BillingAccountService) DeleteAccountService(w http.ResponseWriter, r 
 	WriteResponse(w, http.StatusNoContent, nil)
 }
 
-func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account, token string) {
+// SendAccountRequestEmail sends an email to the helpdesk with the account request details.
+func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.Account, token string) error {
 
-	// Email details
-	from := "support@account-verification.dev.eodatahub.org.uk" // Must be verified in SES
-	to := "jonny.langstone@telespazio.com"
-	subject := "EO DataHub Account Verification Required"
-	approvalLink := fmt.Sprintf("https://dev.eodatahub.org.uk/accounts/%s/approve?token=%s", account.ID.String(), token)
-	denialLink := fmt.Sprintf("https://dev.eodatahub.org.uk/accounts/%s/deny?token=%s", account.ID.String(), token)
+	// Email details - Must be verified in SES
+	from := svc.Config.Accounts.ServiceAccountEmail // This resource can be verified/created via terraform
+	to := svc.Config.Accounts.HelpdeskEmail         // This will require manual verification / setup
+
+	subject := fmt.Sprintf("EO DataHub Account Request - %s", account.AccountOwner)
+	approvalLink := fmt.Sprintf("https://%s/api/accounts/admin/approve/%s", svc.Config.Host, token)
+	denialLink := fmt.Sprintf("https://%s/api/accounts/admin/deny/%s", svc.Config.Host, token)
 	bodyText := fmt.Sprintf(`
 	A new billing account has been requested:
 
@@ -247,6 +247,9 @@ func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account, tok
 	To deny the account, click the following link:
 
 	%s
+
+	Make sure you are authenticated to the EO DataHub and logged in before clicking a link.
+
 	`, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason, approvalLink, denialLink)
 
 	// Prepare the email input
@@ -276,11 +279,10 @@ func (svc *BillingAccountService) SendEmailAPI(account *ws_services.Account, tok
 	defer cancel()
 
 	// Send the email
-	fmt.Println("Attempting to send email via SES API...")
-	output, err := svc.AWSEmailClient.SendEmail(ctx, input)
+	_, err := svc.AWSEmailClient.SendEmail(ctx, input)
 	if err != nil {
-		fmt.Println("Failed to send email: %v", err)
+		return fmt.Errorf("Failed to send email: %v", err)
 	}
 
-	log.Printf("Email sent successfully! Message ID: %s", *output.MessageId)
+	return nil
 }

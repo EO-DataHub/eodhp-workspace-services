@@ -97,6 +97,5 @@ func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
-	log.Info().Msg("Transaction committed successfully")
 	return nil
 }

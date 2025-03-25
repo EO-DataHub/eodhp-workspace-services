@@ -24,6 +24,7 @@ type LinkedAccountService struct {
 }
 
 type BillingAccountService struct {
+	Config         *appconfig.Config
 	DB             *db.WorkspaceDB
 	AWSEmailClient *sesv2.Client
 }

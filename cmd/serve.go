@@ -95,6 +95,7 @@ var serveCmd = &cobra.Command{
 		}
 		// Linked account routes
 		billingAccountService := &services.BillingAccountService{
+			Config:         appCfg,
 			DB:             workspaceDB,
 			AWSEmailClient: awsEmailClient,
 		}
@@ -107,11 +108,11 @@ var serveCmd = &cobra.Command{
 		accountRouter.HandleFunc("/{account-id}", handlers.DeleteAccount(billingAccountService)).Methods(http.MethodDelete)
 		accountRouter.HandleFunc("/{account-id}", handlers.UpdateAccount(billingAccountService)).Methods(http.MethodPut)
 
-		accountAdminRouter := r.PathPrefix("/accounts/admin").Subrouter()
+		accountAdminRouter := accountRouter.PathPrefix("/admin").Subrouter()
 		accountAdminRouter.Use(middleware.WithLogger)
 		accountAdminRouter.Use(middleware.JWTMiddleware)
-		accountAdminRouter.HandleFunc("/approve", handlers.AccountStatusRequests(billingAccountService, services.AccountStatusApproved)).Methods(http.MethodPatch)
-		accountAdminRouter.HandleFunc("/deny", handlers.AccountStatusRequests(billingAccountService, services.AccountStatusDenied)).Methods(http.MethodPatch)
+		accountAdminRouter.HandleFunc("/approve/{token}", handlers.AccountStatusHandler(billingAccountService, services.AccountStatusApproved)).Methods(http.MethodGet)
+		accountAdminRouter.HandleFunc("/deny/{token}", handlers.AccountStatusHandler(billingAccountService, services.AccountStatusDenied)).Methods(http.MethodGet)
 
 		// Workspace scoped session routes
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/sessions", handlers.CreateWorkspaceSession(keycloakClient)).Methods(http.MethodPost)

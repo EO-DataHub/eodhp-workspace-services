@@ -16,10 +16,18 @@ type Config struct {
 	Host     string         `yaml:"host"`
 	BasePath string         `yaml:"basePath"`
 	DocsPath string         `yaml:"docsPath"`
+	Accounts AccountsConfig `yaml:"accounts"`
 	Database DatabaseConfig `yaml:"database"`
 	Pulsar   PulsarConfig   `yaml:"pulsar"`
 	Keycloak KeycloakConfig `yaml:"keycloak"`
 	AWS      AWSConfig      `yaml:"aws"`
+}
+
+// AccountsConfig defines the email chain for account approval requests
+type AccountsConfig struct {
+	ServiceAccountEmail string `yaml:"serviceAccountEmail"`
+	HelpdeskEmail       string `yaml:"helpdeskEmail"`
+
 }
 
 // DatabaseConfig defines the database connection details
