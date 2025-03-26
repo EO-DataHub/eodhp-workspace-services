@@ -10,7 +10,7 @@ import (
 )
 
 // GetUsersService retrieves all users associated with a workspace.
-func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) GetUsersService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -70,7 +70,7 @@ func GetUsersService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // GetUsersService retrieves all users associated with a workspace.
-func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) GetUserService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -138,7 +138,7 @@ func GetUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // AddUserService adds a user to a workspace.
-func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) AddUserService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -205,7 +205,7 @@ func AddUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // RemoveUserService removes a user from a workspace.
-func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) RemoveUserService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -231,6 +231,21 @@ func RemoveUserService(svc *Service, w http.ResponseWriter, r *http.Request) {
 
 	if !authorized {
 		WriteResponse(w, http.StatusForbidden, nil)
+		return
+	}
+
+	// Account owners cannot remove themselves from a group
+	isAccountOwner, err := svc.DB.IsUserAccountOwner(username, workspaceID)
+
+	if err != nil {
+		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to check if user is account owner")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if isAccountOwner {
+		logger.Warn().Str("username", username).Str("workspace_id", workspaceID).Msg("Account owners cannot remove themselves from a workspace")
+		WriteResponse(w, http.StatusForbidden, "Account owners cannot remove themselves from a workspace")
 		return
 	}
 

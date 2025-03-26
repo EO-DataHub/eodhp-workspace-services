@@ -1,6 +1,8 @@
 package authn
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 
 	"github.com/golang-jwt/jwt"
@@ -35,4 +37,14 @@ func ParseClaims(token string) (Claims, error) {
 		}
 	}
 	return claims, nil
+}
+
+// GenerateToken creates a secure one-time token for account verification
+func GenerateToken() (string, error) {
+	b := make([]byte, 32) // 32-byte random token
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(b), nil
 }

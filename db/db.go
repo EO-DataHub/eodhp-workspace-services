@@ -3,19 +3,52 @@ package db
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 	"os"
 	"time"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/google/uuid"
+	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 )
+
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
+
+// WorkspaceDBInterface defines the database operations.
+type WorkspaceDBInterface interface {
+	Close() error
+	GetAccounts(accountOwner string) ([]ws_services.Account, error)
+	GetAccount(accountID uuid.UUID) (*ws_services.Account, error)
+	CreateAccount(req *ws_services.Account) (*ws_services.Account, error)
+	UpdateAccount(accountID uuid.UUID, account ws_services.Account) (*ws_services.Account, error)
+	DeleteAccount(accountID uuid.UUID) error
+	CheckAccountIsVerified(accountID uuid.UUID) (bool, error)
+	IsUserAccountOwner(username, workspaceID string) (bool, error)
+	CreateAccountApprovalToken(accountID uuid.UUID) (string, error)
+	ValidateApprovalToken(token string) (string, error)
+	UpdateAccountStatus(token, accountID, status string) error
+	GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error)
+	GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error)
+	CheckWorkspaceExists(name string) (bool, error)
+	UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) error
+	DeleteWorkspace(workspaceName string) error
+	CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.Tx, error)
+	CommitTransaction(tx *sql.Tx) error
+}
 
 // WorkspaceDB wraps database, events, and logging functionalities.
 type WorkspaceDB struct {
 	DB        *sql.DB
 	AWSConfig *appconfig.AWSConfig
 }
+
+// Ensure WorkspaceDB implements WorkspaceDBInterface
+var _ WorkspaceDBInterface = (*WorkspaceDB)(nil)
 
 // NewWorkspaceDB initializes a WorkspaceDB instance with a database connection.
 func NewWorkspaceDB(awsConfig appconfig.AWSConfig) (*WorkspaceDB, error) {
@@ -53,78 +86,23 @@ func (w *WorkspaceDB) Close() error {
 	return w.DB.Close()
 }
 
-// InitTables creates necessary tables if they do not already exist.
-func (w *WorkspaceDB) InitTables() error {
+// Migrate runs database migrations.
+func (w *WorkspaceDB) Migrate() error {
+	log.Info().Msg("migrating database")
 
-	err := w.DB.Ping()
-	if err != nil {
-		log.Error().Err(err).Msg("Database connection ping failed")
-		return fmt.Errorf("database connection ping failed: %w", err)
+	goose.SetBaseFS(embedMigrations)
+
+	if err := goose.SetDialect("pgx"); err != nil {
+		log.Error().Err(err).Msg("failed to set database dialect")
+		return err
 	}
 
-	log.Debug().Msg("Database connection is healthy, starting table initialization")
-
-	tx, err := w.DB.Begin()
-	if err != nil {
-		log.Error().Err(err).Msg("error starting transaction")
-		return fmt.Errorf("error starting transaction: %w", err)
+	if err := goose.Up(w.DB, "migrations"); err != nil {
+		log.Error().Err(err).Msg("failed to migrate database")
+		return err
 	}
 
-	// List of table creation queries
-	createTableQueries := []string{
-		`CREATE TABLE IF NOT EXISTS accounts (
-				id UUID PRIMARY KEY,
-				created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-				name VARCHAR(255) NOT NULL,
-				account_owner TEXT NOT NULL,
-				billing_address TEXT NOT NULL,
-				organization_name TEXT NULL,
-				account_opening_reason TEXT NULL
-			);`,
-		`CREATE TABLE IF NOT EXISTS workspaces (
-				id UUID PRIMARY KEY,
-				name VARCHAR(255) UNIQUE NOT NULL,
-				account UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-				member_group TEXT NOT NULL,
-				role_name TEXT NULL,
-				role_arn TEXT NULL,
-				status TEXT NOT NULL,
-				last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
-			);`,
-		`CREATE TABLE IF NOT EXISTS workspace_stores (
-				id UUID PRIMARY KEY,
-				workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
-				store_type VARCHAR(50) NOT NULL,
-				name VARCHAR(255) NOT NULL
-			);`,
-		`CREATE TABLE IF NOT EXISTS object_stores (
-				store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
-				path VARCHAR(255) NOT NULL,
-				env_var VARCHAR(255) NOT NULL,
-				access_point_arn VARCHAR(255) NOT NULL
-			);`,
-		`CREATE TABLE IF NOT EXISTS block_stores (
-				store_id UUID PRIMARY KEY REFERENCES workspace_stores(id) ON DELETE CASCADE,
-				access_point_id VARCHAR(255) NOT NULL,
-				mount_point VARCHAR(255) NOT NULL
-			);`,
-	}
-
-	// Execute each table creation query in the transaction
-	for _, query := range createTableQueries {
-		if _, err := tx.Exec(query); err != nil {
-			log.Error().Err(err).Msg("error creating table")
-			tx.Rollback()
-			return err
-		}
-	}
-
-	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("error committing transaction: %w", err)
-	}
-
-	log.Info().Msg("Tables initialized successfully")
+	log.Info().Msg("database migrated")
 	return nil
 }
 
@@ -147,6 +125,5 @@ func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
-	log.Info().Msg("Transaction committed successfully")
 	return nil
 }

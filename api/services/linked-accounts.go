@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go/aws"
@@ -21,7 +22,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
+
+type LinkedAccountService struct {
+	DB             *db.WorkspaceDB
+	SecretsManager *secretsmanager.Client
+	K8sClient      *kubernetes.Clientset
+}
 
 // Payload represents the expected JSON structure
 type Payload struct {

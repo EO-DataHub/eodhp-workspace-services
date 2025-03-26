@@ -8,13 +8,23 @@ import (
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 )
 
+type WorkspaceService struct {
+	Config    *appconfig.Config
+	DB        db.WorkspaceDBInterface
+	Publisher events.Publisher
+	KC        KeycloakClientInterface
+}
+
 // GetWorkspacesService retrieves all workspaces accessible to the authenticated user's groups.
-func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -59,7 +69,7 @@ func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) 
 }
 
 // GetWorkspaceService retrieves an individual workspace accessible to the authenticated user's groups.
-func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) GetWorkspaceService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -107,7 +117,7 @@ func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
-func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) CreateWorkspaceService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -134,12 +144,25 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	logger.Info().Str("workspace_name", wsSettings.Name).Msg("Validating workspace name")
+	// Check that the account exists and the user is the account owner
+	account, err := svc.DB.CheckAccountIsVerified(wsSettings.Account)
+	if err != nil {
+		logger.Error().Err(err).Msg("Database error checking account existence")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Return a not found response if the account does not exist
+	if !account {
+		logger.Warn().Str("account_id", wsSettings.Account.String()).Msg("Unable to create a workspace - account has not been approved")
+		WriteResponse(w, http.StatusForbidden, "Unable to create a workspace - account has not been approved")
+		return
+	}
 
 	// Check the name is DNS-compatible
 	if !IsDNSCompatible(wsSettings.Name) {
 		logger.Warn().Str("workspace_name", wsSettings.Name).Msg("Invalid workspace name. Not DNS compatible")
-		WriteResponse(w, http.StatusBadRequest, fmt.Errorf("invalid workspace name: must contain only a-z and -, not start with - and be less than 63 characters"))
+		WriteResponse(w, http.StatusBadRequest, "invalid workspace name: must contain only a-z and -, not start with - and be less than 63 characters")
 		return
 	}
 
@@ -154,22 +177,7 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 	// Return a conflict response if the workspace name already exists
 	if workspaceExists {
 		logger.Warn().Str("workspace_name", wsSettings.Name).Msg("Workspace name already exists")
-		WriteResponse(w, http.StatusConflict, fmt.Errorf("workspace with name %s already exists", wsSettings.Name))
-		return
-	}
-
-	// Check that the account exists and the user is the account owner
-	account, err := svc.DB.CheckAccountExists(wsSettings.Account)
-	if err != nil {
-		logger.Error().Err(err).Msg("Database error checking account existence")
-		WriteResponse(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	// Return a not found response if the account does not exist
-	if !account {
-		logger.Warn().Str("account_id", wsSettings.Account.String()).Msg("Account does not exist")
-		WriteResponse(w, http.StatusNotFound, fmt.Errorf("The account associated with this workspace does not exist"))
+		WriteResponse(w, http.StatusConflict, "workspace with name %s already exists", wsSettings.Name)
 		return
 	}
 
@@ -250,7 +258,7 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 }
 
 // Deletes a workspace and its associated resources.
-func DeleteWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) DeleteWorkspaceService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 

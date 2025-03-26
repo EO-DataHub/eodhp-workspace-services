@@ -45,6 +45,22 @@ func (e *HTTPError) Error() string {
 	return e.Message
 }
 
+type KeycloakClientInterface interface {
+    GetToken() error
+    CreateGroup(groupName string) (int, error)
+    DeleteGroup(groupName string) (int, error)
+    GetGroup(groupName string) (*models.Group, error)
+    GetGroupMembers(groupID string) ([]models.User, error)
+    GetGroupMember(groupID, userID string) (*models.User, error)
+    AddMemberToGroup(userID, groupID string) error
+    RemoveMemberFromGroup(userID, groupID string) error
+    GetUserID(username string) (string, error)
+    ExchangeToken(accessToken, scope string) (*TokenResponse, error)
+}
+
+var _ KeycloakClientInterface = (*KeycloakClient)(nil)
+
+
 // NewKeycloakClient creates a new instance of KeycloakClient.
 func NewKeycloakClient(baseURL, clientID, clientSecret, realm string) *KeycloakClient {
 	return &KeycloakClient{

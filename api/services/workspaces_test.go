@@ -1,138 +1,143 @@
 package services
 
 import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq" // Import the pq driver for PostgreSQL
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-// TestCreateWorkspace tests the creation of a workspace
-func TestCreateWorkspace(t *testing.T) {
-	// Create an account for testing
-	accountID := uuid.New()
-	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner, billing_address)
-		VALUES ($1, $2, $3, $4)`,
-		accountID, "Test Account", "owner@example.com", "123 Main St",
-	)
-	assert.NoError(t, err, "should insert account without error")
+// MockKeycloakClient is a mock implementation of KeycloakClientInterface
 
-	// Define the workspace to be created
-	workspaceRequest := ws_manager.WorkspaceSettings{
+func TestCreateWorkspaceService(t *testing.T) {
+	// Mock database, publisher, and Keycloak client
+	mockDB := new(MockWorkspaceDB)
+	mockPublisher := new(MockEventPublisher)
+	mockKC := new(MockKeycloakClient)
+
+	// Initialize the service with the mock dependencies
+	svc := WorkspaceService{
+		DB:        mockDB,
+		Publisher: mockPublisher,
+		KC:        mockKC,
+	}
+
+	// Mock claims for authentication
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
+
+	// Valid workspace payload
+	workspacePayload := ws_manager.WorkspaceSettings{
 		Name:    "test-workspace",
-		Account: accountID,
+		Account: uuid.New(),
 	}
 
-	// Start a transaction for creating the workspace
-	tx, err := workspaceDB.CreateWorkspace(&workspaceRequest)
-	assert.NoError(t, err, "should start transaction without error")
-	assert.NotNil(t, tx, "transaction should not be nil")
+	expectedWorkspace := workspacePayload
+	expectedWorkspace.Status = "creating"
 
-	// Simulate publishing the event
-	err = mockPublisher.Publish(workspaceRequest)
-	assert.NoError(t, err, "should publish event without error")
+	payloadBytes, _ := json.Marshal(workspacePayload)
 
-	// Commit the transaction
-	err = workspaceDB.CommitTransaction(tx)
-	assert.NoError(t, err, "should commit transaction without error")
+	mockDB.On("CheckAccountIsVerified", workspacePayload.Account).Return(true, nil).Once()
+	mockDB.On("CheckWorkspaceExists", workspacePayload.Name).Return(false, nil).Once()
+	mockKC.On("CreateGroup", workspacePayload.Name).Return(http.StatusCreated, nil).Once()
+	mockKC.On("GetGroup", workspacePayload.Name).Return(&models.Group{ID: "group-123"}, nil).Once()
+	mockKC.On("AddMemberToGroup", mockClaims.Subject, "group-123").Return(nil).Once()
+	mockDB.On("CreateWorkspace", mock.Anything).Return(&sql.Tx{}, nil).Once()
+	mockDB.On("CommitTransaction", mock.Anything).Return(nil).Once()
+	mockPublisher.On("Publish", mock.Anything).Return(nil).Once()
 
-	// Verify that the workspace was inserted
-	var count int
-	err = workspaceDB.DB.QueryRow(`SELECT COUNT(*) FROM workspaces WHERE name = $1`, workspaceRequest.Name).Scan(&count)
-	assert.NoError(t, err, "should query workspace count without error")
-	assert.Equal(t, 1, count, "workspace should be inserted")
+	// Create test request
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))
+	req.Header.Set("Content-Type", "application/json")
 
-	// Verify that the event was published correctly
-	published := mockPublisher.PublishedMessage
-	assert.Equal(t, workspaceRequest.Name, published.Name, "published name should match")
-}
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
 
-// TestGetUserWorkspaces tests retrieving user workspaces based on member groups
-func TestGetUserWorkspaces(t *testing.T) {
+	w := httptest.NewRecorder()
 
-	// Create accounts
-	accountID := uuid.New()
-	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner, billing_address)
-		VALUES ($1, $2, $3, $4)`,
-		accountID, "Test Account", "owner@example.com", "123 Main St",
-	)
-	assert.NoError(t, err, "should insert account without error")
+	// Call the service method
+	svc.CreateWorkspaceService(w, req)
 
-	// Insert workspaces
-	workspace1 := ws_manager.WorkspaceSettings{
-		ID:          uuid.New(),
-		Name:        "workspace-one",
-		Account:     accountID,
-		MemberGroup: "group1",
-		Status:      "creating",
-	}
-	workspace2 := ws_manager.WorkspaceSettings{
-		ID:          uuid.New(),
-		Name:        "workspace-two",
-		Account:     accountID,
-		MemberGroup: "group2",
-		Status:      "creating",
-	}
+	res := w.Result()
+	defer res.Body.Close()
 
-	_, err = workspaceDB.DB.Exec(`
-		INSERT INTO workspaces (id, name, account, member_group, status)
-		VALUES ($1, $2, $3, $4, $5)`,
-		workspace1.ID, workspace1.Name, workspace1.Account, workspace1.MemberGroup, workspace1.Status,
-	)
-	assert.NoError(t, err, "should insert workspace one without error")
+	assert.Equal(t, http.StatusCreated, res.StatusCode, "Expected HTTP status 201 Created")
 
-	_, err = workspaceDB.DB.Exec(`
-		INSERT INTO workspaces (id, name, account, member_group, status)
-		VALUES ($1, $2, $3, $4, $5)`,
-		workspace2.ID, workspace2.Name, workspace2.Account, workspace2.MemberGroup, workspace2.Status,
-	)
-	assert.NoError(t, err, "should insert workspace two without error")
+	mockDB.AssertExpectations(t)
+	mockPublisher.AssertExpectations(t)
+	mockKC.AssertExpectations(t)
 
-	// Retrieve workspaces for group1
-	memberGroups := []string{"group1"}
-	workspaces, err := workspaceDB.GetUserWorkspaces(memberGroups)
-	assert.NoError(t, err, "should retrieve workspaces without error")
-	assert.Len(t, workspaces, 1, "should retrieve one workspace")
-	assert.Equal(t, "workspace-one", workspaces[0].Name, "workspace name should match")
+	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))
+	req.Header.Set("Content-Type", "application/json")
 
-	// Retrieve workspaces for group1 and group2
-	memberGroups = []string{"group1", "group2"}
-	workspaces, err = workspaceDB.GetUserWorkspaces(memberGroups)
-	assert.NoError(t, err, "should retrieve workspaces without error")
-	assert.Len(t, workspaces, 2, "should retrieve two workspaces")
-}
+	w = httptest.NewRecorder()
+	svc.CreateWorkspaceService(w, req)
 
-// TestCheckWorkspaceExists tests checking the existence of a workspace by name
-func TestCheckWorkspaceExists(t *testing.T) {
-	// Create an account
-	accountID := uuid.New()
-	_, err := workspaceDB.DB.Exec(`
-		INSERT INTO accounts (id, name, account_owner, billing_address)
-		VALUES ($1, $2, $3, $4)`,
-		accountID, "Test Account", "owner@example.com", "123 Main St",
-	)
-	assert.NoError(t, err, "should insert account without error")
+	res = w.Result()
+	defer res.Body.Close()
 
-	// Insert a workspace
-	workspaceName := "existing-workspace"
-	_, err = workspaceDB.DB.Exec(`
-		INSERT INTO workspaces (id, name, account, member_group, status)
-		VALUES ($1, $2, $3, $4, $5)`,
-		uuid.New(), workspaceName, accountID, "group1", "created",
-	)
-	assert.NoError(t, err, "should insert workspace without error")
+	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "Expected HTTP status 401 Unauthorized")
 
-	// Check existence of existing workspace
-	exists, err := workspaceDB.CheckWorkspaceExists(workspaceName)
-	assert.NoError(t, err, "should check workspace existence without error")
-	assert.True(t, exists, "workspace should exist")
+	// Invalid JSON payload
+	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader([]byte("{invalid json}")))
+	req.Header.Set("Content-Type", "application/json")
 
-	// Check existence of non-existing workspace
-	exists, err = workspaceDB.CheckWorkspaceExists("non-existing-workspace")
-	assert.NoError(t, err, "should check workspace existence without error")
-	assert.False(t, exists, "workspace should not exist")
+	ctx = context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w = httptest.NewRecorder()
+	svc.CreateWorkspaceService(w, req)
+
+	res = w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "Expected HTTP status 400 Bad Request for invalid JSON")
+
+	// Workspace name already exists
+	mockDB.On("CheckAccountIsVerified", workspacePayload.Account).Return(true, nil).Once()
+	mockDB.On("CheckWorkspaceExists", workspacePayload.Name).Return(true, nil).Once()
+
+	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx = context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w = httptest.NewRecorder()
+	svc.CreateWorkspaceService(w, req)
+
+	res = w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusConflict, res.StatusCode, "Expected HTTP status 409 Conflict for existing workspace")
+
+	// Database error during account check
+	mockDB.On("CheckAccountIsVerified", workspacePayload.Account).Return(false, fmt.Errorf("database error")).Once()
+
+	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx = context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w = httptest.NewRecorder()
+	svc.CreateWorkspaceService(w, req)
+
+	res = w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode, "Expected HTTP status 500 Internal Server Error for database error")
 }

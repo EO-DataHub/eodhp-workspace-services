@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
@@ -49,13 +52,6 @@ var serveCmd = &cobra.Command{
 		// Create routes
 		r := mux.NewRouter()
 
-		service := &services.Service{
-			Config:    appCfg,
-			DB:        workspaceDB,
-			Publisher: publisher,
-			KC:        keycloakClient,
-		}
-
 		// Create AWS STS client
 		log.Info().Str("region", appCfg.AWS.Region).Msgf("Creating AWS STS client in region '%s'...", appCfg.AWS.Region)
 		sts_client := sts.New(sts.Options{
@@ -69,30 +65,54 @@ var serveCmd = &cobra.Command{
 		api.Use(middleware.WithLogger)
 		api.Use(middleware.JWTMiddleware)
 
+		workspaceService := &services.WorkspaceService{
+			Config:    appCfg,
+			DB:        workspaceDB,
+			Publisher: publisher,
+			KC:        keycloakClient,
+		}
+
 		// Workspace routes
-		api.HandleFunc("/workspaces", handlers.CreateWorkspace(service)).Methods(http.MethodPost)
-		api.HandleFunc("/workspaces", handlers.GetWorkspaces(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.GetWorkspace(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(service)).Methods(http.MethodPut)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(service)).Methods(http.MethodPatch)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(service)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces", handlers.CreateWorkspace(workspaceService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces", handlers.GetWorkspaces(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.GetWorkspace(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(workspaceService)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(workspaceService)).Methods(http.MethodPatch)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(workspaceService)).Methods(http.MethodDelete)
 
 		// Workspace management routes
-		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.AddUser(service)).Methods(http.MethodPut)
-		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.GetUser(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(service)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.AddUser(workspaceService)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.GetUser(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(workspaceService)).Methods(http.MethodDelete)
 
 		// Account routes
 		// Deny workspace-scoped tokens for /accounts routes
+		// Initialize secrets manager client
+		awsEmailClient, err = InitializeAWSEMailClient(appCfg.AWS.Region)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to initialize AWS SES client")
+		}
+		// Linked account routes
+		billingAccountService := &services.BillingAccountService{
+			Config:         appCfg,
+			DB:             workspaceDB,
+			AWSEmailClient: awsEmailClient,
+		}
 		accountRouter := api.PathPrefix("/accounts").Subrouter()
 		accountRouter.Use(middleware.DenyWorkspaceScopedTokens)
 
-		accountRouter.HandleFunc("", handlers.CreateAccount(service)).Methods(http.MethodPost)
-		accountRouter.HandleFunc("", handlers.GetAccounts(service)).Methods(http.MethodGet)
-		accountRouter.HandleFunc("/{account-id}", handlers.GetAccount(service)).Methods(http.MethodGet)
-		accountRouter.HandleFunc("/{account-id}", handlers.DeleteAccount(service)).Methods(http.MethodDelete)
-		accountRouter.HandleFunc("/{account-id}", handlers.UpdateAccount(service)).Methods(http.MethodPut)
+		accountRouter.HandleFunc("", handlers.CreateAccount(billingAccountService)).Methods(http.MethodPost)
+		accountRouter.HandleFunc("", handlers.GetAccounts(billingAccountService)).Methods(http.MethodGet)
+		accountRouter.HandleFunc("/{account-id}", handlers.GetAccount(billingAccountService)).Methods(http.MethodGet)
+		accountRouter.HandleFunc("/{account-id}", handlers.DeleteAccount(billingAccountService)).Methods(http.MethodDelete)
+		accountRouter.HandleFunc("/{account-id}", handlers.UpdateAccount(billingAccountService)).Methods(http.MethodPut)
+
+		accountAdminRouter := accountRouter.PathPrefix("/admin").Subrouter()
+		accountAdminRouter.Use(middleware.WithLogger)
+		accountAdminRouter.Use(middleware.JWTMiddleware)
+		accountAdminRouter.HandleFunc("/approve/{token}", handlers.AccountStatusHandler(billingAccountService, services.AccountStatusApproved)).Methods(http.MethodGet)
+		accountAdminRouter.HandleFunc("/deny/{token}", handlers.AccountStatusHandler(billingAccountService, services.AccountStatusDenied)).Methods(http.MethodGet)
 
 		// Workspace scoped session routes
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/sessions", handlers.CreateWorkspaceSession(keycloakClient)).Methods(http.MethodPost)
@@ -164,4 +184,17 @@ func initializeK8sClient() (*kubernetes.Clientset, error) {
 	}
 
 	return clientset, nil
+}
+
+// InitializeSESClient creates and returns a new SESClient instance with options
+func InitializeAWSEMailClient(region string) (*sesv2.Client, error) {
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	client := sesv2.NewFromConfig(cfg)
+	return client, nil
 }

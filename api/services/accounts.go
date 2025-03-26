@@ -1,22 +1,45 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 )
 
+var (
+	AccountStatusApproved = "Approved"
+	AccountStatusDenied   = "Denied"
+	AccountStatusPending  = "Pending"
+)
+
+type EmailClient interface {
+	SendEmail(ctx context.Context, input *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error)
+}
+
+type BillingAccountService struct {
+	Config         *appconfig.Config
+	DB             db.WorkspaceDBInterface
+	AWSEmailClient EmailClient
+}
+
 // CreateAccountService creates a new account for the authenticated user.
-func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -49,7 +72,16 @@ func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	logger.Info().Str("account_id", account.ID.String()).Msg("Account created successfully")
+	token, err := svc.DB.CreateAccountApprovalToken(account.ID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create account approval token")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	svc.SendAccountRequestEmail(account, token)
+
+	logger.Info().Str("account_id", account.ID.String()).Msg(fmt.Sprintf("Account %s has been created by %s and is awaiting approval", account.Name, account.AccountOwner))
 
 	// Send response
 	var location = fmt.Sprintf("%s/%s", r.URL.Path, account.ID)
@@ -58,7 +90,7 @@ func CreateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 }
 
 // GetAccountsService retrieves all accounts for the authenticated user.
-func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) GetAccountsService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -85,12 +117,13 @@ func GetAccountsService(svc *Service, w http.ResponseWriter, r *http.Request) {
 	}
 
 	logger.Info().Int("account_count", len(accounts)).Msg("Successfully retrieved accounts")
+
 	WriteResponse(w, http.StatusOK, accounts)
 
 }
 
 // GetAccountService retrieves a single account all accounts for the authenticated user.
-func GetAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) GetAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -139,7 +172,7 @@ func GetAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // UpdateAccountService updates an account based on account ID from the URL path.
-func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) UpdateAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -174,7 +207,7 @@ func UpdateAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 }
 
 // DeleteAccountService deletes an account specified by the account ID from the URL path.
-func DeleteAccountService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *BillingAccountService) DeleteAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -196,4 +229,72 @@ func DeleteAccountService(svc *Service, w http.ResponseWriter, r *http.Request) 
 
 	logger.Info().Str("account_id", accountID.String()).Msg("Account deleted successfully")
 	WriteResponse(w, http.StatusNoContent, nil)
+}
+
+// SendAccountRequestEmail sends an email to the helpdesk with the account request details.
+func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.Account, token string) error {
+
+	// Email details - Must be verified in SES
+	from := svc.Config.Accounts.ServiceAccountEmail // This resource can be verified/created via terraform
+	to := svc.Config.Accounts.HelpdeskEmail         // This will require manual verification / setup
+
+	subject := fmt.Sprintf("EO DataHub Account Request - %s", account.AccountOwner)
+	approvalLink := fmt.Sprintf("https://%s/api/accounts/admin/approve/%s", svc.Config.Host, token)
+	denialLink := fmt.Sprintf("https://%s/api/accounts/admin/deny/%s", svc.Config.Host, token)
+	bodyText := fmt.Sprintf(`
+	A new billing account has been requested:
+
+	Account Owner: %s
+	Account Name: %s
+	Organization Name: %s
+	Billing Address: %s
+	Account Opening Reason: %s
+		
+	Choose one of the following options:
+
+	To approve the account, click the following link:
+
+	%s
+
+	To deny the account, click the following link:
+
+	%s
+
+	Make sure you are authenticated to the EO DataHub and logged in before clicking a link.
+
+	`, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason, approvalLink, denialLink)
+
+	// Prepare the email input
+	input := &sesv2.SendEmailInput{
+		FromEmailAddress: aws.String(from),
+		Destination: &types.Destination{
+			ToAddresses: []string{to},
+		},
+		Content: &types.EmailContent{
+			Simple: &types.Message{
+				Subject: &types.Content{
+					Data:    aws.String(subject),
+					Charset: aws.String("UTF-8"),
+				},
+				Body: &types.Body{
+					Text: &types.Content{
+						Data:    aws.String(bodyText),
+						Charset: aws.String("UTF-8"),
+					},
+				},
+			},
+		},
+	}
+
+	// Add a timeout context
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Send the email
+	_, err := svc.AWSEmailClient.SendEmail(ctx, input)
+	if err != nil {
+		return fmt.Errorf("Failed to send email: %v", err)
+	}
+
+	return nil
 }
