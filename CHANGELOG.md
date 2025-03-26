@@ -1,5 +1,10 @@
 # Workspace Services
 
+## v0.7.4 (26-03-2025)
+
+- Added account approval
+- More robust unit tests
+
 ## v0.7.3 (19-03-2025)
 
 - Added access control for workspace scoped tokens
