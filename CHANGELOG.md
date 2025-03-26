@@ -1,9 +1,13 @@
 # Workspace Services
 
-## v0.7.4 (26-03-2025)
+## v0.7.5 (26-03-2025)
 
 - Added account approval
 - More robust unit tests
+
+## v0.7.4 (25-03-2025)
+
+- Fixed typo in openapi session endpoint url
 
 ## v0.7.3 (19-03-2025)
 
