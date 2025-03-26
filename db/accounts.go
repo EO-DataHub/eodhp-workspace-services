@@ -267,7 +267,7 @@ func (w *WorkspaceDB) ValidateApprovalToken(token string) (string, error) {
 	var accountID string
 	var expiresAt time.Time
 
-	query := `SELECT account_id, token_expires_at FROM dev.account_approvals WHERE approval_token = $1`
+	query := `SELECT account_id, token_expires_at FROM account_approvals WHERE approval_token = $1`
 	err := w.DB.QueryRow(query, token).Scan(&accountID, &expiresAt)
 	if err != nil {
 		return "", fmt.Errorf("invalid or expired token")
