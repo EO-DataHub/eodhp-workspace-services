@@ -8,10 +8,20 @@ import (
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 )
+
+type WorkspaceService struct {
+	Config    *appconfig.Config
+	DB        db.WorkspaceDBInterface
+	Publisher events.Publisher
+	KC        KeycloakClientInterface
+}
 
 // GetWorkspacesService retrieves all workspaces accessible to the authenticated user's groups.
 func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http.Request) {
@@ -145,7 +155,7 @@ func (svc *WorkspaceService) CreateWorkspaceService(w http.ResponseWriter, r *ht
 	// Return a not found response if the account does not exist
 	if !account {
 		logger.Warn().Str("account_id", wsSettings.Account.String()).Msg("Unable to create a workspace - account has not been approved")
-		WriteResponse(w, http.StatusNotFound, "Unable to create a workspace - account has not been approved")
+		WriteResponse(w, http.StatusForbidden, "Unable to create a workspace - account has not been approved")
 		return
 	}
 

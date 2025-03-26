@@ -103,7 +103,7 @@ func PatchWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 }
 
 // GetUsers handles HTTP requests for retrieving users that are members of a workspace
-func GetUsers(svc *services.Service) http.HandlerFunc {
+func GetUsers(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -114,12 +114,12 @@ func GetUsers(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.GetUsersService(svc, w, r)
+		svc.GetUsersService(w, r)
 	}
 }
 
 // GetUser handles HTTP requests for retrieving individual users that are members of a workspace
-func GetUser(svc *services.Service) http.HandlerFunc {
+func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -130,12 +130,12 @@ func GetUser(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.GetUserService(svc, w, r)
+		svc.GetUserService(w, r)
 	}
 }
 
 // AddUser handle HTTP requests for adding a user as a member of a workspace
-func AddUser(svc *services.Service) http.HandlerFunc {
+func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -146,12 +146,12 @@ func AddUser(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.AddUserService(svc, w, r)
+		svc.AddUserService(w, r)
 	}
 }
 
 // RemoveUser handle HTTP requests for removing a user as a member of a workspace
-func RemoveUser(svc *services.Service) http.HandlerFunc {
+func RemoveUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -162,6 +162,6 @@ func RemoveUser(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.RemoveUserService(svc, w, r)
+		svc.RemoveUserService(w, r)
 	}
 }

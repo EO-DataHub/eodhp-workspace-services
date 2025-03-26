@@ -59,7 +59,7 @@ func IsDNSCompatible(name string) bool {
 }
 
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
-func isUserWorkspaceAuthorized(svc *db.WorkspaceDB, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
+func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
 
 	// Check if the user is an account owner
 	if mustBeAccountOwner {

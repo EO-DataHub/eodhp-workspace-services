@@ -19,9 +19,3 @@ type Account struct {
 	Status               string                         `json:"status"`
 	Workspaces           []ws_manager.WorkspaceSettings `json:"workspaces"`
 }
-
-type AccountStatus struct {
-	Approved string
-	Denied string
-	Pending string
-}

@@ -45,14 +45,11 @@ func TestCreateWorkspaceService(t *testing.T) {
 		Account: uuid.New(),
 	}
 
-	// Expected response workspace
 	expectedWorkspace := workspacePayload
 	expectedWorkspace.Status = "creating"
 
-	// Marshal payload to JSON
 	payloadBytes, _ := json.Marshal(workspacePayload)
 
-	// Scenario 1: Successful workspace creation
 	mockDB.On("CheckAccountIsVerified", workspacePayload.Account).Return(true, nil).Once()
 	mockDB.On("CheckWorkspaceExists", workspacePayload.Name).Return(false, nil).Once()
 	mockKC.On("CreateGroup", workspacePayload.Name).Return(http.StatusCreated, nil).Once()
@@ -66,28 +63,23 @@ func TestCreateWorkspaceService(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
 
-	// Attach claims to request context
 	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
 	req = req.WithContext(ctx)
 
-	// Create response recorder
 	w := httptest.NewRecorder()
 
-	// Call the CreateWorkspaceService method
+	// Call the service method
 	svc.CreateWorkspaceService(w, req)
 
-	// Get response and assert HTTP 201 Created
 	res := w.Result()
 	defer res.Body.Close()
 
 	assert.Equal(t, http.StatusCreated, res.StatusCode, "Expected HTTP status 201 Created")
 
-	// Verify all expected method calls
 	mockDB.AssertExpectations(t)
 	mockPublisher.AssertExpectations(t)
 	mockKC.AssertExpectations(t)
 
-	// Scenario 2: Unauthorized request (missing claims)
 	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -99,7 +91,7 @@ func TestCreateWorkspaceService(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, res.StatusCode, "Expected HTTP status 401 Unauthorized")
 
-	// Scenario 3: Invalid JSON payload
+	// Invalid JSON payload
 	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader([]byte("{invalid json}")))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -114,7 +106,7 @@ func TestCreateWorkspaceService(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, res.StatusCode, "Expected HTTP status 400 Bad Request for invalid JSON")
 
-	// Scenario 4: Workspace name already exists
+	// Workspace name already exists
 	mockDB.On("CheckAccountIsVerified", workspacePayload.Account).Return(true, nil).Once()
 	mockDB.On("CheckWorkspaceExists", workspacePayload.Name).Return(true, nil).Once()
 
@@ -132,7 +124,7 @@ func TestCreateWorkspaceService(t *testing.T) {
 
 	assert.Equal(t, http.StatusConflict, res.StatusCode, "Expected HTTP status 409 Conflict for existing workspace")
 
-	// Scenario 5: Database error during account check
+	// Database error during account check
 	mockDB.On("CheckAccountIsVerified", workspacePayload.Account).Return(false, fmt.Errorf("database error")).Once()
 
 	req = httptest.NewRequest(http.MethodPost, "/api/workspaces", bytes.NewReader(payloadBytes))

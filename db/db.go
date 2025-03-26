@@ -47,6 +47,7 @@ type WorkspaceDB struct {
 	AWSConfig *appconfig.AWSConfig
 }
 
+// Ensure WorkspaceDB implements WorkspaceDBInterface
 var _ WorkspaceDBInterface = (*WorkspaceDB)(nil)
 
 // NewWorkspaceDB initializes a WorkspaceDB instance with a database connection.

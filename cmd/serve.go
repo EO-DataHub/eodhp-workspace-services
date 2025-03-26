@@ -52,13 +52,6 @@ var serveCmd = &cobra.Command{
 		// Create routes
 		r := mux.NewRouter()
 
-		service := &services.Service{
-			Config:    appCfg,
-			DB:        workspaceDB,
-			Publisher: publisher,
-			KC:        keycloakClient,
-		}
-
 		// Create AWS STS client
 		log.Info().Str("region", appCfg.AWS.Region).Msgf("Creating AWS STS client in region '%s'...", appCfg.AWS.Region)
 		sts_client := sts.New(sts.Options{
@@ -88,10 +81,10 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(workspaceService)).Methods(http.MethodDelete)
 
 		// Workspace management routes
-		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.AddUser(service)).Methods(http.MethodPut)
-		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.GetUser(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(service)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.AddUser(workspaceService)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.GetUser(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(workspaceService)).Methods(http.MethodDelete)
 
 		// Account routes
 		// Deny workspace-scoped tokens for /accounts routes

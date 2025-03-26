@@ -9,6 +9,8 @@ import (
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
@@ -28,6 +30,12 @@ var (
 
 type EmailClient interface {
 	SendEmail(ctx context.Context, input *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error)
+}
+
+type BillingAccountService struct {
+	Config         *appconfig.Config
+	DB             db.WorkspaceDBInterface
+	AWSEmailClient EmailClient
 }
 
 // CreateAccountService creates a new account for the authenticated user.
