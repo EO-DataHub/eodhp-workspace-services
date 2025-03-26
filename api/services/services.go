@@ -5,7 +5,6 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -25,6 +24,13 @@ type LinkedAccountService struct {
 
 type BillingAccountService struct {
 	Config         *appconfig.Config
-	DB             *db.WorkspaceDB
-	AWSEmailClient *sesv2.Client
+	DB             db.WorkspaceDBInterface
+	AWSEmailClient EmailClient
+}
+
+type WorkspaceService struct {
+	Config    *appconfig.Config
+	DB        db.WorkspaceDBInterface
+	Publisher events.Publisher
+	KC        KeycloakClientInterface
 }

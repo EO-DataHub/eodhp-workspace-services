@@ -17,6 +17,12 @@ type EventPublisher struct {
 	producer pulsar.Producer
 }
 
+// Publisher defines the interface for an event publisher
+type Publisher interface {
+	Publish(event ws_manager.WorkspaceSettings) error
+	Close()
+}
+
 const maxRetries = 3 // Hardcoded and slightly random for now - can be made configurable
 
 // Initializes the Pulsar client and producer

@@ -14,7 +14,7 @@ import (
 )
 
 // GetWorkspacesService retrieves all workspaces accessible to the authenticated user's groups.
-func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -59,7 +59,7 @@ func GetWorkspacesService(svc *Service, w http.ResponseWriter, r *http.Request) 
 }
 
 // GetWorkspaceService retrieves an individual workspace accessible to the authenticated user's groups.
-func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) GetWorkspaceService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -107,7 +107,7 @@ func GetWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateWorkspaceService handles creating a new workspace and publishing its creation event.
-func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) CreateWorkspaceService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 
@@ -248,7 +248,7 @@ func CreateWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request
 }
 
 // Deletes a workspace and its associated resources.
-func DeleteWorkspaceService(svc *Service, w http.ResponseWriter, r *http.Request) {
+func (svc *WorkspaceService) DeleteWorkspaceService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
 

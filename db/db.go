@@ -8,7 +8,10 @@ import (
 	"os"
 	"time"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
 	"github.com/rs/zerolog/log"
 )
@@ -16,11 +19,35 @@ import (
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 
+// WorkspaceDBInterface defines the database operations.
+type WorkspaceDBInterface interface {
+	Close() error
+	GetAccounts(accountOwner string) ([]ws_services.Account, error)
+	GetAccount(accountID uuid.UUID) (*ws_services.Account, error)
+	CreateAccount(req *ws_services.Account) (*ws_services.Account, error)
+	UpdateAccount(accountID uuid.UUID, account ws_services.Account) (*ws_services.Account, error)
+	DeleteAccount(accountID uuid.UUID) error
+	CheckAccountIsVerified(accountID uuid.UUID) (bool, error)
+	IsUserAccountOwner(username, workspaceID string) (bool, error)
+	CreateAccountApprovalToken(accountID uuid.UUID) (string, error)
+	ValidateApprovalToken(token string) (string, error)
+	UpdateAccountStatus(token, accountID, status string) error
+	GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error)
+	GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error)
+	CheckWorkspaceExists(name string) (bool, error)
+	UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) error
+	DeleteWorkspace(workspaceName string) error
+	CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.Tx, error)
+	CommitTransaction(tx *sql.Tx) error
+}
+
 // WorkspaceDB wraps database, events, and logging functionalities.
 type WorkspaceDB struct {
 	DB        *sql.DB
 	AWSConfig *appconfig.AWSConfig
 }
+
+var _ WorkspaceDBInterface = (*WorkspaceDB)(nil)
 
 // NewWorkspaceDB initializes a WorkspaceDB instance with a database connection.
 func NewWorkspaceDB(awsConfig appconfig.AWSConfig) (*WorkspaceDB, error) {

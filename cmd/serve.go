@@ -72,13 +72,20 @@ var serveCmd = &cobra.Command{
 		api.Use(middleware.WithLogger)
 		api.Use(middleware.JWTMiddleware)
 
+		workspaceService := &services.WorkspaceService{
+			Config:    appCfg,
+			DB:        workspaceDB,
+			Publisher: publisher,
+			KC:        keycloakClient,
+		}
+
 		// Workspace routes
-		api.HandleFunc("/workspaces", handlers.CreateWorkspace(service)).Methods(http.MethodPost)
-		api.HandleFunc("/workspaces", handlers.GetWorkspaces(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.GetWorkspace(service)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(service)).Methods(http.MethodPut)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(service)).Methods(http.MethodPatch)
-		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(service)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces", handlers.CreateWorkspace(workspaceService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces", handlers.GetWorkspaces(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.GetWorkspace(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.UpdateWorkspace(workspaceService)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.PatchWorkspace(workspaceService)).Methods(http.MethodPatch)
+		api.HandleFunc("/workspaces/{workspace-id}", handlers.DeleteWorkspace(workspaceService)).Methods(http.MethodDelete)
 
 		// Workspace management routes
 		api.HandleFunc("/workspaces/{workspace-id}/users", handlers.GetUsers(service)).Methods(http.MethodGet)

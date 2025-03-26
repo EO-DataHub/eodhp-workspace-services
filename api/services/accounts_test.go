@@ -1,226 +1,234 @@
 package services
 
-// // // accounts_test.go
-// package services
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 
-// import (
-// 	"database/sql"
-// 	"testing"
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
+	"github.com/aws/aws-sdk-go-v2/service/sesv2"
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+)
 
-// 	"github.com/EO-DataHub/eodhp-workspace-services/models"
-// 	"github.com/google/uuid"
-// 	_ "github.com/lib/pq" // Import the pq driver for PostgreSQL
-// 	"github.com/stretchr/testify/assert"
-// )
+func TestCreateAccountApprovalToken(t *testing.T) {
 
-// // TestCreateAccount tests the creation of an account.
-// func TestCreateAccount(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
 
-// 	// Define the account to be created
-// 	accountRequest := models.Account{
-// 		Name:         "Test Account",
-// 		AccountOwner: "test-owner@example.com",
-// 	}
+	mockDB.On("CreateAccountApprovalToken", mock.AnythingOfType("uuid.UUID")).Return("some-token", nil)
 
-// 	// Call CreateAccount to insert the account into the database
-// 	account, err := workspaceDB.CreateAccount(&accountRequest)
-// 	assert.NoError(t, err, "should create account without error")
-// 	assert.NotNil(t, account, "created account should not be nil")
-// 	assert.Equal(t, accountRequest.Name, account.Name, "account name should match")
-// 	assert.Equal(t, accountRequest.AccountOwner, account.AccountOwner, "account owner should match")
+	token, err := mockDB.CreateAccountApprovalToken(uuid.New())
 
-// 	// Verify that the account was inserted
-// 	var count int
-// 	err = workspaceDB.DB.QueryRow(`SELECT COUNT(*) FROM accounts WHERE id = $1`, account.ID).Scan(&count)
-// 	assert.NoError(t, err, "should query account count without error")
-// 	assert.Equal(t, 1, count, "account should be inserted")
-// }
+	mockDB.AssertExpectations(t)
 
-// // TestGetAccounts tests retrieving accounts for a user.
-// func TestGetAccounts(t *testing.T) {
+	// Check if the return value is correct
+	if token != "some-token" || err != nil {
+		t.Errorf("Expected token 'some-token' but got '%s' and error '%v'", token, err)
+	}
+}
 
-// 	// Insert accounts
-// 	account1 := models.Account{
-// 		ID:             uuid.New(),
-// 		Name:           "Account One",
-// 		AccountOwner:   "user1@example.com",
-// 		BillingAddress: "123 Main St",
-// 	}
-// 	account2 := models.Account{
-// 		ID:             uuid.New(),
-// 		Name:           "Account Two",
-// 		AccountOwner:   "user1@example.com",
-// 		BillingAddress: "456 Elm St",
-// 	}
-// 	account3 := models.Account{
-// 		ID:             uuid.New(),
-// 		Name:           "Account Three",
-// 		AccountOwner:   "user2@example.com",
-// 		BillingAddress: "789 Oak St",
-// 	}
+func TestCreateAccountService(t *testing.T) {
 
-// 	_, err := workspaceDB.DB.Exec(`
-// 		INSERT INTO accounts (id, name, account_owner, billing_address)
-// 		VALUES ($1, $2, $3, $4)`,
-// 		account1.ID, account1.Name, account1.AccountOwner, account1.BillingAddress,
-// 	)
-// 	assert.NoError(t, err, "should insert account one without error")
+	// Create a mock database, email client, and config
+	mockDB := new(MockWorkspaceDB)
+	mockAWSEmailClient := new(MockAWSEmailClient)
+	mockConfig := &appconfig.Config{
+		Accounts: appconfig.AccountsConfig{
+			ServiceAccountEmail: "service@example.com",
+			HelpdeskEmail:       "helpdesk@example.com",
+		},
+	}
 
-// 	_, err = workspaceDB.DB.Exec(`
-// 		INSERT INTO accounts (id, name, account_owner, billing_address)
-// 		VALUES ($1, $2, $3, $4)`,
-// 		account2.ID, account2.Name, account2.AccountOwner, account2.BillingAddress,
-// 	)
-// 	assert.NoError(t, err, "should insert account two without error")
+	// Create the service with the mock DB, email client, and config
+	svc := BillingAccountService{DB: mockDB, AWSEmailClient: mockAWSEmailClient, Config: mockConfig}
 
-// 	_, err = workspaceDB.DB.Exec(`
-// 		INSERT INTO accounts (id, name, account_owner, billing_address)
-// 		VALUES ($1, $2, $3, $4)`,
-// 		account3.ID, account3.Name, account3.AccountOwner, account2.BillingAddress,
-// 	)
-// 	assert.NoError(t, err, "should insert account three without error")
+	// Define the account to be created
+	testAccount := &models.Account{
+		ID:                   uuid.New(),
+		Name:                 "Test Account",
+		AccountOwner:         "testuser",
+		OrganizationName:     aws.String("Telespazio UK"),
+		BillingAddress:       "123 Test St, London, UK",
+		AccountOpeningReason: aws.String("Testing"),
+	}
 
-// 	// Retrieve accounts for user1@example.com
-// 	username := "user1@example.com"
-// 	accounts, err := workspaceDB.GetAccounts(username)
-// 	assert.NoError(t, err, "should retrieve accounts without error")
-// 	assert.Len(t, accounts, 2, "user1 should have two accounts")
-// 	assert.Equal(t, "Account One", accounts[0].Name, "first account name should match")
-// 	assert.Equal(t, "Account Two", accounts[1].Name, "second account name should match")
+	// Mock the JWT token and claims (simulate the authenticated user)
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
 
-// 	// Retrieve accounts for user2@example.com
-// 	username = "user2@example.com"
-// 	accounts, err = workspaceDB.GetAccounts(username)
-// 	assert.NoError(t, err, "should retrieve accounts without error")
-// 	assert.Len(t, accounts, 1, "user2 should have one account")
-// 	assert.Equal(t, "Account Three", accounts[0].Name, "account name should match")
-// }
+	// Set up the mock for CreateAccount method
+	mockDB.On("CreateAccount", mock.Anything).Return(testAccount, nil)
 
-// // TestGetAccount tests retrieving a single account, including unauthorized access.
-// func TestGetAccount(t *testing.T) {
+	// Set up the mock for CreateAccountApprovalToken method
+	mockDB.On("CreateAccountApprovalToken", mock.AnythingOfType("uuid.UUID")).Return("some-token", nil)
 
-// 	// Insert an account
-// 	accountOwner := "owner@example.com"
-// 	account := models.Account{
-// 		ID:             uuid.New(),
-// 		Name:           "Owner's Account",
-// 		AccountOwner:   accountOwner,
-// 		BillingAddress: "123 Main St",
-// 	}
+	// Mock the email client to return a successful response
+	mockAWSEmailClient.On("SendEmail", mock.Anything, mock.Anything, mock.Anything).
+		Return(&sesv2.SendEmailOutput{}, nil)
 
-// 	_, err := workspaceDB.DB.Exec(`
-// 		INSERT INTO accounts (id, name, account_owner, billing_address)
-// 		VALUES ($1, $2, $3, $4)`,
-// 		account.ID, account.Name, account.AccountOwner, account.BillingAddress,
-// 	)
-// 	assert.NoError(t, err, "should insert account without error")
+	// Create the request body and attach it to the request
+	requestBody, _ := json.Marshal(testAccount)
+	r := httptest.NewRequest(http.MethodPost, "/api/accounts", bytes.NewReader(requestBody))
 
-// 	// Test retrieving the account
-// 	retrievedAccount, err := workspaceDB.GetAccount(account.ID)
-// 	assert.NoError(t, err, "should retrieve account without error")
-// 	assert.NotNil(t, retrievedAccount, "retrieved account should not be nil")
-// 	assert.Equal(t, account.ID, retrievedAccount.ID, "account ID should match")
-// 	assert.Equal(t, account.Name, retrievedAccount.Name, "account name should match")
-// 	assert.Equal(t, account.AccountOwner, retrievedAccount.AccountOwner, "account owner should match")
+	// Create a new context with the mocked claims and attach it to the request
+	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, mockClaims)
+	r = r.WithContext(ctx)
 
-// 	// Test retrieving a non-existent account
-// 	nonExistentID := uuid.New()
-// 	retrievedAccount, err = workspaceDB.GetAccount(nonExistentID)
-// 	assert.Nil(t, retrievedAccount, "retrieved account should be nil for non-existent ID")
-// 	if err != nil {
-// 		assert.Contains(t, err.Error(), "no rows in result set", "error should indicate no rows found")
-// 	}
-// }
+	// Create the recorder to capture the response
+	w := httptest.NewRecorder()
 
-// // TestUpdateAccount tests updating an account.
-// func TestUpdateAccount(t *testing.T) {
+	// Call the service method
+	svc.CreateAccountService(w, r)
 
-// 	// Insert an account to be updated
-// 	accountOwner := "owner@example.com"
-// 	account := models.Account{
-// 		ID:             uuid.New(),
-// 		Name:           "Original Account Name",
-// 		AccountOwner:   accountOwner,
-// 		BillingAddress: "123 Main St",
-// 	}
+	// Get the response and assert results
+	res := w.Result()
+	defer res.Body.Close()
 
-// 	_, err := workspaceDB.DB.Exec(`
-// 		INSERT INTO accounts (id, name, account_owner, billing_address)
-// 		VALUES ($1, $2, $3, $4)`,
-// 		account.ID, account.Name, account.AccountOwner, account.BillingAddress,
-// 	)
-// 	assert.NoError(t, err, "should insert account without error")
+	assert.Equal(t, http.StatusCreated, res.StatusCode)
 
-// 	// Define the new name for the update
-// 	updatedName := "Updated Account Name"
+	body, _ := io.ReadAll(res.Body)
+	var responseAccount models.Account
+	err := json.Unmarshal(body, &responseAccount)
+	assert.NoError(t, err, "Response should be valid JSON")
+	assert.Equal(t, testAccount.Name, responseAccount.Name, "Account name should match")
+	assert.Equal(t, *testAccount.OrganizationName, *responseAccount.OrganizationName, "Organization name should match")
 
-// 	// Update the account
-// 	updatedAccount, err := workspaceDB.UpdateAccount(account.ID, models.Account{Name: updatedName})
-// 	assert.NoError(t, err, "should update account without error")
-// 	assert.NotNil(t, updatedAccount, "updated account should not be nil")
-// 	assert.Equal(t, updatedName, updatedAccount.Name, "account name should be updated")
+	mockDB.AssertExpectations(t)
+	mockAWSEmailClient.AssertExpectations(t)
 
-// 	// Verify that the account was updated in the database
-// 	var retrievedName string
-// 	err = workspaceDB.DB.QueryRow(`SELECT name FROM accounts WHERE id = $1`, account.ID).Scan(&retrievedName)
-// 	assert.NoError(t, err, "should retrieve updated account name without error")
-// 	assert.Equal(t, updatedName, retrievedName, "account name in DB should match updated name")
+	mockAWSEmailClient.AssertCalled(t, "SendEmail", mock.Anything, mock.MatchedBy(func(input *sesv2.SendEmailInput) bool {
+		return input.FromEmailAddress != nil && *input.FromEmailAddress == "service@example.com"
+	}), mock.Anything)
 
-// 	// Test updating a non-existent account, expecting no change in the database
-// 	nonExistentID := uuid.New()
-// 	_, err = workspaceDB.UpdateAccount(nonExistentID, models.Account{Name: "Should Not Exist"})
-// 	assert.NoError(t, err, "updating a non-existent account should not return an error")
+	mockDB.AssertExpectations(t)
+}
 
-// 	// Verify that no row was affected by checking the database for the non-existent ID
-// 	var checkName string
-// 	err = workspaceDB.DB.QueryRow(`SELECT name FROM accounts WHERE id = $1`, nonExistentID).Scan(&checkName)
-// 	assert.Error(t, err, "should return an error when querying non-existent account")
-// 	assert.Equal(t, sql.ErrNoRows, err, "should indicate no rows found for non-existent ID")
-// }
+func TestGetAccountsService(t *testing.T) {
 
-// // TestDeleteAccount tests deleting an account.
-// func TestDeleteAccount(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockAccounts := []models.Account{
+		{ID: uuid.New(), Name: "Test Account 1", AccountOwner: "testuser"},
+		{ID: uuid.New(), Name: "Test Account 2", AccountOwner: "testuser"},
+	}
 
-// 	// Insert an account to be deleted
-// 	accountOwner := "owner@example.com"
-// 	account := models.Account{
-// 		ID:             uuid.New(),
-// 		Name:           "Account To Delete",
-// 		AccountOwner:   accountOwner,
-// 		BillingAddress: "123 Main St",
-// 	}
+	mockDB.On("GetAccounts", "testuser").Return(mockAccounts, nil)
 
-// 	_, err := workspaceDB.DB.Exec(`
-// 		INSERT INTO accounts (id, name, account_owner, billing_address)
-// 		VALUES ($1, $2, $3, $4)`,
-// 		account.ID, account.Name, account.AccountOwner, account.BillingAddress,
-// 	)
-// 	assert.NoError(t, err, "should insert account without error")
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
 
-// 	// Verify the account exists in the database before deletion
-// 	var initialCount int
-// 	err = workspaceDB.DB.QueryRow(`SELECT COUNT(*) FROM accounts WHERE id = $1`, account.ID).Scan(&initialCount)
-// 	assert.NoError(t, err, "should query initial account count without error")
-// 	assert.Equal(t, 1, initialCount, "account should exist before deletion")
+	r := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
 
-// 	// Delete the account
-// 	err = workspaceDB.DeleteAccount(account.ID)
-// 	assert.NoError(t, err, "should delete account without error")
+	ctx := context.WithValue(r.Context(), middleware.ClaimsKey, mockClaims)
+	r = r.WithContext(ctx)
 
-// 	// Verify the account was deleted from the database
-// 	var postDeleteCount int
-// 	err = workspaceDB.DB.QueryRow(`SELECT COUNT(*) FROM accounts WHERE id = $1`, account.ID).Scan(&postDeleteCount)
-// 	assert.NoError(t, err, "should query post-delete account count without error")
-// 	assert.Equal(t, 0, postDeleteCount, "account should be deleted from the database")
+	svc := BillingAccountService{DB: mockDB}
 
-// 	// Test deleting a non-existent account, expecting no error but no deletion
-// 	nonExistentID := uuid.New()
-// 	err = workspaceDB.DeleteAccount(nonExistentID)
-// 	assert.NoError(t, err, "deleting a non-existent account should not return an error")
+	w := httptest.NewRecorder()
+	svc.GetAccountsService(w, r)
 
-// 	// Verify that the non-existent account still does not exist in the database
-// 	var checkCount int
-// 	err = workspaceDB.DB.QueryRow(`SELECT COUNT(*) FROM accounts WHERE id = $1`, nonExistentID).Scan(&checkCount)
-// 	assert.NoError(t, err, "should query count of non-existent account without error")
-// 	assert.Equal(t, 0, checkCount, "non-existent account should not be present in the database")
-// }
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status 200 OK")
+
+	assert.Equal(t, "application/json", res.Header.Get("Content-Type"), "Expected JSON response")
+
+	body, _ := io.ReadAll(res.Body)
+	var responseAccounts []models.Account
+	err := json.Unmarshal(body, &responseAccounts)
+
+	assert.NoError(t, err, "Response should be valid JSON")
+	assert.Len(t, responseAccounts, len(mockAccounts), "Expected number of accounts to match")
+
+	for i, acc := range mockAccounts {
+		assert.Equal(t, acc.ID, responseAccounts[i].ID, "Account ID should match")
+		assert.Equal(t, acc.Name, responseAccounts[i].Name, "Account name should match")
+		assert.Equal(t, acc.AccountOwner, responseAccounts[i].AccountOwner, "Account owner should match")
+	}
+
+	mockDB.AssertExpectations(t)
+	mockDB.AssertCalled(t, "GetAccounts", "testuser")
+}
+
+func TestDeleteAccountService(t *testing.T) {
+
+	mockDB := new(MockWorkspaceDB)
+	accountID := uuid.New()
+
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
+
+	mockDB.On("DeleteAccount", accountID).Return(nil).Once()
+
+	req := httptest.NewRequest(http.MethodDelete, fmt.Sprintf("/api/accounts/%s", accountID), nil)
+	req = mux.SetURLVars(req, map[string]string{"account-id": accountID.String()})
+
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	svc := BillingAccountService{DB: mockDB}
+	svc.DeleteAccountService(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusNoContent, res.StatusCode, "Expected HTTP status 204 No Content")
+
+	mockDB.AssertExpectations(t)
+	mockDB.AssertCalled(t, "DeleteAccount", accountID)
+
+}
+
+func TestGetAccountService(t *testing.T) {
+
+	mockDB := new(MockWorkspaceDB)
+	accountID := uuid.New()
+
+	mockAccount := &models.Account{
+		ID:           accountID,
+		Name:         "Test Account",
+		AccountOwner: "testuser",
+	}
+
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
+
+	svc := BillingAccountService{DB: mockDB}
+
+	mockDB.On("GetAccount", accountID).Return(mockAccount, nil).Once()
+
+	req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/accounts/%s", accountID), nil)
+	req = mux.SetURLVars(req, map[string]string{"account-id": accountID.String()})
+
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+
+	svc.GetAccountService(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected HTTP status 200 OK")
+
+	mockDB.AssertCalled(t, "GetAccount", accountID)
+
+}

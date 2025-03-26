@@ -26,6 +26,10 @@ var (
 	AccountStatusPending  = "Pending"
 )
 
+type EmailClient interface {
+	SendEmail(ctx context.Context, input *sesv2.SendEmailInput, optFns ...func(*sesv2.Options)) (*sesv2.SendEmailOutput, error)
+}
+
 // CreateAccountService creates a new account for the authenticated user.
 func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r *http.Request) {
 

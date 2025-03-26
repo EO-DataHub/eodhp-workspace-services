@@ -92,12 +92,6 @@ func initializeDatabase() error {
 		return err
 	}
 
-	// // Create database tables if they don't exist
-	// err = workspaceDB.InitTables()
-	// if err != nil {
-	// 	log.Fatal().Err(err).Msg("Failed to initialize database tables")
-	// }
-
 	return nil
 }
 

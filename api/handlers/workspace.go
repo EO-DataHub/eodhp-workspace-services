@@ -9,7 +9,7 @@ import (
 )
 
 // CreateWorkspace handles HTTP requests for creating a new workspace.
-func CreateWorkspace(svc *services.Service) http.HandlerFunc {
+func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -20,12 +20,13 @@ func CreateWorkspace(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.CreateWorkspaceService(svc, w, r)
+		svc.CreateWorkspaceService(w, r)
 	}
 }
 
+
 // GetWorkspaces handles HTTP requests for retrieving workspaces.
-func GetWorkspaces(svc *services.Service) http.HandlerFunc {
+func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -36,12 +37,12 @@ func GetWorkspaces(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.GetWorkspacesService(svc, w, r)
+		svc.GetWorkspacesService(w, r)
 	}
 }
 
 // GetWorkspace handles HTTP requests for retrieving an individual workspace.
-func GetWorkspace(svc *services.Service) http.HandlerFunc {
+func GetWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -52,12 +53,12 @@ func GetWorkspace(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.GetWorkspaceService(svc, w, r)
+		svc.GetWorkspaceService(w, r)
 	}
 }
 
 // DeleteWorkspace handles HTTP requests for deleting a workspace
-func DeleteWorkspace(svc *services.Service) http.HandlerFunc {
+func DeleteWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -68,14 +69,14 @@ func DeleteWorkspace(svc *services.Service) http.HandlerFunc {
 			return
 		}
 
-		services.DeleteWorkspaceService(svc, w, r)
+		svc.DeleteWorkspaceService(w, r)
 	}
 }
 
 
 // UpdateWorkspace handles HTTP requests for updating a specific workspace by ID.
 // This is a placeholder for the actual implementation.
-func UpdateWorkspace(svc *services.Service) http.HandlerFunc {
+func UpdateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
@@ -89,7 +90,7 @@ func UpdateWorkspace(svc *services.Service) http.HandlerFunc {
 
 // PatchWorkspace handles HTTP requests for partially updating a specific workspace by ID.
 // This is a placeholder for the actual implementation.
-func PatchWorkspace(svc *services.Service) http.HandlerFunc {
+func PatchWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
