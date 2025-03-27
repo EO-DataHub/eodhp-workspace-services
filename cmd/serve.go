@@ -116,7 +116,7 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
 
 		// Data Loader routes
-		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
 		// Docs
 		docs.SwaggerInfo.Host = appCfg.Host

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	services "github.com/EO-DataHub/eodhp-workspace-services/api/services"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -21,16 +22,17 @@ type DataLoaderPayload struct {
 	FileName    string `json:"fileName"`
 }
 
-// CreateWorkspace handles HTTP requests for creating a new workspace.
-func AddFileDataLoader(roleArn string, c STSClient, k services.KeycloakClient) http.HandlerFunc {
+// AddFileDataLoader is a handler that uploads a file to S3
+func AddFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.KeycloakClient) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		ctx := r.Context()
-		logger := zerolog.Ctx(ctx).With().Str("role arn", roleArn).Logger()
+		logger := zerolog.Ctx(ctx).With().Str("role arn", appCfg.AWS.S3.RoleArn).Logger()
 
 		// Extract the workspace ID from the request URL path
 		workspaceID := mux.Vars(r)["workspace-id"]
+
 		// Parse the payload
 		var payload DataLoaderPayload
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
@@ -39,10 +41,12 @@ func AddFileDataLoader(roleArn string, c STSClient, k services.KeycloakClient) h
 			return
 		}
 
-		bucket := "eodhp-dev-workspaces"
+		bucket := appCfg.AWS.S3.Bucket
+
+		// Create a prefix for storing eodh-config files
 		objectKey := fmt.Sprintf("%s/%s/%s", workspaceID, "eodh-config", payload.FileName)
 
-		creds, err := GetS3Credentials(roleArn, c, k, r)
+		creds, err := GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
 		if err != nil {
 			var status int
 			if httpErr, ok := err.(*services.HTTPError); ok {
@@ -54,7 +58,7 @@ func AddFileDataLoader(roleArn string, c STSClient, k services.KeycloakClient) h
 			return
 		}
 
-		// Step 3: Create an AWS config with the temporary credentials
+		// Create an AWS config with the temporary credentials
 		cfg, err := config.LoadDefaultConfig(r.Context(),
 			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 				creds.AccessKeyId,
@@ -69,10 +73,10 @@ func AddFileDataLoader(roleArn string, c STSClient, k services.KeycloakClient) h
 			return
 		}
 
-		// Step 4: Create an S3 client
+		// Create an S3 client
 		s3Client := awsclient.NewS3Client(cfg)
 
-		// Step 6: Upload the file to S3
+		// Upload the file to S3
 		_, err = s3Client.PutObject(r.Context(), &s3.PutObjectInput{
 			Bucket: aws.String(bucket),
 			Key:    aws.String(objectKey),
@@ -84,6 +88,7 @@ func AddFileDataLoader(roleArn string, c STSClient, k services.KeycloakClient) h
 			return
 		}
 
+		w.WriteHeader(http.StatusCreated)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
 			"message": fmt.Sprintf("File uploaded successfully to s3://%s/%s", bucket, objectKey),
