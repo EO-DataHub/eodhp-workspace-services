@@ -194,6 +194,10 @@ func (m *MockKeycloakClient) GetUserID(username string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockKeycloakClient) GetUserGroups(userID string) ([]string, error) {
+	args := m.Called(userID)
+	return args.Get(0).([]string), args.Error(1)
+}
 func (m *MockKeycloakClient) RemoveMemberFromGroup(userID, groupID string) error {
 	args := m.Called(userID, groupID)
 	return args.Error(1)

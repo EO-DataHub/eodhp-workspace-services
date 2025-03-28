@@ -36,8 +36,14 @@ func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http
 		return
 	}
 
+	// Retrieve groups the user is a member of
+	memberGroups, err := svc.KC.GetUserGroups(claims.Subject)
+	if err != nil {
+		logger.Error().Err(err).Str("user_id", claims.Subject).Msg("Failed to retrieve user groups")
+	}
+
 	// Retrieve workspaces assigned to these groups
-	workspaces, err := svc.DB.GetUserWorkspaces(claims.MemberGroups)
+	workspaces, err := svc.DB.GetUserWorkspaces(memberGroups)
 	if err != nil {
 		logger.Error().Err(err).Msg("Database error retrieving workspaces")
 		WriteResponse(w, http.StatusInternalServerError, nil)
