@@ -22,7 +22,7 @@ type STSClient interface {
 		*sts.AssumeRoleWithWebIdentityOutput, error)
 }
 
-// getS3Credentials extracts the core logic to retrieve S3 credentials
+// GetS3Credentials extracts the core logic to retrieve S3 credentials
 func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r *http.Request) (S3Credentials, error) {
 	vars := mux.Vars(r)
 	workspaceID := vars["workspace-id"]
