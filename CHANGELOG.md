@@ -1,5 +1,9 @@
 # Workspace Services
 
+## v0.7.6 (31-03-2025)
+
+- Added data-loader endpoint to store STAC items to /eodh-config workspace S3 prefix
+
 ## v0.7.5 (26-03-2025)
 
 - Added account approval
