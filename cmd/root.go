@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -10,9 +9,9 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
-	"github.com/aws/aws-sdk-go-v2/config"
+	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
-	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -27,7 +26,7 @@ var (
 	workspaceDB          *db.WorkspaceDB
 	keycloakClient       *services.KeycloakClient
 	secretsManagerClient *secretsmanager.Client
-	awsEmailClient       *sesv2.Client
+	awsCfg               aws.Config
 )
 
 var rootCmd = &cobra.Command{
@@ -70,11 +69,13 @@ func commonSetUp() {
 	// Initialise KeyCloak client
 	keycloakClient = initializeKeycloakClient(appCfg.Keycloak)
 
-	// Initialize secrets manager client
-	secretsManagerClient, err = initializeSecretsManagerClient(appCfg.AWS.Region)
+	// Load AWS Config Once
+	awsCfg, err = awsclient.LoadAWSConfig(appCfg.AWS.Region)
 	if err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize secrets manager client")
+		log.Fatal().Err(err).Msg("Failed to load AWS config")
 	}
+
+	secretsManagerClient = awsclient.NewSecretsManagerClient(awsCfg)
 
 }
 
@@ -103,17 +104,6 @@ func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.Keycloak
 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
-}
-
-// InitializeSecretsManagerClient initializes the AWS Secrets Manager client.
-func initializeSecretsManagerClient(region string) (*secretsmanager.Client, error) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithRegion(region))
-	if err != nil {
-		return nil, fmt.Errorf("unable to load SDK config, %v", err)
-	}
-
-	svc := secretsmanager.NewFromConfig(cfg)
-	return svc, nil
 }
 
 func setLogging(level string) {

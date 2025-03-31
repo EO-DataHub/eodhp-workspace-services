@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,10 +10,8 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	docs "github.com/EO-DataHub/eodhp-workspace-services/docs"
+	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/events"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/service/sesv2"
-	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -52,12 +49,6 @@ var serveCmd = &cobra.Command{
 		// Create routes
 		r := mux.NewRouter()
 
-		// Create AWS STS client
-		log.Info().Str("region", appCfg.AWS.Region).Msgf("Creating AWS STS client in region '%s'...", appCfg.AWS.Region)
-		sts_client := sts.New(sts.Options{
-			Region: appCfg.AWS.Region,
-		})
-
 		// Register the routes
 		api := r.PathPrefix(appCfg.BasePath).Subrouter()
 
@@ -87,17 +78,10 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(workspaceService)).Methods(http.MethodDelete)
 
 		// Account routes
-		// Deny workspace-scoped tokens for /accounts routes
-		// Initialize secrets manager client
-		awsEmailClient, err = InitializeAWSEMailClient(appCfg.AWS.Region)
-		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to initialize AWS SES client")
-		}
-		// Linked account routes
 		billingAccountService := &services.BillingAccountService{
 			Config:         appCfg,
 			DB:             workspaceDB,
-			AWSEmailClient: awsEmailClient,
+			AWSEmailClient: awsclient.NewSESClient(awsCfg),
 		}
 		accountRouter := api.PathPrefix("/accounts").Subrouter()
 		accountRouter.Use(middleware.DenyWorkspaceScopedTokens)
@@ -118,6 +102,7 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/sessions", handlers.CreateWorkspaceSession(keycloakClient)).Methods(http.MethodPost)
 
 		// S3 token routes
+		sts_client := awsclient.NewSTSClient(awsCfg)
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
 		// Linked account routes
@@ -129,6 +114,9 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
+
+		// Data Loader routes
+		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
 		// Docs
 		docs.SwaggerInfo.Host = appCfg.Host
@@ -184,17 +172,4 @@ func initializeK8sClient() (*kubernetes.Clientset, error) {
 	}
 
 	return clientset, nil
-}
-
-// InitializeSESClient creates and returns a new SESClient instance with options
-func InitializeAWSEMailClient(region string) (*sesv2.Client, error) {
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
-		config.WithRegion(region),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	client := sesv2.NewFromConfig(cfg)
-	return client, nil
 }

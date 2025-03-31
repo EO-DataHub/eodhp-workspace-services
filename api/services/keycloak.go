@@ -46,20 +46,20 @@ func (e *HTTPError) Error() string {
 }
 
 type KeycloakClientInterface interface {
-    GetToken() error
-    CreateGroup(groupName string) (int, error)
-    DeleteGroup(groupName string) (int, error)
-    GetGroup(groupName string) (*models.Group, error)
-    GetGroupMembers(groupID string) ([]models.User, error)
-    GetGroupMember(groupID, userID string) (*models.User, error)
-    AddMemberToGroup(userID, groupID string) error
-    RemoveMemberFromGroup(userID, groupID string) error
-    GetUserID(username string) (string, error)
-    ExchangeToken(accessToken, scope string) (*TokenResponse, error)
+	GetToken() error
+	CreateGroup(groupName string) (int, error)
+	DeleteGroup(groupName string) (int, error)
+	GetGroup(groupName string) (*models.Group, error)
+	GetGroupMembers(groupID string) ([]models.User, error)
+	GetGroupMember(groupID, userID string) (*models.User, error)
+	AddMemberToGroup(userID, groupID string) error
+	RemoveMemberFromGroup(userID, groupID string) error
+	GetUserID(username string) (string, error)
+	GetUserGroups(userID string) ([]string, error)
+	ExchangeToken(accessToken, scope string) (*TokenResponse, error)
 }
 
 var _ KeycloakClientInterface = (*KeycloakClient)(nil)
-
 
 // NewKeycloakClient creates a new instance of KeycloakClient.
 func NewKeycloakClient(baseURL, clientID, clientSecret, realm string) *KeycloakClient {
@@ -265,6 +265,33 @@ func (kc *KeycloakClient) GetUserID(username string) (string, error) {
 	}
 
 	return users[0].ID, nil
+}
+
+// GetUserGroups retrieves a list of group names that a user is a member of.
+func (kc *KeycloakClient) GetUserGroups(userID string) ([]string, error) {
+	url := fmt.Sprintf("%s/admin/realms/%s/users/%s/groups", kc.BaseURL, kc.Realm, userID)
+
+	respBody, statusCode, err := kc.makeRequest(http.MethodGet, url, "application/json", nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch user groups: %w", err)
+	}
+
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch user groups, status: %d", statusCode)
+	}
+
+	var groups []models.Group
+	if err := json.Unmarshal(respBody, &groups); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Extract group names into a string slice
+	var groupNames []string
+	for _, group := range groups {
+		groupNames = append(groupNames, group.Name)
+	}
+
+	return groupNames, nil
 }
 
 // ExchangeToken exchanges an access token for a new token with a different scope.
