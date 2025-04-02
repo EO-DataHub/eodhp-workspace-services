@@ -1,7 +1,10 @@
 package services
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 
@@ -61,6 +64,10 @@ func IsDNSCompatible(name string) bool {
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
 func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
 
+	if claims.Username == "service-account-eodh-workspaces" {
+		return true, nil
+	}
+
 	// Check if the user is an account owner
 	if mustBeAccountOwner {
 		if isMemberGroupAuthorized(workspace, claims.MemberGroups) {
@@ -90,4 +97,29 @@ func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims,
 
 	// Return false if the user is not a member of the workspace or an account owner
 	return false, nil
+}
+
+
+func makeHTTPRequest(method, url string, headers map[string]string, body []byte) ([]byte, error) {
+	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+
+	for key, value := range headers {
+		req.Header.Set(key, value)
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed request, status: %s", resp.Status)
+	}
+
+	return io.ReadAll(resp.Body)
 }

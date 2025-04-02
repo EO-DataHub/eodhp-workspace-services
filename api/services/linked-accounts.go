@@ -9,10 +9,13 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"reflect"
 	"strings"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go/aws"
@@ -25,7 +28,26 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type AirbusContractsData struct {
+	Optical map[string]string `json:"optical,omitempty"`
+	SAR     bool              `json:"sar"`
+}
+
+type AirbusOpticalContract struct {
+	ContractID string `json:"contractId"`
+	Name       string `json:"name"`
+}
+
+type AirbusOpticalContractsResponse struct {
+	Contracts []AirbusOpticalContract `json:"contracts"`
+}
+
+type AirbusSARContractsResponse struct {
+	Services []string `json:"services"`
+}
+
 type LinkedAccountService struct {
+	Config         *appconfig.Config
 	DB             *db.WorkspaceDB
 	SecretsManager *secretsmanager.Client
 	K8sClient      *kubernetes.Clientset
@@ -33,8 +55,9 @@ type LinkedAccountService struct {
 
 // Payload represents the expected JSON structure
 type Payload struct {
-	Name string `json:"name"`
-	Key  string `json:"key"`
+	Name      string              `json:"name"`
+	Key       string              `json:"key"`
+	Contracts AirbusContractsData `json:"contracts,omitempty"` // Airbus only
 }
 
 type LinkedAccountServiceInterface interface {
@@ -175,7 +198,7 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 	}
 
 	if !authorized {
-		WriteResponse(w, http.StatusForbidden, nil)
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
 		return
 	}
 
@@ -203,6 +226,12 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 		return
 	}
 
+	if payload.Name == "airbus" && reflect.DeepEqual(payload.Contracts, AirbusContractsData{}) {
+		logger.Error().Str("workspace_id", workspaceID).Msg("Field 'contracts' is required for an airbus key and cannot be empty")
+		WriteResponse(w, http.StatusBadRequest, "Field 'contracts' is required for an airbus key and cannot be empty")
+		return
+	}
+
 	// Encrypt the key field using One-Time Pad (OTP)
 	otp, ciphertext, err := encryptWithOTP(payload.Key)
 	if err != nil {
@@ -213,7 +242,14 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 
 	// Store OTP in Kubernetes
 	k8sSecretName := "otp-" + payload.Name
-	if err := svc.storeOTPSecret(otp, k8sSecretName, namespace); err != nil {
+
+	if payload.Name == "airbus" {
+		err = svc.storeK8sSecrets(otp, k8sSecretName, namespace, payload.Contracts)
+	} else {
+		err = svc.storeK8sSecrets(otp, k8sSecretName, namespace)
+	}
+
+	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Failed to store OTP in Kubernetes: %v", err))
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store OTP in Kubernetes: %v", err))
 		return
@@ -226,6 +262,92 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 		return
 	}
 	WriteResponse(w, http.StatusCreated, nil)
+
+}
+
+// ValidateAirbusLinkedAccountService validates the Airbus key and returns the associated contracts.
+// The key is used to obtain an access token, which is then used to fetch the contracts from the Airbus API.
+func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	// Extract the workspace ID from the request URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+
+	// Check if the user is the account owner
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		return
+	}
+
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to read request body")
+		WriteResponse(w, http.StatusBadRequest, "Failed to read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	// Parse the JSON payload
+	var payload Payload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Invalid JSON payload")
+		WriteResponse(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	// Validate the key field
+	if payload.Name != "airbus" {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Only an Airbus key is allowed")
+		WriteResponse(w, http.StatusBadRequest, "Only an Airbus key is allowed")
+		return
+	}
+
+	// Get an access token from Airbus
+	token, err := svc.getAirbusAccessToken(payload.Key)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to get Airbus token")
+		WriteResponse(w, http.StatusForbidden, "Access Denied")
+		return
+	}
+
+	// Get OPTICAL contracts from Airbus
+	opticalContracts, err := svc.getAirbusOpticalContracts(token)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to get Airbus contracts")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		fmt.Println("Error getting contracts:", err)
+		return
+	}
+
+	sarContracts, err := svc.getAirbusSARContracts(token)
+	if err != nil {
+		WriteResponse(w, http.StatusInternalServerError, nil)
+	}
+
+	// Prepare the response payload
+	payload.Contracts = AirbusContractsData{
+		Optical: opticalContracts,
+		SAR:     sarContracts,
+	}
+
+	WriteResponse(w, http.StatusOK, payload)
 
 }
 
@@ -255,7 +377,7 @@ func encryptWithOTP(plaintext string) (string, string, error) {
 
 // storeOTPSecret securely stores the OTP key in a Kubernetes secret.
 // The OTP key is required to decrypt the corresponding ciphertext stored in AWS.
-func (svc *LinkedAccountService) storeOTPSecret(otpKey, secretName, namespace string) error {
+func (svc *LinkedAccountService) storeK8sSecrets(otpKey, secretName, namespace string, contracts ...AirbusContractsData) error {
 
 	// Decode OTP if it's already Base64-encoded
 	decodedOTPKey, err := base64.StdEncoding.DecodeString(otpKey)
@@ -263,14 +385,29 @@ func (svc *LinkedAccountService) storeOTPSecret(otpKey, secretName, namespace st
 		return fmt.Errorf("failed to decode OTP before storing: %v", err)
 	}
 
+	var secretsData map[string][]byte
+	if len(contracts) == 0 {
+		secretsData = map[string][]byte{
+			"otp": decodedOTPKey,
+		}
+	} else {
+		contractsJSON, err := json.Marshal(contracts)
+		if err != nil {
+			return fmt.Errorf("failed to marshal contracts: %v", err)
+		}
+
+		secretsData = map[string][]byte{
+			"otp":       decodedOTPKey,
+			"contracts": contractsJSON,
+		}
+	}
+
 	// Create Kubernetes secret object
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: secretName,
 		},
-		Data: map[string][]byte{
-			"otp": decodedOTPKey,
-		},
+		Data: secretsData,
 	}
 
 	// Try creating the secret
@@ -388,6 +525,7 @@ func (svc *LinkedAccountService) getSecretKeysFromAWS(secretName string) ([]stri
 	return keys, nil
 }
 
+// deleteOTPSecret deletes the specified Kubernetes secret containing the OTP secret.
 func (svc *LinkedAccountService) deleteOTPSecret(secretName, namespace string) error {
 
 	// Attempt to delete the secret
@@ -439,4 +577,78 @@ func (svc *LinkedAccountService) deleteSecretKeyFromAWS(secretName, keyToRemove 
 	}
 
 	return nil
+}
+
+func (svc *LinkedAccountService) getAirbusAccessToken(apiKey string) (string, error) {
+
+	data := url.Values{}
+	data.Set("apikey", apiKey)
+	data.Set("grant_type", "api_key")
+	data.Set("client_id", "IDP")
+
+	headers := map[string]string{
+		"Content-Type": "application/x-www-form-urlencoded",
+	}
+
+	body, err := makeHTTPRequest("POST", svc.Config.Providers.Airbus.AcessTokenURL, headers, []byte(data.Encode()))
+	if err != nil {
+		return "", err
+	}
+
+	var tokenResp TokenResponse
+	if err := json.Unmarshal(body, &tokenResp); err != nil {
+		return "", err
+	}
+
+	return tokenResp.Access, nil
+}
+
+func (svc *LinkedAccountService) getAirbusOpticalContracts(accessToken string) (map[string]string, error) {
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + accessToken,
+	}
+
+	body, err := makeHTTPRequest("GET", svc.Config.Providers.Airbus.OpticalContractsURL, headers, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var contractsResp AirbusOpticalContractsResponse
+	if err := json.Unmarshal(body, &contractsResp); err != nil {
+		return nil, err
+	}
+
+	contractsMap := make(map[string]string)
+	for _, contract := range contractsResp.Contracts {
+		contractsMap[contract.ContractID] = contract.Name
+	}
+
+	return contractsMap, nil
+
+}
+
+func (svc *LinkedAccountService) getAirbusSARContracts(accessToken string) (bool, error) {
+
+	headers := map[string]string{
+		"Authorization": "Bearer " + accessToken,
+	}
+
+	body, err := makeHTTPRequest("GET", svc.Config.Providers.Airbus.SARContractsURL, headers, nil)
+	if err != nil {
+		return false, err
+	}
+
+	var sarResp AirbusSARContractsResponse
+	if err := json.Unmarshal(body, &sarResp); err != nil {
+		return false, err
+	}
+
+	for _, service := range sarResp.Services {
+		if service == "radar" {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

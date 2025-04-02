@@ -13,21 +13,21 @@ import (
 
 // Config holds all configuration details
 type Config struct {
-	Host     string         `yaml:"host"`
-	BasePath string         `yaml:"basePath"`
-	DocsPath string         `yaml:"docsPath"`
-	Accounts AccountsConfig `yaml:"accounts"`
-	Database DatabaseConfig `yaml:"database"`
-	Pulsar   PulsarConfig   `yaml:"pulsar"`
-	Keycloak KeycloakConfig `yaml:"keycloak"`
-	AWS      AWSConfig      `yaml:"aws"`
+	Host      string          `yaml:"host"`
+	BasePath  string          `yaml:"basePath"`
+	DocsPath  string          `yaml:"docsPath"`
+	Accounts  AccountsConfig  `yaml:"accounts"`
+	Database  DatabaseConfig  `yaml:"database"`
+	Pulsar    PulsarConfig    `yaml:"pulsar"`
+	Keycloak  KeycloakConfig  `yaml:"keycloak"`
+	AWS       AWSConfig       `yaml:"aws"`
+	Providers ProvidersConfig `yaml:"providers"`
 }
 
 // AccountsConfig defines the email chain for account approval requests
 type AccountsConfig struct {
 	ServiceAccountEmail string `yaml:"serviceAccountEmail"`
 	HelpdeskEmail       string `yaml:"helpdeskEmail"`
-
 }
 
 // DatabaseConfig defines the database connection details
@@ -62,6 +62,16 @@ type AWSConfig struct {
 	Region          string   `yaml:"region"`
 	WorkspaceDomain string   `yaml:"workspace_domain"`
 	S3              S3Config `yaml:"s3"`
+}
+
+type AirbusProviderConfig struct {
+	AcessTokenURL       string `yaml:"access_token_url"`
+	OpticalContractsURL string `yaml:"optical_contracts_url"`
+	SARContractsURL     string `yaml:"sar_contracts_url"`
+}
+
+type ProvidersConfig struct {
+	Airbus AirbusProviderConfig `yaml:"airbus"`
 }
 
 // LoadConfig loads and parses the configuration from a given file path
