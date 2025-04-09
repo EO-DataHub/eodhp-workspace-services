@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 
@@ -87,7 +88,6 @@ func (svc *LinkedAccountService) GetLinkedAccounts(w http.ResponseWriter, r *htt
 
 	// Extract the workspace ID from the request URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
-	namespace := "ws-" + workspaceID
 
 	// Check if the user can access the workspace
 	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
@@ -102,7 +102,9 @@ func (svc *LinkedAccountService) GetLinkedAccounts(w http.ResponseWriter, r *htt
 		return
 	}
 
-	providers, err := svc.getSecretKeysFromAWS(namespace)
+	clusterPrefix := os.Getenv("CLUSTER_PREFIX")
+	awsSecretName := fmt.Sprintf("ws-%s-%s", workspaceID, clusterPrefix)
+	providers, err := svc.getSecretKeysFromAWS(awsSecretName)
 
 	// Return an empty array if no providers are found
 	if providers == nil {
@@ -158,7 +160,9 @@ func (svc *LinkedAccountService) DeleteLinkedAccountService(w http.ResponseWrite
 	}
 
 	// Delete the encrypted key from AWS Secrets Manager
-	err = svc.deleteSecretKeyFromAWS(namespace, provider)
+	clusterPrefix := os.Getenv("CLUSTER_PREFIX")
+	awsSecretName := fmt.Sprintf("ws-%s-%s", workspaceID, clusterPrefix)
+	err = svc.deleteSecretKeyFromAWS(awsSecretName, provider)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Str("provider", provider).Msg("Failed to delete encrypted key from AWS Secrets Manager")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -255,7 +259,8 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 		return
 	}
 	// Store the ciphertext in AWS Secrets Manager
-	awsSecretName := "ws-" + workspaceID // We want to differentiate general secrets in AWS with workspace specific secrets
+	clusterPrefix := os.Getenv("CLUSTER_PREFIX")
+	awsSecretName := fmt.Sprintf("ws-%s-%s", workspaceID, clusterPrefix) // We want to differentiate general secrets in AWS with workspace specific secrets
 	if err := svc.storeCiphertextInAWSSecrets(ciphertext, awsSecretName, payload.Name); err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg(fmt.Sprintf("Failed to store encrypted key in AWS: %v", err))
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store encrypted key in AWS: %v", err))
@@ -391,7 +396,8 @@ func (svc *LinkedAccountService) storeK8sSecrets(otpKey, secretName, namespace s
 			"otp": decodedOTPKey,
 		}
 	} else {
-		contractsJSON, err := json.Marshal(contracts)
+
+		contractsJSON, err := json.Marshal(contracts[0])
 		if err != nil {
 			return fmt.Errorf("failed to marshal contracts: %v", err)
 		}
