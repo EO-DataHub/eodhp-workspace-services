@@ -20,7 +20,7 @@ cd eodhp-workspace-services
 
 The config is in the proposed format:
 ```
-host: {{{ENV}}}.eodatahub.org.uk
+host: {{ENV}}.eodatahub.org.uk
 basePath: /api
 docsPath: /api/docs/workspace-services
 accounts:
