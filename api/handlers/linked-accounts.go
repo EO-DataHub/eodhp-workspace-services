@@ -31,3 +31,12 @@ func DeleteLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 		svc.DeleteLinkedAccountService(w, r)
 	}
 }
+
+// ValidateAirbusLinkedAccount handles HTTP requests for validating an Airbus linked account.
+func ValidateAirbusLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		svc.ValidateAirbusLinkedAccountService(w, r)
+	}
+}

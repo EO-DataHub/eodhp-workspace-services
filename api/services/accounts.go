@@ -79,7 +79,13 @@ func (svc *BillingAccountService) CreateAccountService(w http.ResponseWriter, r 
 		return
 	}
 
-	svc.SendAccountRequestEmail(account, token)
+	err = svc.SendAccountRequestEmail(account, token)
+
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to send account request email")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
 
 	logger.Info().Str("account_id", account.ID.String()).Msg(fmt.Sprintf("Account %s has been created by %s and is awaiting approval", account.Name, account.AccountOwner))
 
@@ -290,7 +296,7 @@ func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.A
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Send the email
+	// Send the email and capture the response
 	_, err := svc.AWSEmailClient.SendEmail(ctx, input)
 	if err != nil {
 		return fmt.Errorf("Failed to send email: %v", err)

@@ -107,6 +107,7 @@ var serveCmd = &cobra.Command{
 
 		// Linked account routes
 		linkedAccountService := &services.LinkedAccountService{
+			Config:         appCfg,
 			DB:             workspaceDB,
 			SecretsManager: secretsManagerClient,
 			K8sClient:      k8sClient,
@@ -114,6 +115,7 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/airbus/validate", handlers.ValidateAirbusLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 
 		// Data Loader routes
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)

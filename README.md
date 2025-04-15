@@ -20,6 +20,12 @@ cd eodhp-workspace-services
 
 The config is in the proposed format:
 ```
+host: {{ENV}}.eodatahub.org.uk
+basePath: /api
+docsPath: /api/docs/workspace-services
+accounts:
+  serviceAccountEmail: platform@account-verification.{{ENV}}.eodatahub.org.uk
+  helpdeskEmail: enquiries@eodatahub.org.uk
 database:
   driver: pgx
   source: postgres://{{.SQL_USER}}:{{.SQL_PASSWORD}}@{{.SQL_HOST}}:{{.SQL_PORT}}/{{.SQL_DATABASE}}?search_path={{.SQL_SCHEMA}}
@@ -28,40 +34,72 @@ pulsar:
   topicProducer: persistent://public/default/workspace-settings
   topicConsumer: persistent://public/default/workspace-status
   subscription: workspace-status-sub
+keycloak:
+  url: "https://{{ENV}}.eodatahub.org.uk/keycloak"
+  realm: eodhp
+  clientId: eodh-workspaces
+aws:
+  account: {{AWS_ACCOUNT_ID}}
+  cluster_prefix: eodhp-{{ENV}}
+  region: eu-west-2
+  workspace_domain: workspaces.{{ENV}}.eodhp.eco-ke-staging.com
+  s3:
+    bucket: workspaces-eodhp-{{ENV}}
+    host: s3-accesspoint.eu-west-2.amazonaws.com
+    roleArn: arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/WorkspaceServices-{{AWS_CLUSTER_NAME}}
+providers:
+  airbus:
+    access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token
+    optical_contracts_url: https://order.api.oneatlas.airbus.com/api/v1/contracts
+    sar_contracts_url: https://sar.api.oneatlas.airbus.com/v1/user/whoami
 ```
-The repository connects to the workspaces database. In the cluster it will get it's connection string from env vars already setup. This config file is defined in the `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
+The config map is defined in `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
 
 
-## Run with AWS DB Locally
-If you want to connect to the AWS instance, you should set up an SSH tunnel outside the go app in a separate terminal:
+## CLI Options
+The service has three primary CLI functions:
+- API Server (`serve`)
+- Workspace Status Updater (`consume`)
+- Database Reconciler (`reconcile`)
+
+### API Server
+This hosts the API endpoints for billing accounts and workspaces. The API documentation can be viewed at https://staging.eodatahub.org.uk/api/docs/workspace-services/index.html
+
+Run this with:
+
+`go run main.go serve --config {path-to-config.yaml}`
+
+
+### Workspace Status Updater
+This listens for workspace status updates from pulsar topic `persistent://public/default/workspace-status`. It will update the database accordingly.
+
+Run this with:
+
+`go run main.go consume --config {path-to-config.yaml}`
+
+
+### Database Reconciler
+This reconciles workspaces that exist in the database against what exists in the cluster, making sure that the database serves as the source of truth against these resources
+
+Run this with:
+
+`go run main.go reconcile --config {path-to-config.yaml}`
+
+## Local Setup
+
+### Database
+To connect to the database, setup an SSH tunnel:
 
 `ssh -i <PATH-TO-PRIVATE-KEY> -L 8443:<REMOTE-HOST>:5432 <SSH-USER>@<SSH-HOST> -N`
 
-These details can be given upon request.
+A database proxy EC2 instance is used to connect.
 
 
-
-## Run with Pulsar Locally
+### Pulsar
 Make sure pulsar is installed. If you run `./pulsar standalone` and amend the config file to your localhost, then the app will attach to it.
 
-## Run the API Server:
-To start the server:
 
-```go run main.go serve --config /path/to/config.yaml```
-
-
-
-### Consume Workspace Events
-The `consume` command runs a Pulsar consumer that listens to events on the `workspace-status` topic and processes workspace updates in the database.
-
-To start the server:
-
-```go run main.go consume --config /path/to/config.yaml```
 
 ## Deployment
-- Push to the ECR:
-    - ```make VERSION={VERSION} dockerpush```
 
-### Run Locally
-```docker build -t workspace-services```
-```docker run -p 8080:8080 -e AWS_ACCESS_KEY=.. -e AWS_SECRET_ACCESS_KEY=.. workspace-services ```
+```make VERSION={VERSION} dockerpush```
