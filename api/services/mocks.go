@@ -189,9 +189,9 @@ func (m *MockKeycloakClient) GetGroupMember(groupID, userID string) (*models.Use
 	return args.Get(0).(*models.User), args.Error(1)
 }
 
-func (m *MockKeycloakClient) GetUserID(username string) (string, error) {
+func (m *MockKeycloakClient) GetUser(username string) (*models.User, error) {
 	args := m.Called(username)
-	return args.String(0), args.Error(1)
+	return args.Get(0).(*models.User), args.Error(1)
 }
 
 func (m *MockKeycloakClient) GetUserGroups(userID string) ([]string, error) {

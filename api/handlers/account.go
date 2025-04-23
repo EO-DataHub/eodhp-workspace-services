@@ -1,12 +1,10 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 
 	services "github.com/EO-DataHub/eodhp-workspace-services/api/services"
-	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
@@ -59,27 +57,15 @@ func UpdateAccount(svc *services.BillingAccountService) http.HandlerFunc {
 func AccountStatusHandler(svc *services.BillingAccountService, accountStatusRequest string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		vars := mux.Vars(r)
-		token := vars["token"]
-
-		if token == "" {
-			http.Error(w, "Token is required", http.StatusBadRequest)
-			return
-		}
-
-		// Validate token
-		accountID, err := svc.DB.ValidateApprovalToken(token)
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
 		if err != nil {
-			http.Error(w, "Invalid or expired token", http.StatusBadRequest)
+			fmt.Println("Error getting token from Keycloak:", err)
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
 			return
 		}
 
-		if err := svc.DB.UpdateAccountStatus(token, accountID, accountStatusRequest); err != nil {
-			http.Error(w, "Failed to approve account", http.StatusInternalServerError)
-			return
-		}
+		svc.AccountApprovalService(w, r, accountStatusRequest)
 
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(fmt.Sprintf("Account has been %s", accountStatusRequest))
 	}
 }

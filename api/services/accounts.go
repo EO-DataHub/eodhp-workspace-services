@@ -36,6 +36,7 @@ type BillingAccountService struct {
 	Config         *appconfig.Config
 	DB             db.WorkspaceDBInterface
 	AWSEmailClient EmailClient
+	KC             KeycloakClientInterface
 }
 
 // CreateAccountService creates a new account for the authenticated user.
@@ -122,8 +123,6 @@ func (svc *BillingAccountService) GetAccountsService(w http.ResponseWriter, r *h
 		accounts = []models.Account{}
 	}
 
-	logger.Info().Int("account_count", len(accounts)).Msg("Successfully retrieved accounts")
-
 	WriteResponse(w, http.StatusOK, accounts)
 
 }
@@ -172,7 +171,6 @@ func (svc *BillingAccountService) GetAccountService(w http.ResponseWriter, r *ht
 		return
 	}
 
-	logger.Info().Str("account_id", account.ID.String()).Msg("Successfully retrieved account")
 	WriteResponse(w, http.StatusOK, *account)
 
 }
@@ -237,17 +235,88 @@ func (svc *BillingAccountService) DeleteAccountService(w http.ResponseWriter, r 
 	WriteResponse(w, http.StatusNoContent, nil)
 }
 
+// DeleteAccountService deletes an account specified by the account ID from the URL path.
+func (svc *BillingAccountService) AccountApprovalService(w http.ResponseWriter, r *http.Request, accountStatusRequest string) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	vars := mux.Vars(r)
+	token := vars["token"]
+
+	if token == "" {
+		logger.Warn().Msg("Token is required")
+		http.Error(w, "Token is required", http.StatusBadRequest)
+		return
+	}
+
+	// Validate token
+	accountID, err := svc.DB.ValidateApprovalToken(token)
+	if err != nil {
+		logger.Error().Err(err).Msg("Invalid or expired token")
+		http.Error(w, "Invalid or expired token", http.StatusBadRequest)
+		return
+	}
+
+	// Convert accountID to UUID
+	parsedID, err := uuid.Parse(accountID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Invalid account id")
+		http.Error(w, "Invalid account id", http.StatusBadRequest)
+		return
+	}
+
+	// Retrieve the account from the database
+	account, err := svc.DB.GetAccount(parsedID)
+	if err != nil {
+		logger.Error().Err(err).Msg("Database error retrieving account")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Find the email address of the account owner
+	user, err := svc.KC.GetUser(account.AccountOwner)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to get user from Keycloak")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Update the account status in the database
+	if err := svc.DB.UpdateAccountStatus(token, accountID, accountStatusRequest); err != nil {
+		logger.Error().Err(err).Msg("Failed to update account status")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// Send confirmation email to the account owner
+	if accountStatusRequest == AccountStatusApproved {
+		err = svc.SendAccountApprovalEmail(account, user.Email)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to send account confirmation email")
+			WriteResponse(w, http.StatusInternalServerError, nil)
+			return
+		}
+		logger.Info().Str("account_id", account.ID.String()).Msg("Account confirmation email sent successfully")
+	} else if accountStatusRequest == AccountStatusDenied {
+		err = svc.SendAccountDenialEmail(account, user.Email)
+		if err != nil {
+			logger.Error().Err(err).Msg("Failed to send account denial email")
+			WriteResponse(w, http.StatusInternalServerError, nil)
+			return
+		}
+		logger.Info().Str("account_id", account.ID.String()).Msg("Account denial email sent successfully")
+	}
+
+	WriteResponse(w, http.StatusOK, fmt.Sprintf("Account has been %s", accountStatusRequest))
+}
+
 // SendAccountRequestEmail sends an email to the helpdesk with the account request details.
 func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.Account, token string) error {
-
-	// Email details - Must be verified in SES
-	from := svc.Config.Accounts.ServiceAccountEmail // This resource can be verified/created via terraform
-	to := svc.Config.Accounts.HelpdeskEmail         // This will require manual verification / setup
-
 	subject := fmt.Sprintf("EO DataHub Account Request - %s", account.AccountOwner)
 	approvalLink := fmt.Sprintf("https://%s/api/accounts/admin/approve/%s", svc.Config.Host, token)
 	denialLink := fmt.Sprintf("https://%s/api/accounts/admin/deny/%s", svc.Config.Host, token)
-	bodyText := fmt.Sprintf(`
+
+	body := fmt.Sprintf(`
 	A new billing account has been requested:
 
 	Account Owner: %s
@@ -255,22 +324,74 @@ func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.A
 	Organization Name: %s
 	Billing Address: %s
 	Account Opening Reason: %s
-		
+
 	Choose one of the following options:
 
 	To approve the account, click the following link:
-
 	%s
 
 	To deny the account, click the following link:
-
 	%s
 
 	Make sure you are authenticated to the EO DataHub and logged in before clicking a link.
-
 	`, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason, approvalLink, denialLink)
 
-	// Prepare the email input
+	return svc.sendEmail(svc.Config.Accounts.ServiceAccountEmail, svc.Config.Accounts.HelpdeskEmail, subject, body)
+}
+
+// SendAccountApprovalEmail sends an email to the account owner with the account approval details.
+func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.Account, recipient string) error {
+	subject := fmt.Sprintf("EO DataHub Billing Account Confirmation - %s", account.Name)
+
+	body := fmt.Sprintf(`
+	Dear %s,
+
+	This is a notification to inform you that your account has been approved.
+	Thank you for your patience and welcome to the EO DataHub!
+	Please find the details of your account below:
+
+	Account Owner: %s
+	Account Name: %s
+	Organization Name: %s
+	Billing Address: %s
+	Account Opening Reason: %s
+
+	Regards,
+	EO DataHub Team
+	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason)
+
+	return svc.sendEmail(svc.Config.Accounts.ServiceAccountEmail, recipient, subject, body)
+}
+
+// SendAccountDenialEmail sends an email to the account owner with the account denial details.
+func (svc *BillingAccountService) SendAccountDenialEmail(account *ws_services.Account, recipient string) error {
+	subject := fmt.Sprintf("EO DataHub Billing Account Denial - %s", account.Name)
+
+	body := fmt.Sprintf(`
+	Dear %s,
+
+	This is a notification to inform you that your account has been denied.
+
+	Please find the details of your account below:
+
+	Account Owner: %s
+	Account Name: %s
+	Organization Name: %s
+	Billing Address: %s
+	Account Opening Reason: %s
+
+	We are sorry for the inconvenience.
+	Please do not hesitate to contact us if you have any questions.
+
+	Regards,
+	EO DataHub Team
+	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason)
+
+	return svc.sendEmail(svc.Config.Accounts.ServiceAccountEmail, recipient, subject, body)
+}
+
+// sendEmail is a shared helper to construct and send an SES email
+func (svc *BillingAccountService) sendEmail(from, to, subject, body string) error {
 	input := &sesv2.SendEmailInput{
 		FromEmailAddress: aws.String(from),
 		Destination: &types.Destination{
@@ -284,7 +405,7 @@ func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.A
 				},
 				Body: &types.Body{
 					Text: &types.Content{
-						Data:    aws.String(bodyText),
+						Data:    aws.String(body),
 						Charset: aws.String("UTF-8"),
 					},
 				},
@@ -292,15 +413,12 @@ func (svc *BillingAccountService) SendAccountRequestEmail(account *ws_services.A
 		},
 	}
 
-	// Add a timeout context
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Send the email and capture the response
 	_, err := svc.AWSEmailClient.SendEmail(ctx, input)
 	if err != nil {
-		return fmt.Errorf("Failed to send email: %v", err)
+		return fmt.Errorf("failed to send email: %v", err)
 	}
-
 	return nil
 }

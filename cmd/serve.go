@@ -82,6 +82,7 @@ var serveCmd = &cobra.Command{
 			Config:         appCfg,
 			DB:             workspaceDB,
 			AWSEmailClient: awsclient.NewSESClient(awsCfg),
+			KC:             keycloakClient,
 		}
 		accountRouter := api.PathPrefix("/accounts").Subrouter()
 		accountRouter.Use(middleware.DenyWorkspaceScopedTokens)
