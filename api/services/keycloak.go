@@ -54,7 +54,7 @@ type KeycloakClientInterface interface {
 	GetGroupMember(groupID, userID string) (*models.User, error)
 	AddMemberToGroup(userID, groupID string) error
 	RemoveMemberFromGroup(userID, groupID string) error
-	GetUserID(username string) (string, error)
+	GetUser(username string) (*models.User, error)
 	GetUserGroups(userID string) ([]string, error)
 	ExchangeToken(accessToken, scope string) (*TokenResponse, error)
 }
@@ -242,29 +242,29 @@ func (kc *KeycloakClient) RemoveMemberFromGroup(userID, groupID string) error {
 	return nil
 }
 
-// GetUserID retrieves a user ID by username from Keycloak.
-func (kc *KeycloakClient) GetUserID(username string) (string, error) {
+// GetUser retrieves a user ID by username from Keycloak.
+func (kc *KeycloakClient) GetUser(username string) (*models.User, error) {
 	url := fmt.Sprintf("%s/admin/realms/%s/users?username=%s", kc.BaseURL, kc.Realm, username)
 
 	respBody, statusCode, err := kc.makeRequest(http.MethodGet, url, "application/json", nil)
 	if err != nil {
-		return "", fmt.Errorf("failed to fetch user by username: %w", err)
+		return nil, fmt.Errorf("failed to fetch user by username: %w", err)
 	}
 
 	if statusCode != http.StatusOK {
-		return "", fmt.Errorf("failed to fetch user, status: %d", statusCode)
+		return nil, fmt.Errorf("failed to fetch user, status: %d", statusCode)
 	}
 
 	var users []models.User
 	if err := json.Unmarshal(respBody, &users); err != nil {
-		return "", fmt.Errorf("failed to decode response: %w", err)
+		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
 	if len(users) == 0 {
-		return "", fmt.Errorf("user '%s' not found", username)
+		return nil, fmt.Errorf("user '%s' not found", username)
 	}
 
-	return users[0].ID, nil
+	return &users[0], nil
 }
 
 // GetUserGroups retrieves a list of group names that a user is a member of.

@@ -64,6 +64,11 @@ func IsDNSCompatible(name string) bool {
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
 func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
 
+	// hub_admin role is a superuser role
+	if HasRole(claims.RealmAccess.Roles, "hub_admin") {
+		return true, nil
+	}
+
 	if claims.Username == "service-account-eodh-workspaces" {
 		return true, nil
 	}
@@ -98,7 +103,6 @@ func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims,
 	// Return false if the user is not a member of the workspace or an account owner
 	return false, nil
 }
-
 
 func makeHTTPRequest(method, url string, headers map[string]string, body []byte) ([]byte, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(body))
