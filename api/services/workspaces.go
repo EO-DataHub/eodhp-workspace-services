@@ -36,10 +36,13 @@ func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http
 		return
 	}
 
+	_, workspacesOwned := r.URL.Query()["owned"]
+
 	// Retrieve groups the user is a member of
 	memberGroups, err := svc.KC.GetUserGroups(claims.Subject)
 	if err != nil {
 		logger.Error().Err(err).Str("user_id", claims.Subject).Msg("Failed to retrieve user groups")
+		WriteResponse(w, http.StatusInternalServerError, nil)
 	}
 
 	// Retrieve workspaces assigned to these groups
@@ -50,27 +53,43 @@ func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http
 		return
 	}
 
-	// If using a workspace scoped token, only return the workspace the token is scoped to
-	if claims.Workspace != "" {
-		var scopedWorkspaces []ws_manager.WorkspaceSettings
-		for _, ws := range workspaces {
-			if ws.Name == claims.Workspace {
-				scopedWorkspaces = []ws_manager.WorkspaceSettings{ws}
-				WriteResponse(w, http.StatusOK, scopedWorkspaces)
+	var result []ws_manager.WorkspaceSettings
+
+	for _, ws := range workspaces {
+
+		// If workspace scoped cliam and the workspace name does not match, skip it
+		if claims.Workspace != "" && ws.Name != claims.Workspace {
+			continue
+		}
+
+		// Check if user requests owned workspaces only
+		if workspacesOwned {
+			isOwner, err := svc.DB.IsUserAccountOwner(claims.Username, ws.Name)
+			if err != nil {
+				logger.Error().Err(err).Str("workspace_id", ws.Name).Msg("Database error checking workspace ownership")
+				WriteResponse(w, http.StatusInternalServerError, nil)
 				return
 			}
+
+			if isOwner {
+				result = append(result, ws)
+			}
+		} else {
+			result = append(result, ws)
 		}
-		// If the workspace is not found, return unauthorized
+	}
+
+	if claims.Workspace != "" && len(result) == 0 {
 		WriteResponse(w, http.StatusUnauthorized, nil)
 		return
 	}
 
-	// Ensure workspaces is not nil, return an empty slice if no workspaces are found
-	if workspaces == nil {
-		workspaces = []ws_manager.WorkspaceSettings{}
+	// Return empty list if no matches
+	if result == nil {
+		result = []ws_manager.WorkspaceSettings{}
 	}
 
-	WriteResponse(w, http.StatusOK, workspaces)
+	WriteResponse(w, http.StatusOK, result)
 
 }
 
