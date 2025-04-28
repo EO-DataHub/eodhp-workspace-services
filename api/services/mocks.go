@@ -98,6 +98,11 @@ func (m *MockWorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]ws_manager
 	return args.Get(0).([]ws_manager.WorkspaceSettings), args.Error(1)
 }
 
+func (m *MockWorkspaceDB) GetOwnedWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error) {
+	args := m.Called(username)
+	return args.Get(0).([]ws_manager.WorkspaceSettings), args.Error(1)
+}
+
 func (m *MockWorkspaceDB) CheckWorkspaceExists(name string) (bool, error) {
 	args := m.Called(name)
 	return args.Bool(0), args.Error(1)

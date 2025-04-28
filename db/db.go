@@ -34,6 +34,7 @@ type WorkspaceDBInterface interface {
 	UpdateAccountStatus(token, accountID, status string) error
 	GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error)
 	GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error)
+	GetOwnedWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error)
 	CheckWorkspaceExists(name string) (bool, error)
 	UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) error
 	DeleteWorkspace(workspaceName string) error
