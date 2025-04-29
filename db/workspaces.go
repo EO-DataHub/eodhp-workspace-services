@@ -58,6 +58,24 @@ func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]ws_manager.Wo
 	return workspaces, nil
 }
 
+// GetOwnedWorkspaces retrieves workspaces owned by the specified username.
+func (db *WorkspaceDB) GetOwnedWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error) {
+
+	// Get the workspaces the user owns
+	workspaces, err := db.getWorkspacesByOwnership(username)
+	if err != nil {
+		return nil, err
+	}
+
+	workspaces, err = db.getWorkspaceStores(workspaces)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return workspaces, nil
+}
+
 // GetAllWorkspaces retrieves all workspaces.
 func (db *WorkspaceDB) GetAllWorkspaces() ([]string, error) {
 	// Query to select all workspaces without filtering by member group
@@ -214,6 +232,28 @@ func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_m
 func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager.WorkspaceSettings, error) {
 	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE account = $1`
 	rows, err := db.DB.Query(query, accountID)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
+	}
+	defer rows.Close()
+
+	var workspaces []ws_manager.WorkspaceSettings
+	for rows.Next() {
+		var ws ws_manager.WorkspaceSettings
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
+			return nil, fmt.Errorf("error scanning workspace: %w", err)
+		}
+		workspaces = append(workspaces, ws)
+	}
+	return workspaces, nil
+}
+
+// getWorkspacesByOwnership retrieves workspaces owned by the specified username.
+func (db *WorkspaceDB) getWorkspacesByOwnership(username string) ([]ws_manager.WorkspaceSettings, error) {
+	query := `SELECT workspaces.id, workspaces.name, account, member_group, workspaces.status, last_updated FROM workspaces 
+			  INNER JOIN accounts on accounts.id = workspaces.account
+			  WHERE account_owner = $1`
+	rows, err := db.DB.Query(query, username)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
 	}
