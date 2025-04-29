@@ -24,8 +24,15 @@ func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-
-// GetWorkspaces handles HTTP requests for retrieving workspaces.
+// @Summary Get a list of workspaces you are a member of
+// @Description Retrieve a list of workspaces for the authenticated user.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Success 200 {array} ws_manager.WorkspaceSettings
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces [get]
 func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +48,17 @@ func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-// GetWorkspace handles HTTP requests for retrieving an individual workspace.
+// @Summary Get a workspace by ID
+// @Description Retrieve a specific workspace using its ID for the authenticated user.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID" // Workspace ID from the URL path
+// @Success 200 {object} ws_manager.WorkspaceSettings
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id} [get]
 func GetWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +89,6 @@ func DeleteWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 		svc.DeleteWorkspaceService(w, r)
 	}
 }
-
 
 // UpdateWorkspace handles HTTP requests for updating a specific workspace by ID.
 // This is a placeholder for the actual implementation.
