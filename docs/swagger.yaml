@@ -23,12 +23,233 @@ definitions:
       sessionToken:
         type: string
     type: object
+  models.Account:
+    properties:
+      accountOpeningReason:
+        type: string
+      accountOwner:
+        type: string
+      billingAddress:
+        type: string
+      createdAt:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      organizationName:
+        type: string
+      status:
+        type: string
+      workspaces:
+        items:
+          $ref: '#/definitions/models.WorkspaceSettings'
+        type: array
+    type: object
+  models.BlockStore:
+    description: Configuration for a block store.
+    properties:
+      access_point_id:
+        type: string
+      mount_point:
+        type: string
+      name:
+        type: string
+      store_id:
+        type: string
+    type: object
+  models.ObjectStore:
+    description: Configuration for an object store.
+    properties:
+      access_point_arn:
+        type: string
+      access_url:
+        type: string
+      bucket:
+        type: string
+      env_var:
+        type: string
+      host:
+        type: string
+      name:
+        type: string
+      prefix:
+        type: string
+      store_id:
+        type: string
+    type: object
+  models.Stores:
+    description: Object and block storage configurations for the workspace.
+    properties:
+      block:
+        items:
+          $ref: '#/definitions/models.BlockStore'
+        type: array
+      object:
+        items:
+          $ref: '#/definitions/models.ObjectStore'
+        type: array
+    type: object
+  models.User:
+    properties:
+      email:
+        type: string
+      firstName:
+        type: string
+      id:
+        type: string
+      lastName:
+        type: string
+      username:
+        type: string
+    type: object
+  models.WorkspaceSettings:
+    properties:
+      account:
+        type: string
+      id:
+        type: string
+      last_updated:
+        type: string
+      member_group:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+      stores:
+        items:
+          $ref: '#/definitions/models.Stores'
+        type: array
+    type: object
 info:
   contact: {}
   description: This is the API for the EODHP Workspace Services.
   title: EODHP Workspace Services API
   version: v1
 paths:
+  /accounts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of billing accounts owned by the authenticated
+        user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Account'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get billing accounts
+      tags:
+      - Billing Accounts
+  /accounts/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve details of a specific billing account by its unique ID.
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Account'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get a billing account
+      tags:
+      - Billing Accounts
+  /workspaces:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of workspaces for the authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.WorkspaceSettings'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get a list of workspaces you are a member of
+      tags:
+      - Workspaces
+  /workspaces/{workspace-id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific workspace using its ID for the authenticated
+        user.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.WorkspaceSettings'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get a workspace by ID
+      tags:
+      - Workspaces
   /workspaces/{workspace-id}/{user-id}/s3-tokens:
     post:
       consumes:
@@ -69,7 +290,7 @@ paths:
             type: string
       summary: Request S3 session credentials
       tags:
-      - s3 credentials auth
+      - Workspaces
   /workspaces/{workspace-id}/{user-id}/sessions:
     post:
       consumes:
@@ -115,5 +336,167 @@ paths:
             type: string
       summary: Request workspace scoped session credentials
       tags:
-      - workspace session credentials auth
+      - Workspaces
+  /workspaces/{workspace-id}/users:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of users who are members of the specified workspace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get users of a workspace
+      tags:
+      - Workspaces
+  /workspaces/{workspace-id}/users/{username}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a user from the specified workspace by providing the workspace
+        ID and username.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Remove a user from a workspace
+      tags:
+      - Workspaces
+    get:
+      consumes:
+      - application/json
+      description: Retrieve details of a specific user that is a member of the specified
+        workspace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get a user of a workspace
+      tags:
+      - Workspaces
+    put:
+      consumes:
+      - application/json
+      description: Add a user to the specified workspace by providing the workspace
+        ID and username.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Add a user to a workspace
+      tags:
+      - Workspaces
 swagger: "2.0"

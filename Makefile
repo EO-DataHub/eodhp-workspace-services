@@ -56,4 +56,5 @@ publish: docs dockerbuild dockerpush
 
 # Generate Swagger docs
 docs:
-	swag init -g cmd/serve.go
+	swag init -pd -g cmd/serve.go
+	swagger2openapi ./docs/swagger.json -o ./docs/openapi.yaml

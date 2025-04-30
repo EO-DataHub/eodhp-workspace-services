@@ -3,10 +3,14 @@ package handlers
 import (
 	"net/http"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
+
+// Trick compiler to keep import for swag annotation
+var _ = ws_manager.WorkspaceSettings{}
 
 // CreateWorkspace handles HTTP requests for creating a new workspace.
 func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
@@ -24,8 +28,15 @@ func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-
-// GetWorkspaces handles HTTP requests for retrieving workspaces.
+// @Summary Get a list of workspaces you are a member of
+// @Description Retrieve a list of workspaces for the authenticated user.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Success 200 {array} ws_manager.WorkspaceSettings
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces [get]
 func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -41,7 +52,17 @@ func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-// GetWorkspace handles HTTP requests for retrieving an individual workspace.
+// @Summary Get a workspace by ID
+// @Description Retrieve a specific workspace using its ID for the authenticated user.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID" // Workspace ID from the URL path
+// @Success 200 {object} ws_manager.WorkspaceSettings
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id} [get]
 func GetWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -73,7 +94,6 @@ func DeleteWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-
 // UpdateWorkspace handles HTTP requests for updating a specific workspace by ID.
 // This is a placeholder for the actual implementation.
 func UpdateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
@@ -102,7 +122,17 @@ func PatchWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-// GetUsers handles HTTP requests for retrieving users that are members of a workspace
+// @Summary Get users of a workspace
+// @Description Retrieve a list of users who are members of the specified workspace.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Success 200 {array} models.User
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/users [get]
 func GetUsers(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -118,7 +148,19 @@ func GetUsers(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-// GetUser handles HTTP requests for retrieving individual users that are members of a workspace
+// @Summary Get a user of a workspace
+// @Description Retrieve details of a specific user that is a member of the specified workspace.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param username path string true "Username"
+// @Success 200 {object} models.User
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/users/{username} [get]
 func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -134,7 +176,19 @@ func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-// AddUser handle HTTP requests for adding a user as a member of a workspace
+// @Summary Add a user to a workspace
+// @Description Add a user to the specified workspace by providing the workspace ID and username.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param username path string true "Username"
+// @Success 204 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/users/{username} [put]
 func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -150,7 +204,19 @@ func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 	}
 }
 
-// RemoveUser handle HTTP requests for removing a user as a member of a workspace
+// @Summary Remove a user from a workspace
+// @Description Remove a user from the specified workspace by providing the workspace ID and username.
+// @Tags Workspaces
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param username path string true "Username"
+// @Success 204 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/users/{username} [delete]
 func RemoveUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {

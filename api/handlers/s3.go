@@ -84,7 +84,7 @@ func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r 
 
 // @Summary Request S3 session credentials
 // @Description Request S3 session credentials for user access to a single workspace. {user-id} can be set to "me" to use the token owner's user id.
-// @Tags s3 credentials auth
+// @Tags Workspaces
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID" example(my-workspace)
