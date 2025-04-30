@@ -106,16 +106,22 @@ Make sure pulsar is installed. If you run `./pulsar standalone` and amend the co
 
 
 ## Docs
-This project uses `swaggo/swag` to generate Swagger documentation. To generate up-to-date API docs, use the `Makefile` shortcut:
+This project uses `swaggo/swag` to generate API documentation from inline comments in Go code.
 
-```make docs`
+Use the following Makefile target to generate and convert the documentation:
 
-This will:
-- Run `swag init` to generate `swagger.json` and `swagger.yaml` inside the `./docs` directory.
-- Use `swagger2openapi` to convert `swagger.json` into an OpenAPI 3-compliant `openapi.yaml` if required.
+```make docs```
+
+This produces:
+- `./docs/swagger.json`: API spec in Swagger 2.0 (OpenAPI v2)
+- `./docs/swagger.yaml`: YAML version of the same
+- `./docs/openapi.yaml`: OpenAPI v3-compliant version (converted)
+ 
+The `swaggo/swag` tool only supports Swagger 2.0 (OpenAPI v2) and does not generate OpenAPI v3 specs natively. If your tooling or downstream consumers require OpenAPI v3 (such as for client SDK generation, validation, or documentation portals), you must use a converter like `swagger2openapi` to upgrade the spec.
+
+This is handled automatically in the make docs step, but keep in mind that certain OpenAPI v3 features will only be available after conversion.
+
 
 `swagger2openapi` must be installed on your system. You can install it via:
 
 ```npm install -g swagger2openapi```
-
-These files are used to serve the Swagger UI and to support external integrations that require OpenAPI 3 format.

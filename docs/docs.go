@@ -221,7 +221,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of users",
+                        "description": "OK",
                         "schema": {
                             "type": "array",
                             "items": {
@@ -281,7 +281,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "User details",
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/models.User"
                         }
@@ -342,7 +342,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "User successfully added to the workspace",
+                        "description": "OK",
                         "schema": {
                             "type": "string"
                         }
@@ -360,7 +360,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Workspace or User Not Found",
+                        "description": "Not Found",
                         "schema": {
                             "type": "string"
                         }
@@ -403,7 +403,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "User successfully removed from the workspace",
+                        "description": "OK",
                         "schema": {
                             "type": "string"
                         }
@@ -421,7 +421,7 @@ const docTemplate = `{
                         }
                     },
                     "404": {
-                        "description": "Workspace or User Not Found",
+                        "description": "Not Found",
                         "schema": {
                             "type": "string"
                         }

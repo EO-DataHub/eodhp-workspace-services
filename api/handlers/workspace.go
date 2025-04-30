@@ -128,7 +128,7 @@ func PatchWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
-// @Success 200 {array} models.User "List of users"
+// @Success 200 {array} models.User
 // @Failure 400 {object} string
 // @Failure 401 {object} string
 // @Failure 500 {object} string
@@ -155,7 +155,7 @@ func GetUsers(svc *services.WorkspaceService) http.HandlerFunc {
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
 // @Param username path string true "Username"
-// @Success 200 {object} models.User "User details"
+// @Success 200 {object} models.User
 // @Failure 400 {object} string
 // @Failure 401 {object} string
 // @Failure 404 {object} string
@@ -183,11 +183,11 @@ func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
 // @Param username path string true "Username"
-// @Success 200 {string} string "User successfully added to the workspace"
-// @Failure 400 {object} string "Bad Request"
-// @Failure 401 {object} string "Unauthorized"
-// @Failure 404 {object} string "Workspace or User Not Found"
-// @Failure 500 {object} string "Internal Server Error"
+// @Success 200 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
 // @Router /workspaces/{workspace-id}/users/{username} [put]
 func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 
@@ -211,11 +211,11 @@ func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
 // @Param username path string true "Username"
-// @Success 200 {string} string "User successfully removed from the workspace"
-// @Failure 400 {object} string "Bad Request"
-// @Failure 401 {object} string "Unauthorized"
-// @Failure 404 {object} string "Workspace or User Not Found"
-// @Failure 500 {object} string "Internal Server Error"
+// @Success 200 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 404 {object} string 
+// @Failure 500 {object} string
 // @Router /workspaces/{workspace-id}/users/{username} [delete]
 func RemoveUser(svc *services.WorkspaceService) http.HandlerFunc {
 

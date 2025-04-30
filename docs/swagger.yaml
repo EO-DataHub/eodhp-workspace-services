@@ -352,7 +352,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of users
+          description: OK
           schema:
             items:
               $ref: '#/definitions/models.User'
@@ -393,7 +393,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: User successfully removed from the workspace
+          description: OK
           schema:
             type: string
         "400":
@@ -405,7 +405,7 @@ paths:
           schema:
             type: string
         "404":
-          description: Workspace or User Not Found
+          description: Not Found
           schema:
             type: string
         "500":
@@ -435,7 +435,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: User details
+          description: OK
           schema:
             $ref: '#/definitions/models.User'
         "400":
@@ -477,7 +477,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: User successfully added to the workspace
+          description: OK
           schema:
             type: string
         "400":
@@ -489,7 +489,7 @@ paths:
           schema:
             type: string
         "404":
-          description: Workspace or User Not Found
+          description: Not Found
           schema:
             type: string
         "500":

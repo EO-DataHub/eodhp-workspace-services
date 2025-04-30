@@ -156,7 +156,7 @@ paths:
             type: string
       responses:
         "200":
-          description: List of users
+          description: OK
           content:
             application/json:
               schema:
@@ -203,7 +203,7 @@ paths:
             type: string
       responses:
         "200":
-          description: User details
+          description: OK
           content:
             application/json:
               schema:
@@ -253,7 +253,7 @@ paths:
             type: string
       responses:
         "200":
-          description: User successfully added to the workspace
+          description: OK
           content:
             application/json:
               schema:
@@ -271,7 +271,7 @@ paths:
               schema:
                 type: string
         "404":
-          description: Workspace or User Not Found
+          description: Not Found
           content:
             application/json:
               schema:
@@ -303,7 +303,7 @@ paths:
             type: string
       responses:
         "200":
-          description: User successfully removed from the workspace
+          description: OK
           content:
             application/json:
               schema:
@@ -321,7 +321,7 @@ paths:
               schema:
                 type: string
         "404":
-          description: Workspace or User Not Found
+          description: Not Found
           content:
             application/json:
               schema:
