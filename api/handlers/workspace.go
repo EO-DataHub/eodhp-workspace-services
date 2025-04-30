@@ -183,7 +183,7 @@ func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
 // @Param username path string true "Username"
-// @Success 200 {string} string
+// @Success 204 {string} string
 // @Failure 400 {object} string
 // @Failure 401 {object} string
 // @Failure 404 {object} string
@@ -211,10 +211,10 @@ func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
 // @Param username path string true "Username"
-// @Success 200 {string} string
+// @Success 204 {string} string
 // @Failure 400 {object} string
 // @Failure 401 {object} string
-// @Failure 404 {object} string 
+// @Failure 404 {object} string
 // @Failure 500 {object} string
 // @Router /workspaces/{workspace-id}/users/{username} [delete]
 func RemoveUser(svc *services.WorkspaceService) http.HandlerFunc {
