@@ -117,7 +117,7 @@ This produces:
 - `./docs/swagger.yaml`: YAML version of the same
 - `./docs/openapi.yaml`: OpenAPI v3-compliant version (converted)
  
-The `swaggo/swag` tool only supports Swagger 2.0 (OpenAPI v2) and does not generate OpenAPI v3 specs natively. If your tooling or downstream consumers require OpenAPI v3 (such as for client SDK generation, validation, or documentation portals), you must use a converter like `swagger2openapi` to upgrade the spec.
+The `swaggo/swag` tool only supports Swagger 2.0 (OpenAPI v2) and does not generate OpenAPI v3 specs natively. If your tooling or downstream consumers require OpenAPI v3, you must use a converter like `swagger2openapi` to upgrade the spec.
 
 This is handled automatically in the make docs step, but keep in mind that certain OpenAPI v3 features will only be available after conversion.
 
