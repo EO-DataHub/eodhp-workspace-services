@@ -103,3 +103,19 @@ Make sure pulsar is installed. If you run `./pulsar standalone` and amend the co
 ## Deployment
 
 ```make VERSION={VERSION} dockerpush```
+
+
+## Docs
+This project uses `swaggo/swag` to generate Swagger documentation. To generate up-to-date API docs, use the `Makefile` shortcut:
+
+```make docs`
+
+This will:
+- Run `swag init` to generate `swagger.json` and `swagger.yaml` inside the `./docs` directory.
+- Use `swagger2openapi` to convert `swagger.json` into an OpenAPI 3-compliant `openapi.yaml` if required.
+
+`swagger2openapi` must be installed on your system. You can install it via:
+
+```npm install -g swagger2openapi```
+
+These files are used to serve the Swagger UI and to support external integrations that require OpenAPI 3 format.

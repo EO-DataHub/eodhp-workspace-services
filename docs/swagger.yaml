@@ -90,8 +90,20 @@ definitions:
           $ref: '#/definitions/models.ObjectStore'
         type: array
     type: object
+  models.User:
+    properties:
+      email:
+        type: string
+      firstName:
+        type: string
+      id:
+        type: string
+      lastName:
+        type: string
+      username:
+        type: string
+    type: object
   models.WorkspaceSettings:
-    description: Workspace configuration including associated stores.
     properties:
       account:
         type: string
@@ -278,7 +290,7 @@ paths:
             type: string
       summary: Request S3 session credentials
       tags:
-      - s3 credentials auth
+      - Workspaces
   /workspaces/{workspace-id}/{user-id}/sessions:
     post:
       consumes:
@@ -324,5 +336,167 @@ paths:
             type: string
       summary: Request workspace scoped session credentials
       tags:
-      - workspace session credentials auth
+      - Workspaces
+  /workspaces/{workspace-id}/users:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of users who are members of the specified workspace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of users
+          schema:
+            items:
+              $ref: '#/definitions/models.User'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get users of a workspace
+      tags:
+      - Workspaces
+  /workspaces/{workspace-id}/users/{username}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a user from the specified workspace by providing the workspace
+        ID and username.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User successfully removed from the workspace
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Workspace or User Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Remove a user from a workspace
+      tags:
+      - Workspaces
+    get:
+      consumes:
+      - application/json
+      description: Retrieve details of a specific user that is a member of the specified
+        workspace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User details
+          schema:
+            $ref: '#/definitions/models.User'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get a user of a workspace
+      tags:
+      - Workspaces
+    put:
+      consumes:
+      - application/json
+      description: Add a user to the specified workspace by providing the workspace
+        ID and username.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User successfully added to the workspace
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Workspace or User Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Add a user to a workspace
+      tags:
+      - Workspaces
 swagger: "2.0"
