@@ -70,8 +70,13 @@ type AirbusProviderConfig struct {
 	SARContractsURL     string `yaml:"sar_contracts_url"`
 }
 
+type PlanetProviderConfig struct {
+	ValidationURL string `yaml:"validation_url"`
+}
+
 type ProvidersConfig struct {
 	Airbus AirbusProviderConfig `yaml:"airbus"`
+	Planet PlanetProviderConfig `yaml:"planet"`
 }
 
 // LoadConfig loads and parses the configuration from a given file path

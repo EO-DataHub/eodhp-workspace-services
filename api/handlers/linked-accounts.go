@@ -40,3 +40,13 @@ func ValidateAirbusLinkedAccount(svc *services.LinkedAccountService) http.Handle
 		svc.ValidateAirbusLinkedAccountService(w, r)
 	}
 }
+
+// ValidatePlanetLinkedAccount handles HTTP requests for validating an Planet linked account.
+func ValidatePlanetLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		svc.ValidatePlanetLinkedAccountService(w, r)
+	}
+}
+

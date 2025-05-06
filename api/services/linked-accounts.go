@@ -356,6 +356,88 @@ func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.Respo
 
 }
 
+// ValidatePlanetLinkedAccountService validates the Planet key
+func (svc *LinkedAccountService) ValidatePlanetLinkedAccountService(w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	// Extract claims from the request context to identify the user
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	// Extract the workspace ID from the request URL path
+	workspaceID := mux.Vars(r)["workspace-id"]
+
+	// Check if the user is the account owner
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		return
+	}
+
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to read request body")
+		WriteResponse(w, http.StatusBadRequest, "Failed to read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	// Parse the JSON payload
+	var payload Payload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Invalid JSON payload")
+		WriteResponse(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	// Validate the key field
+	if payload.Name != "planet" {
+		logger.Error().Str("workspace_id", workspaceID).Msg("Only a Planet key is allowed")
+		WriteResponse(w, http.StatusBadRequest, "Only a Planet key is allowed")
+		return
+	}
+
+	// Send GET request to Planet API
+	req, err := http.NewRequest("GET", svc.Config.Providers.Planet.ValidationURL, nil)
+	if err != nil {
+		logger.Error().Err(err).Msg("Failed to create request to Planet API")
+		WriteResponse(w, http.StatusInternalServerError, "Failed to contact Planet API")
+		return
+	}
+	req.Header.Set("Authorization", "api-key "+payload.Key)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		logger.Error().Err(err).Msg("Error making request to Planet API")
+		WriteResponse(w, http.StatusBadGateway, "Error contacting Planet API")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Error().Int("status_code", resp.StatusCode).Msg("Planet API returned error")
+		WriteResponse(w, resp.StatusCode, "Invalid or unauthorized token for Planet API")
+		return
+	}
+
+	// Return empty OK  response
+	WriteResponse(w, http.StatusOK, nil)
+
+}
+
 // encryptWithOTP uses a One-Time Pad (OTP) to securely encrypt data by XORing it with a random key that is the same length as the plaintext and used only once to ensure perfect secrecy.
 func encryptWithOTP(plaintext string) (string, string, error) {
 
