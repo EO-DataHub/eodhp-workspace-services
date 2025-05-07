@@ -117,6 +117,7 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/airbus/validate", handlers.ValidateAirbusLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/planet/validate", handlers.ValidatePlanetLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 
 		// Data Loader routes
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)
