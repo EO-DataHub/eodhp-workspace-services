@@ -121,6 +121,7 @@ var serveCmd = &cobra.Command{
 
 		// Data Loader routes
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.DeleteFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodDelete)
 
 		// Docs
 		docs.SwaggerInfo.Host = appCfg.Host
