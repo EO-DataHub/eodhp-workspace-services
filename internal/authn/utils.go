@@ -48,15 +48,3 @@ func GenerateToken() (string, error) {
 	}
 	return base64.URLEncoding.EncodeToString(b), nil
 }
-
-// isValidationError checks if the error is a known validation error
-// from the jwt package. This is useful to determine if the error
-// is ignorable (e.g. expired token) or if it indicates a structural
-// problem with the token (e.g. malformed token).
-func isValidationError(err error) bool {
-	return errors.Is(err, jwt.ErrTokenMalformed) ||
-		errors.Is(err, jwt.ErrTokenSignatureInvalid) ||
-		errors.Is(err, jwt.ErrTokenExpired) ||
-		errors.Is(err, jwt.ErrTokenUsedBeforeIssued) ||
-		errors.Is(err, jwt.ErrTokenNotValidYet)
-}
