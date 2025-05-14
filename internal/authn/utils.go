@@ -5,14 +5,14 @@ import (
 	"encoding/base64"
 	"errors"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var ErrInvalidJWT = errors.New("invalid jwt token")
 var ErrInvalidClaims = errors.New("invalid claims")
 
 type Claims struct {
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 	Username    string `json:"preferred_username"`
 	RealmAccess struct {
 		Roles []string `json:"roles"`
@@ -21,21 +21,21 @@ type Claims struct {
 	MemberGroups []string `json:"member_groups"`
 }
 
-func ParseClaims(token string) (Claims, error) {
+func ParseClaims(tokenStr string) (Claims, error) {
 	claims := Claims{}
-	// Check if token is JWT by attempting to parse it
-	if t, err := jwt.ParseWithClaims(token, &claims, nil); err != nil {
-		// Ignore validation errors (no need to check signing of key)
-		if _, ok := err.(*jwt.ValidationError); !ok {
-			return claims, ErrInvalidJWT
-		}
 
-		// Check if token was decoded successfully
-		if t == nil {
-			// Return an error if the token was not decoded successfully
-			return claims, ErrInvalidClaims
-		}
+	// Use ParseUnverified to parse the token without verifying the signature.
+	t, _, err := jwt.NewParser().ParseUnverified(tokenStr, &claims)
+	if err != nil {
+		return claims, ErrInvalidJWT
 	}
+
+	// If the token is malformed or the claims couldn't be parsed, return an error.
+	if t == nil || t.Claims == nil {
+		return claims, ErrInvalidClaims
+	}
+
+	// Return the claims if everything is good.
 	return claims, nil
 }
 
