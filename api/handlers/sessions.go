@@ -15,7 +15,7 @@ import (
 
 // @Summary Request workspace scoped session credentials
 // @Description Request workspace scoped session credentials for user access to a single workspace. {user-id} can be set to "me" to use the token owner's user id.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID" example(my-workspace)
