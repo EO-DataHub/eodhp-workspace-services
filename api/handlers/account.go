@@ -20,7 +20,7 @@ func CreateAccount(svc *services.BillingAccountService) http.HandlerFunc {
 // GetAccounts retrieves all billing accounts for the authenticated user.
 // @Summary Get billing accounts
 // @Description Retrieve a list of billing accounts owned by the authenticated user.
-// @Tags Billing Accounts
+// @Tags Billing and Billing Accounts
 // @Accept json
 // @Produce json
 // @Success 200 {array} models.Account
@@ -38,7 +38,7 @@ func GetAccounts(svc *services.BillingAccountService) http.HandlerFunc {
 // GetAccount retrieves a billing account by ID.
 // @Summary Get a billing account
 // @Description Retrieve details of a specific billing account by its unique ID.
-// @Tags Billing Accounts
+// @Tags Billing and Billing Accounts
 // @Accept json
 // @Produce json
 // @Param id path string true "Account ID"
