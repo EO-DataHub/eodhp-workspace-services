@@ -30,7 +30,7 @@ func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 // @Summary Get a list of workspaces you are a member of
 // @Description Retrieve a list of workspaces for the authenticated user.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Success 200 {array} ws_manager.WorkspaceSettings
@@ -54,7 +54,7 @@ func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 
 // @Summary Get a workspace by ID
 // @Description Retrieve a specific workspace using its ID for the authenticated user.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID" // Workspace ID from the URL path
@@ -124,7 +124,7 @@ func PatchWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 
 // @Summary Get users of a workspace
 // @Description Retrieve a list of users who are members of the specified workspace.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
@@ -150,7 +150,7 @@ func GetUsers(svc *services.WorkspaceService) http.HandlerFunc {
 
 // @Summary Get a user of a workspace
 // @Description Retrieve details of a specific user that is a member of the specified workspace.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
@@ -178,7 +178,7 @@ func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 // @Summary Add a user to a workspace
 // @Description Add a user to the specified workspace by providing the workspace ID and username.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
@@ -206,7 +206,7 @@ func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 
 // @Summary Remove a user from a workspace
 // @Description Remove a user from the specified workspace by providing the workspace ID and username.
-// @Tags Workspaces
+// @Tags Workspace Management
 // @Accept json
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
