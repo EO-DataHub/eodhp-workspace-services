@@ -11,6 +11,13 @@ func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
 
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
 		svc.CreateLinkedAccountService(w, r)
 	}
 }
@@ -19,6 +26,14 @@ func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
+
 		svc.GetLinkedAccounts(w, r)
 	}
 }
@@ -27,6 +42,13 @@ func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 func DeleteLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		err := svc.KC.GetToken()
+		if err != nil {
+			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+			return
+		}
 
 		svc.DeleteLinkedAccountService(w, r)
 	}
@@ -49,4 +71,3 @@ func ValidatePlanetLinkedAccount(svc *services.LinkedAccountService) http.Handle
 		svc.ValidatePlanetLinkedAccountService(w, r)
 	}
 }
-

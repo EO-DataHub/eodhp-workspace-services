@@ -62,7 +62,7 @@ func IsDNSCompatible(name string) bool {
 }
 
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
-func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
+func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
 
 	// hub_admin role is a superuser role
 	if HasRole(claims.RealmAccess.Roles, "hub_admin") {
@@ -73,12 +73,17 @@ func isUserWorkspaceAuthorized(svc db.WorkspaceDBInterface, claims authn.Claims,
 		return true, nil
 	}
 
+	// Get the groups from keycloak associated with the user
+	memberGroups, err := kc.GetUserGroups(claims.Subject)
+	if err != nil {
+	}
+
 	// Check if the user is an account owner
 	if mustBeAccountOwner {
-		if isMemberGroupAuthorized(workspace, claims.MemberGroups) {
+		if isMemberGroupAuthorized(workspace, memberGroups) {
 
 			// Do they own the workspace
-			isAccountOwner, err := svc.IsUserAccountOwner(claims.Username, workspace)
+			isAccountOwner, err := db.IsUserAccountOwner(claims.Username, workspace)
 
 			// Check for errors
 			if err != nil {

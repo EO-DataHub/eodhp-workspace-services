@@ -52,6 +52,7 @@ type LinkedAccountService struct {
 	DB             *db.WorkspaceDB
 	SecretsManager *secretsmanager.Client
 	K8sClient      *kubernetes.Clientset
+	KC             KeycloakClientInterface
 }
 
 // Payload represents the expected JSON structure
@@ -90,7 +91,7 @@ func (svc *LinkedAccountService) GetLinkedAccounts(w http.ResponseWriter, r *htt
 	workspaceID := mux.Vars(r)["workspace-id"]
 
 	// Check if the user can access the workspace
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, false)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -138,7 +139,7 @@ func (svc *LinkedAccountService) DeleteLinkedAccountService(w http.ResponseWrite
 	namespace := "ws-" + workspaceID
 
 	// Check if the user is the account owner
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -194,7 +195,7 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 	namespace := "ws-" + workspaceID
 
 	// Check if the user is the account owner
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -288,7 +289,7 @@ func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.Respo
 	workspaceID := mux.Vars(r)["workspace-id"]
 
 	// Check if the user is the account owner
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -373,7 +374,7 @@ func (svc *LinkedAccountService) ValidatePlanetLinkedAccountService(w http.Respo
 	workspaceID := mux.Vars(r)["workspace-id"]
 
 	// Check if the user is the account owner
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)

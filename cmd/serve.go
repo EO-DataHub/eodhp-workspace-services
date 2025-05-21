@@ -112,6 +112,7 @@ var serveCmd = &cobra.Command{
 			DB:             workspaceDB,
 			SecretsManager: secretsManagerClient,
 			K8sClient:      k8sClient,
+			KC:             keycloakClient,
 		}
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
