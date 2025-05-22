@@ -76,6 +76,7 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 	// Get the groups from keycloak associated with the user
 	memberGroups, err := kc.GetUserGroups(claims.Subject)
 	if err != nil {
+		return false, err
 	}
 
 	// Check if the user is an account owner
@@ -101,7 +102,7 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 	}
 
 	// If the user is not an account owner, check if they are a member of the workspace
-	if isMemberGroupAuthorized(workspace, claims.MemberGroups) {
+	if isMemberGroupAuthorized(workspace, memberGroups) {
 		return true, nil
 	}
 
