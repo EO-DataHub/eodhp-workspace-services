@@ -26,7 +26,7 @@ func (svc *WorkspaceService) GetUsersService(w http.ResponseWriter, r *http.Requ
 	workspaceID := mux.Vars(r)["workspace-id"]
 
 	// Check if the user can access the workspace
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, false)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -86,7 +86,7 @@ func (svc *WorkspaceService) GetUserService(w http.ResponseWriter, r *http.Reque
 	username := mux.Vars(r)["username"]
 
 	// Check if the user can access the workspace
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, false)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, false)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -153,7 +153,7 @@ func (svc *WorkspaceService) AddUserService(w http.ResponseWriter, r *http.Reque
 	username := mux.Vars(r)["username"]
 
 	// Only account owners can remove users from a workspace
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
@@ -220,7 +220,7 @@ func (svc *WorkspaceService) RemoveUserService(w http.ResponseWriter, r *http.Re
 	username := mux.Vars(r)["username"]
 
 	// Only account owners can remove users from a workspace
-	authorized, err := isUserWorkspaceAuthorized(svc.DB, claims, workspaceID, true)
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
 		WriteResponse(w, http.StatusInternalServerError, nil)
