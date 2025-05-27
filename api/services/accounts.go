@@ -346,9 +346,10 @@ func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.
 	body := fmt.Sprintf(`
 	Dear %s,
 
-	This is a notification to inform you that your account has been approved.
-	Thank you for your patience and welcome to the EO DataHub!
-	Please find the details of your account below:
+	We are pleased to inform you that your billing account has been successfully approved. 
+	Thank you for your patience throughout the approval process.
+
+	Below are the details of your approved account:
 
 	Account Owner: %s
 	Account Name: %s
@@ -356,9 +357,16 @@ func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.
 	Billing Address: %s
 	Account Opening Reason: %s
 
+	You can now begin setting up workspaces through the EO DataHub platform. To get started, visit https://%s/workspaces/.
+
+	For guidance on how to create and manage your workspaces, please refer to our documentation at https://%s/docs/account-setup/workspaces/.
+
+	If you have any questions or require assistance, please dont hesitate to contact our support team at enquiries@eodatahub.org.uk.
+
 	Regards,
 	EO DataHub Team
-	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, *account.AccountOpeningReason)
+	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, 
+	*account.AccountOpeningReason, svc.Config.Host, svc.Config.Host)
 
 	return svc.sendEmail(svc.Config.Accounts.ServiceAccountEmail, recipient, subject, body)
 }
@@ -370,9 +378,10 @@ func (svc *BillingAccountService) SendAccountDenialEmail(account *ws_services.Ac
 	body := fmt.Sprintf(`
 	Dear %s,
 
-	This is a notification to inform you that your account has been denied.
+	Thank you for your interest in EO DataHub. After reviewing your account request, 
+	we regret to inform you that your billing account application has not been approved at this time.
 
-	Please find the details of your account below:
+	Below is a summary of the submitted account details:
 
 	Account Owner: %s
 	Account Name: %s
@@ -380,8 +389,7 @@ func (svc *BillingAccountService) SendAccountDenialEmail(account *ws_services.Ac
 	Billing Address: %s
 	Account Opening Reason: %s
 
-	We are sorry for the inconvenience.
-	Please do not hesitate to contact us if you have any questions.
+	We are sorry for the inconvenience. Please do not hesitate to contact us if you have any questions.
 
 	Regards,
 	EO DataHub Team

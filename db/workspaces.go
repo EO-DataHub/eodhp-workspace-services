@@ -128,7 +128,7 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 
 	err = w.execQuery(tx, `
 		INSERT INTO workspaces (id, name, account, status, last_updated)
-		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
 		workspaceID, req.Name, req.Account, req.Status)
 	if err != nil {
 		return nil, fmt.Errorf("error inserting workspace: %w", err)
