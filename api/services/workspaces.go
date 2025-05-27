@@ -127,7 +127,7 @@ func (svc *WorkspaceService) GetWorkspaceService(w http.ResponseWriter, r *http.
 	}
 
 	// Check if the account owner matches any of the claims member groups
-	if !isMemberGroupAuthorized(workspace.MemberGroup, memberGroups) {
+	if !isMemberGroupAuthorized(workspace.Name, memberGroups) {
 		logger.Warn().Str("workspace_id", workspaceID).Str("user", claims.Username).Msg("Access denied: user not in authorized groups")
 		WriteResponse(w, http.StatusForbidden, nil)
 		return
@@ -214,22 +214,22 @@ func (svc *WorkspaceService) CreateWorkspaceService(w http.ResponseWriter, r *ht
 	}
 
 	// Create a group in Keycloak - the group name is the same as the workspace name
-	wsSettings.MemberGroup = wsSettings.Name
-	statusCode, err := svc.KC.CreateGroup(wsSettings.MemberGroup)
+	wsSettings.Owner = claims.Username
+	statusCode, err := svc.KC.CreateGroup(wsSettings.Name)
 
 	if err != nil {
-		logger.Error().Err(err).Str("group_name", wsSettings.MemberGroup).Msg("Failed to create Keycloak group")
+		logger.Error().Err(err).Str("name", wsSettings.Name).Msg("Failed to create Keycloak group")
 		WriteResponse(w, statusCode, nil)
 		return
 	}
 
-	logger.Info().Str("group_name", wsSettings.MemberGroup).Msg("Group created successfully")
+	logger.Info().Str("name", wsSettings.Name).Msg("Group created successfully")
 
 	// Find the group ID just created from keycloak
-	group, err := svc.KC.GetGroup(wsSettings.MemberGroup)
+	group, err := svc.KC.GetGroup(wsSettings.Name)
 
 	if err != nil {
-		logger.Error().Err(err).Str("group_name", wsSettings.MemberGroup).Msg("Failed to retrieve Keycloak group")
+		logger.Error().Err(err).Str("name", wsSettings.Name).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}

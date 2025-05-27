@@ -48,10 +48,10 @@ func (svc *WorkspaceService) GetUsersService(w http.ResponseWriter, r *http.Requ
 	}
 
 	// Find the group ID from keycloak
-	group, err := svc.KC.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.Name)
 
 	if err != nil {
-		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
+		logger.Error().Err(err).Str("name", workspace.Name).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -108,10 +108,10 @@ func (svc *WorkspaceService) GetUserService(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Find the group ID from keycloak
-	group, err := svc.KC.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.Name)
 
 	if err != nil {
-		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
+		logger.Error().Err(err).Str("name", workspace.Name).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -165,7 +165,6 @@ func (svc *WorkspaceService) AddUserService(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Get the workspace member_group
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
@@ -175,10 +174,10 @@ func (svc *WorkspaceService) AddUserService(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Find the group ID from keycloak
-	group, err := svc.KC.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.Name)
 
 	if err != nil {
-		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
+		logger.Error().Err(err).Str("name", workspace.Name).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
@@ -247,7 +246,6 @@ func (svc *WorkspaceService) RemoveUserService(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Get the workspace member_group
 	workspace, err := svc.DB.GetWorkspace(workspaceID)
 
 	if err != nil {
@@ -257,10 +255,10 @@ func (svc *WorkspaceService) RemoveUserService(w http.ResponseWriter, r *http.Re
 	}
 
 	// Find the group ID from keycloak
-	group, err := svc.KC.GetGroup(workspace.MemberGroup)
+	group, err := svc.KC.GetGroup(workspace.Name)
 
 	if err != nil {
-		logger.Error().Err(err).Str("member_group", workspace.MemberGroup).Msg("Failed to retrieve Keycloak group")
+		logger.Error().Err(err).Str("name", workspace.Name).Msg("Failed to retrieve Keycloak group")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
