@@ -359,14 +359,18 @@ func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.
 
 	You can now begin setting up workspaces through the EO DataHub platform. To get started, visit https://%s/workspaces/.
 
+	A workspace is essential to fully utilize the EO DataHub. It provides a secure, hosted environment for storing workflows, 
+	datasets, and results. With a workspace, you can analyze data, process datasets, place commercial orders, and generate value-added outputs 
+	directly on the Hub.
+
 	For guidance on how to create and manage your workspaces, please refer to our documentation at https://%s/docs/account-setup/workspaces/.
 
 	If you have any questions or require assistance, please dont hesitate to contact our support team at enquiries@eodatahub.org.uk.
 
 	Regards,
 	EO DataHub Team
-	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress, 
-	*account.AccountOpeningReason, svc.Config.Host, svc.Config.Host)
+	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress,
+		*account.AccountOpeningReason, svc.Config.Host, svc.Config.Host)
 
 	return svc.sendEmail(svc.Config.Accounts.ServiceAccountEmail, recipient, subject, body)
 }
