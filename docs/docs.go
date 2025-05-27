@@ -731,7 +731,7 @@ const docTemplate = `{
                 "last_updated": {
                     "type": "string"
                 },
-                "member_group": {
+                "owner": {
                     "type": "string"
                 },
                 "name": {
