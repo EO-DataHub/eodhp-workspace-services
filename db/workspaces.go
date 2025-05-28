@@ -14,7 +14,21 @@ import (
 func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error) {
 
 	// Check that the workspace exists
-	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE name = $1`
+	query := `
+	SELECT 
+		workspaces.id, 
+		workspaces.name, 
+		workspaces.account, 
+		accounts.account_owner as owner, 
+		workspaces.status, 
+		workspaces.last_updated
+	FROM 
+		workspaces
+	INNER JOIN 
+		accounts ON accounts.id = workspaces.account
+	WHERE 
+		workspaces.name = $1
+	`
 	rows, err := db.DB.Query(query, workspace_name)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspace: %w", err)
@@ -23,7 +37,7 @@ func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.Workspac
 
 	var ws ws_manager.WorkspaceSettings
 	if rows.Next() {
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 	} else {
@@ -44,7 +58,7 @@ func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.Workspac
 func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
 
 	// Get the workspaces the user is a member of
-	workspaces, err := db.getWorkspacesByMemberGroup(memberGroups)
+	workspaces, err := db.getWorkspacesByGroup(memberGroups)
 	if err != nil {
 		return nil, err
 	}
@@ -113,9 +127,9 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 	workspaceID := uuid.New()
 
 	err = w.execQuery(tx, `
-		INSERT INTO workspaces (id, name, account, member_group, status, last_updated)
-		VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
-		workspaceID, req.Name, req.Account, req.MemberGroup, req.Status)
+		INSERT INTO workspaces (id, name, account, status, last_updated)
+		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
+		workspaceID, req.Name, req.Account, req.Status)
 	if err != nil {
 		return nil, fmt.Errorf("error inserting workspace: %w", err)
 	}
@@ -208,9 +222,25 @@ func (db *WorkspaceDB) getWorkspaceStores(workspaces []ws_manager.WorkspaceSetti
 
 }
 
-// getWorkspacesByMemberGroup retrieves workspaces for the provided member groups.
-func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
-	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE member_group = ANY($1)`
+// getWorkspacesByGroup retrieves workspaces for the provided keycloak groups.
+func (db *WorkspaceDB) getWorkspacesByGroup(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
+
+	query := `
+	SELECT 
+		workspaces.id, 
+		workspaces.name, 
+		workspaces.account, 
+		accounts.account_owner as owner, 
+		workspaces.status, 
+		workspaces.last_updated
+	FROM 
+		workspaces
+	INNER JOIN 
+		accounts ON accounts.id = workspaces.account
+	WHERE 
+		workspaces.name = ANY($1)
+	`
+
 	rows, err := db.DB.Query(query, pq.Array(memberGroups))
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
@@ -220,7 +250,7 @@ func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_m
 	var workspaces []ws_manager.WorkspaceSettings
 	for rows.Next() {
 		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 		workspaces = append(workspaces, ws)
@@ -230,7 +260,23 @@ func (db *WorkspaceDB) getWorkspacesByMemberGroup(memberGroups []string) ([]ws_m
 
 // getWorkspacesByAccount retrieves workspaces linked to a specific account ID.
 func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager.WorkspaceSettings, error) {
-	query := `SELECT id, name, account, member_group, status, last_updated FROM workspaces WHERE account = $1`
+
+	query := `
+	SELECT 
+		workspaces.id, 
+		workspaces.name, 
+		workspaces.account, 
+		accounts.account_owner as owner, 
+		workspaces.status, 
+		workspaces.last_updated
+	FROM 
+		workspaces
+	INNER JOIN 
+		accounts ON accounts.id = workspaces.account
+	WHERE 
+		workspaces.account = $1
+	`
+
 	rows, err := db.DB.Query(query, accountID)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
@@ -240,7 +286,7 @@ func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager
 	var workspaces []ws_manager.WorkspaceSettings
 	for rows.Next() {
 		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 		workspaces = append(workspaces, ws)
@@ -250,9 +296,23 @@ func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager
 
 // getWorkspacesByOwnership retrieves workspaces owned by the specified username.
 func (db *WorkspaceDB) getWorkspacesByOwnership(username string) ([]ws_manager.WorkspaceSettings, error) {
-	query := `SELECT workspaces.id, workspaces.name, account, member_group, workspaces.status, last_updated FROM workspaces 
-			  INNER JOIN accounts on accounts.id = workspaces.account
-			  WHERE account_owner = $1`
+
+	query := `
+	SELECT 
+		workspaces.id, 
+		workspaces.name, 
+		workspaces.account, 
+		accounts.account_owner as owner, 
+		workspaces.status, 
+		workspaces.last_updated
+	FROM 
+		workspaces
+	INNER JOIN 
+		accounts ON accounts.id = workspaces.account
+	WHERE 
+		accounts.account_owner = $1
+	`
+
 	rows, err := db.DB.Query(query, username)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
@@ -262,7 +322,7 @@ func (db *WorkspaceDB) getWorkspacesByOwnership(username string) ([]ws_manager.W
 	var workspaces []ws_manager.WorkspaceSettings
 	for rows.Next() {
 		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.MemberGroup, &ws.Status, &ws.LastUpdated); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
 		workspaces = append(workspaces, ws)
