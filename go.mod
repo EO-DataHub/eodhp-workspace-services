@@ -5,7 +5,7 @@ go 1.23.0
 toolchain go1.23.3
 
 require (
-	github.com/EO-DataHub/eodhp-workspace-manager v0.1.6-0.20250527101834-6fbb75c455cf
+	github.com/EO-DataHub/eodhp-workspace-manager v0.2.0
 	github.com/apache/pulsar-client-go v0.14.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.36.3
