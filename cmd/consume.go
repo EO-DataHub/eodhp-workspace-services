@@ -111,11 +111,12 @@ var consumeCmd = &cobra.Command{
 	},
 }
 
-// deleteWorkspace deletes a workspace from the database, Keycloak and AWS Secrets Manager
+// deleteWorkspace deletes a workspace by setting its status to 'Unavailable' in the database,
+// removing its Keycloak group, and deleting any lingering secrets in AWS Secrets Manager.
 func deleteWorkspace(wsStatus ws_manager.WorkspaceStatus) error {
 
-	// Remove workspace record from database
-	err := workspaceDB.DeleteWorkspace(wsStatus.Name)
+	// Set the workspace as 'Unavailable' in the database
+	err := workspaceDB.DisableWorkspace(wsStatus.Name)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to delete workspace")
 		return err

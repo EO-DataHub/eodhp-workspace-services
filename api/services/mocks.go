@@ -113,7 +113,7 @@ func (m *MockWorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatu
 	return args.Error(0)
 }
 
-func (m *MockWorkspaceDB) DeleteWorkspace(workspaceName string) error {
+func (m *MockWorkspaceDB) DisableWorkspace(workspaceName string) error {
 	args := m.Called(workspaceName)
 	return args.Error(0)
 }

@@ -27,7 +27,7 @@ func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.Workspac
 	INNER JOIN 
 		accounts ON accounts.id = workspaces.account
 	WHERE 
-		workspaces.name = $1
+		workspaces.name = $1 AND workspaces.status != 'Unavailable'
 	`
 	rows, err := db.DB.Query(query, workspace_name)
 	if err != nil {
@@ -93,7 +93,7 @@ func (db *WorkspaceDB) GetOwnedWorkspaces(username string) ([]ws_manager.Workspa
 // GetAllWorkspaces retrieves all workspaces.
 func (db *WorkspaceDB) GetAllWorkspaces() ([]string, error) {
 	// Query to select all workspaces without filtering by member group
-	query := `SELECT name FROM workspaces`
+	query := `SELECT name FROM workspaces WHERE status != 'Unavailable'`
 
 	// Execute the query
 	rows, err := db.DB.Query(query)
@@ -238,7 +238,7 @@ func (db *WorkspaceDB) getWorkspacesByGroup(memberGroups []string) ([]ws_manager
 	INNER JOIN 
 		accounts ON accounts.id = workspaces.account
 	WHERE 
-		workspaces.name = ANY($1)
+		workspaces.name = ANY($1) AND workspaces.status != 'Unavailable'
 	`
 
 	rows, err := db.DB.Query(query, pq.Array(memberGroups))
@@ -274,7 +274,7 @@ func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager
 	INNER JOIN 
 		accounts ON accounts.id = workspaces.account
 	WHERE 
-		workspaces.account = $1
+		workspaces.account = $1 AND workspaces.status != 'Unavailable'
 	`
 
 	rows, err := db.DB.Query(query, accountID)
@@ -310,7 +310,7 @@ func (db *WorkspaceDB) getWorkspacesByOwnership(username string) ([]ws_manager.W
 	INNER JOIN 
 		accounts ON accounts.id = workspaces.account
 	WHERE 
-		accounts.account_owner = $1
+		accounts.account_owner = $1 AND workspaces.status != 'Unavailable'
 	`
 
 	rows, err := db.DB.Query(query, username)
@@ -494,27 +494,52 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 	return nil
 }
 
-func (w *WorkspaceDB) DeleteWorkspace(workspaceName string) error {
-
+func (w *WorkspaceDB) DisableWorkspace(workspaceName string) error {
 	tx, err := w.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("error starting transaction: %w", err)
 	}
 
-	// Delete the workspace record by name
-	_, err = tx.Exec(`DELETE FROM workspaces WHERE name = $1`, workspaceName)
+	// Get workspace ID from name
+	var workspaceID string
+	err = tx.QueryRow(`SELECT id FROM workspaces WHERE name = $1`, workspaceName).Scan(&workspaceID)
 	if err != nil {
 		tx.Rollback()
-		return fmt.Errorf("error deleting workspace: %w", err)
+		return fmt.Errorf("workspace not found: %w", err)
 	}
 
-	// Commit the transaction
-	err = tx.Commit()
+	// Delete from dependent tables in reverse dependency order
+	_, err = tx.Exec(`DELETE FROM object_stores WHERE store_id IN 
+		(SELECT id FROM workspace_stores WHERE workspace_id = $1)`, workspaceID)
 	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error deleting from object_stores: %w", err)
+	}
+
+	_, err = tx.Exec(`DELETE FROM block_stores WHERE store_id IN 
+		(SELECT id FROM workspace_stores WHERE workspace_id = $1)`, workspaceID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error deleting from block_stores: %w", err)
+	}
+
+	_, err = tx.Exec(`DELETE FROM workspace_stores WHERE workspace_id = $1`, workspaceID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error deleting from workspace_stores: %w", err)
+	}
+
+	// Set workspace status to 'Unavailable'
+	_, err = tx.Exec(`UPDATE workspaces SET status = 'Unavailable', role_name = NULL, role_arn = NULL, last_updated = CURRENT_TIMESTAMP WHERE id = $1`, workspaceID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error updating workspace status: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
 		tx.Rollback()
 		return fmt.Errorf("error committing transaction: %w", err)
 	}
 
 	return nil
-
 }
