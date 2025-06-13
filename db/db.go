@@ -37,7 +37,7 @@ type WorkspaceDBInterface interface {
 	GetOwnedWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error)
 	CheckWorkspaceExists(name string) (bool, error)
 	UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) error
-	DeleteWorkspace(workspaceName string) error
+	DisableWorkspace(workspaceName string) error
 	CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.Tx, error)
 	CommitTransaction(tx *sql.Tx) error
 }
