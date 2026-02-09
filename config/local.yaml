@@ -1,0 +1,34 @@
+host: localhost:8080
+basePath: /api
+docsPath: /api/docs/workspace-services
+accounts:
+  serviceAccountEmail: platform@account-verification.{{.ENV}}.eodatahub.org.uk
+  helpdeskEmail: enquiries@eodatahub.org.uk
+database:
+  driver: pgx
+  source: postgres://{{.SQL_USER}}:{{.SQL_PASSWORD}}@{{.SQL_HOST}}:{{.SQL_PORT}}/{{.SQL_DATABASE}}?search_path={{.SQL_SCHEMA}}
+pulsar:
+  url: pulsar://localhost:6650
+  topicProducer: persistent://public/default/workspace-settings
+  topicConsumer: persistent://public/default/workspace-status
+  subscription: workspace-status-sub
+keycloak:
+  url: "https://{{.ENV}}.eodatahub.org.uk/keycloak"
+  realm: eodhp
+  clientId: eodh-workspaces
+aws:
+  account: {{.AWS_ACCOUNT_ID}}
+  region: eu-west-2
+  workspace_domain: workspaces.{{.ENV}}.eodhp.eco-ke-staging.com
+  s3:
+    bucket: workspaces-eodhp-{{.ENV}}
+    host: s3-accesspoint.eu-west-2.amazonaws.com
+    roleArn: arn:aws:iam::{{.AWS_ACCOUNT_ID}}:role/WorkspaceServices-{{.AWS_CLUSTER_NAME}}
+    publicEndpoint: https://s3-accesspoint.eu-west-2.amazonaws.com
+download:
+  signingSecret: {{.DOWNLOAD_SIGNING_SECRET}}
+providers:
+  airbus:
+    access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token
+    optical_contracts_url: https://order.api.oneatlas.airbus.com/api/v1/contracts
+    sar_contracts_url: https://sar.api.oneatlas.airbus.com/v1/user/whoami

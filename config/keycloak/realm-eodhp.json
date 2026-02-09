@@ -1,0 +1,54 @@
+{
+  "realm": "eodhp",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "eodh-workspaces",
+      "name": "EODH Workspace Services",
+      "secret": "eodh-workspaces-secret",
+      "serviceAccountsEnabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true
+    }
+  ],
+  "groups": [
+    {
+      "name": "test-workspace"
+    }
+  ],
+  "users": [
+    {
+      "username": "dev-user",
+      "enabled": true,
+      "emailVerified": true,
+      "email": "dev-user@example.com",
+      "firstName": "Dev",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "devpass",
+          "temporary": false
+        }
+      ],
+      "groups": [
+        "/test-workspace"
+      ]
+    },
+    {
+      "username": "service-account-eodh-workspaces",
+      "enabled": true,
+      "serviceAccountClientId": "eodh-workspaces",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "query-users",
+          "view-groups",
+          "query-groups",
+          "manage-groups"
+        ]
+      }
+    }
+  ]
+}

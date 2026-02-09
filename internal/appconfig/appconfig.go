@@ -21,6 +21,7 @@ type Config struct {
 	Pulsar    PulsarConfig    `yaml:"pulsar"`
 	Keycloak  KeycloakConfig  `yaml:"keycloak"`
 	AWS       AWSConfig       `yaml:"aws"`
+	Download  DownloadConfig  `yaml:"download"`
 	Providers ProvidersConfig `yaml:"providers"`
 }
 
@@ -52,9 +53,14 @@ type KeycloakConfig struct {
 }
 
 type S3Config struct {
-	Bucket  string `yaml:"bucket"`
-	Host    string `yaml:"host"`
-	RoleArn string `yaml:"roleArn"`
+	Bucket         string `yaml:"bucket"`
+	Host           string `yaml:"host"`
+	RoleArn        string `yaml:"roleArn"`
+	Endpoint       string `yaml:"endpoint"`
+	PublicEndpoint string `yaml:"publicEndpoint"`
+	ForcePathStyle bool   `yaml:"forcePathStyle"`
+	AccessKey      string `yaml:"accessKey"`
+	SecretKey      string `yaml:"secretKey"`
 }
 
 type AWSConfig struct {
@@ -62,6 +68,10 @@ type AWSConfig struct {
 	Region          string   `yaml:"region"`
 	WorkspaceDomain string   `yaml:"workspace_domain"`
 	S3              S3Config `yaml:"s3"`
+}
+
+type DownloadConfig struct {
+	SigningSecret string `yaml:"signingSecret"`
 }
 
 type AirbusProviderConfig struct {

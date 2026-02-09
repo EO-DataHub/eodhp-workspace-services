@@ -51,16 +51,26 @@ func AddFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keycloa
 		// Create a prefix for storing eodh-config files
 		objectKey := fmt.Sprintf("%s/%s/%s", workspaceID, "eodh-config", payload.FileName)
 
-		creds, err := GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
-		if err != nil {
-			var status int
-			if httpErr, ok := err.(*services.HTTPError); ok {
-				status = httpErr.Status
-			} else {
-				status = http.StatusInternalServerError
+		var creds S3Credentials
+		if appCfg.AWS.S3.AccessKey != "" && appCfg.AWS.S3.SecretKey != "" {
+			creds = S3Credentials{
+				AccessKeyId:     appCfg.AWS.S3.AccessKey,
+				SecretAccessKey: appCfg.AWS.S3.SecretKey,
+				SessionToken:    "",
 			}
-			http.Error(w, err.Error(), status)
-			return
+		} else {
+			var err error
+			creds, err = GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
+			if err != nil {
+				var status int
+				if httpErr, ok := err.(*services.HTTPError); ok {
+					status = httpErr.Status
+				} else {
+					status = http.StatusInternalServerError
+				}
+				http.Error(w, err.Error(), status)
+				return
+			}
 		}
 
 		// Create an AWS config with the temporary credentials
@@ -79,7 +89,7 @@ func AddFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keycloa
 		}
 
 		// Create an S3 client
-		s3Client := awsclient.NewS3Client(cfg)
+		s3Client := awsclient.NewS3ClientWithEndpoint(cfg, appCfg.AWS.S3.Endpoint, appCfg.AWS.S3.ForcePathStyle)
 
 		// Upload the file to S3
 		_, err = s3Client.PutObject(r.Context(), &s3.PutObjectInput{
@@ -125,16 +135,26 @@ func DeleteFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keyc
 		}
 
 		// Get temporary credentials
-		creds, err := GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
-		if err != nil {
-			var status int
-			if httpErr, ok := err.(*services.HTTPError); ok {
-				status = httpErr.Status
-			} else {
-				status = http.StatusInternalServerError
+		var creds S3Credentials
+		if appCfg.AWS.S3.AccessKey != "" && appCfg.AWS.S3.SecretKey != "" {
+			creds = S3Credentials{
+				AccessKeyId:     appCfg.AWS.S3.AccessKey,
+				SecretAccessKey: appCfg.AWS.S3.SecretKey,
+				SessionToken:    "",
 			}
-			http.Error(w, err.Error(), status)
-			return
+		} else {
+			var err error
+			creds, err = GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
+			if err != nil {
+				var status int
+				if httpErr, ok := err.(*services.HTTPError); ok {
+					status = httpErr.Status
+				} else {
+					status = http.StatusInternalServerError
+				}
+				http.Error(w, err.Error(), status)
+				return
+			}
 		}
 
 		cfg, err := config.LoadDefaultConfig(ctx,
@@ -150,7 +170,7 @@ func DeleteFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keyc
 			return
 		}
 
-		s3Client := awsclient.NewS3Client(cfg)
+		s3Client := awsclient.NewS3ClientWithEndpoint(cfg, appCfg.AWS.S3.Endpoint, appCfg.AWS.S3.ForcePathStyle)
 
 		var objects []s3types.ObjectIdentifier
 		for _, key := range payload.Keys {

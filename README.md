@@ -85,7 +85,50 @@ Run this with:
 
 `go run main.go reconcile --config {path-to-config.yaml}`
 
-## Local Setup
+## Alternative Local Setup
+
+### Docker Development Environment (Recommended)
+This repository includes a local Docker Compose setup that runs:
+- Postgres
+- Pulsar (standalone)
+- MinIO (S3-compatible)
+- Keycloak (dev realm)
+- Workspace Services API
+
+Start the environment:
+```
+docker compose up --build
+```
+
+Key files:
+- `docker-compose.yml`
+- `config/local-docker.yaml`
+- `config/keycloak/realm-eodhp.json`
+- `config/db/seed.sql`
+
+Default local endpoints:
+- API: http://localhost:8080
+- Keycloak: http://localhost:8081
+- MinIO Console: http://localhost:9001 (user: `minio`, pass: `minio123`)
+
+Expected container state:
+- Running: `eodhp-workspace-services`, `eodhp-postgres`, `eodhp-pulsar`, `eodhp-minio`, `eodhp-keycloak`
+- Exited (one-off jobs): `workspace-migrate-1`, `db-seed-1`, `minio-init-1`, `pulsar-init-1`
+
+Keycloak dev user:
+- username: `dev-user`
+- password: `devpass`
+- client: `eodh-workspaces`
+- client secret: `eodh-workspaces-secret`
+
+Obtain a token:
+```
+curl -X POST http://localhost:8081/realms/eodhp/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password&client_id=eodh-workspaces&client_secret=eodh-workspaces-secret&username=dev-user&password=devpass"
+```
+
+MinIO bucket (created automatically): `workspaces-eodhp-local`
 
 ### Database
 To connect to the database, setup an SSH tunnel:

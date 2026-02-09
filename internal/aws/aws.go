@@ -40,3 +40,14 @@ func NewSTSClient(cfg aws.Config) *sts.Client {
 func NewS3Client(cfg aws.Config) *s3.Client {
 	return s3.NewFromConfig(cfg)
 }
+
+// Initialize S3 Client with optional endpoint override.
+func NewS3ClientWithEndpoint(cfg aws.Config, endpoint string, forcePathStyle bool) *s3.Client {
+	if endpoint == "" {
+		return s3.NewFromConfig(cfg)
+	}
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		o.BaseEndpoint = aws.String(endpoint)
+		o.UsePathStyle = forcePathStyle
+	})
+}
