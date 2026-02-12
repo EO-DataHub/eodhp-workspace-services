@@ -24,9 +24,9 @@ aws:
     bucket: workspaces-eodhp-{{.ENV}}
     host: s3-accesspoint.eu-west-2.amazonaws.com
     roleArn: arn:aws:iam::{{.AWS_ACCOUNT_ID}}:role/WorkspaceServices-{{.AWS_CLUSTER_NAME}}
-    publicEndpoint: https://s3-accesspoint.eu-west-2.amazonaws.com
-download:
-  signingSecret: {{.DOWNLOAD_SIGNING_SECRET}}
+files:
+  responseTimeFormat: "2006-01-02T15:04:05Z"
+  maxUploadFormMemoryMB: 32
 providers:
   airbus:
     access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token

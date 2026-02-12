@@ -23,9 +23,7 @@ import (
 // @Router /workspaces/{workspace-id}/files [get]
 func GetWorkspaceFiles(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -50,9 +48,7 @@ func GetWorkspaceFiles(svc *services.FileService) http.HandlerFunc {
 // @Router /workspaces/{workspace-id}/files/object [post]
 func UploadWorkspaceObjectFiles(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -77,9 +73,7 @@ func UploadWorkspaceObjectFiles(svc *services.FileService) http.HandlerFunc {
 // @Router /workspaces/{workspace-id}/files/block [post]
 func UploadWorkspaceBlockFiles(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -105,9 +99,7 @@ func UploadWorkspaceBlockFiles(svc *services.FileService) http.HandlerFunc {
 // @Router /workspaces/{workspace-id}/files/object [delete]
 func DeleteWorkspaceObjectFile(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -133,9 +125,7 @@ func DeleteWorkspaceObjectFile(svc *services.FileService) http.HandlerFunc {
 // @Router /workspaces/{workspace-id}/files/block [delete]
 func DeleteWorkspaceBlockFile(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -160,9 +150,7 @@ func DeleteWorkspaceBlockFile(svc *services.FileService) http.HandlerFunc {
 // @Router /workspaces/{workspace-id}/files/object/metadata [get]
 func GetWorkspaceObjectFileMetadata(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -187,33 +175,10 @@ func GetWorkspaceObjectFileMetadata(svc *services.FileService) http.HandlerFunc 
 // @Router /workspaces/{workspace-id}/files/block/metadata [get]
 func GetWorkspaceBlockFileMetadata(svc *services.FileService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
 		svc.GetFileMetadataService(w, r, "block")
-	}
-}
-
-// @Summary Download a file from the workspace block store
-// @Description Serves a block-store file using a short-lived signed URL (exp + sig). Clients should use the downloadUrl returned by list/metadata instead of calling this directly.
-// @Tags Workspace Files Management
-// @Accept json
-// @Produce application/octet-stream
-// @Param workspace-id path string true "Workspace ID"
-// @Param file query string true "File name to download"
-// @Param exp query string true "Expiry timestamp (unix)"
-// @Param sig query string true "Signature"
-// @Success 200 {file} file
-// @Failure 400 {object} string
-// @Failure 401 {object} string
-// @Failure 404 {object} string
-// @Failure 500 {object} string
-// @Router /workspaces/{workspace-id}/files/block/download [get]
-func DownloadWorkspaceBlockFile(svc *services.FileService) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		svc.DownloadBlockFileService(w, r)
 	}
 }

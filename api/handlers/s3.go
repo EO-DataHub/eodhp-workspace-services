@@ -9,6 +9,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/gorilla/mux"
@@ -23,7 +24,7 @@ type STSClient interface {
 }
 
 // GetS3Credentials extracts the core logic to retrieve S3 credentials
-func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r *http.Request) (S3Credentials, error) {
+func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r *http.Request) (awsclient.S3Credentials, error) {
 	vars := mux.Vars(r)
 	workspaceID := vars["workspace-id"]
 	userID := vars["user-id"]
@@ -35,7 +36,7 @@ func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r 
 	if !ok {
 		err := fmt.Errorf("invalid token")
 		logger.Error().Msg(err.Error())
-		return S3Credentials{}, err
+		return awsclient.S3Credentials{}, err
 	}
 
 	logger.Debug().Str("token", token).Msg("Token retrieved")
@@ -44,7 +45,7 @@ func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r 
 	if !ok {
 		err := fmt.Errorf("invalid claims")
 		logger.Error().Msg(err.Error())
-		return S3Credentials{}, err
+		return awsclient.S3Credentials{}, err
 	}
 
 	logger = logger.With().Str("claims user", claims.Username).Logger()
@@ -59,7 +60,7 @@ func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r 
 		workspaceToken, err := k.ExchangeToken(token, fmt.Sprintf("workspace:%s", workspaceID))
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to get offline token")
-			return S3Credentials{}, err
+			return awsclient.S3Credentials{}, err
 		}
 		token = workspaceToken.Access
 	}
@@ -71,10 +72,10 @@ func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r 
 	})
 	if err != nil {
 		logger.Err(err).Msg("Failed to retrieve S3 credentials")
-		return S3Credentials{}, err
+		return awsclient.S3Credentials{}, err
 	}
 
-	return S3Credentials{
+	return awsclient.S3Credentials{
 		AccessKeyId:     *resp.Credentials.AccessKeyId,
 		SecretAccessKey: *resp.Credentials.SecretAccessKey,
 		SessionToken:    *resp.Credentials.SessionToken,
@@ -89,7 +90,7 @@ func GetS3Credentials(roleArn string, c STSClient, k services.KeycloakClient, r 
 // @Produce json
 // @Param workspace-id path string true "Workspace ID" example(my-workspace)
 // @Param user-id path string true "User ID" example(me)
-// @Success 200 {object} S3Credentials
+// @Success 200 {object} awsclient.S3Credentials
 // @Failure 400 {object} string
 // @Failure 401 {object} string
 // @Failure 500 {object} string
@@ -118,13 +119,6 @@ func RequestS3CredentialsHandler(roleArn string, c STSClient, k services.Keycloa
 		}
 		logger.Info().Msg("S3 credentials retrieved")
 	}
-}
-
-type S3Credentials struct {
-	AccessKeyId     string `json:"accessKeyId"`
-	SecretAccessKey string `json:"secretAccessKey"`
-	SessionToken    string `json:"sessionToken"`
-	Expiration      string `json:"expiration"`
 }
 
 func tokenExchangeRequired(claims authn.Claims, workspaceID string,

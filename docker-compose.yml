@@ -8,6 +8,11 @@ services:
       POSTGRES_USER: eodhp
       POSTGRES_PASSWORD: eodhp
       POSTGRES_DB: eodhp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eodhp -d eodhp -h localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     ports:
       - "5432:5432"
     volumes:
@@ -91,7 +96,8 @@ services:
   workspace-migrate:
     build: .
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       ENV: local
       SQL_USER: eodhp
@@ -106,7 +112,6 @@ services:
       S3_ACCESS_KEY: minio
       S3_SECRET_KEY: minio123
       KEYCLOAK_CLIENT_SECRET: eodh-workspaces-secret
-      DOWNLOAD_SIGNING_SECRET: local-download-secret
     command: ["init-db-migrate", "--config", "/config/local-docker.yaml"]
     volumes:
       - ./config/local-docker.yaml:/config/local-docker.yaml
@@ -114,7 +119,8 @@ services:
   db-seed:
     image: postgres:15
     depends_on:
-      - workspace-migrate
+      workspace-migrate:
+        condition: service_completed_successfully
     environment:
       PGPASSWORD: eodhp
     command: ["psql", "-h", "postgres", "-U", "eodhp", "-d", "eodhp", "-f", "/seed/seed.sql"]
@@ -154,7 +160,6 @@ services:
       S3_ACCESS_KEY: minio
       S3_SECRET_KEY: minio123
       KEYCLOAK_CLIENT_SECRET: eodh-workspaces-secret
-      DOWNLOAD_SIGNING_SECRET: local-download-secret
     ports:
       - "8080:8080"
     command: ["serve", "--host=0.0.0.0", "--port=8080", "--config", "/config/local-docker.yaml"]

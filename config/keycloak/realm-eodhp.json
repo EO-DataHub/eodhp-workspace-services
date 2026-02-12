@@ -14,7 +14,16 @@
   ],
   "groups": [
     {
-      "name": "test-workspace"
+      "name": "eodh-demos"
+    },
+    {
+      "name": "samples-airbus-optical"
+    },
+    {
+      "name": "samples-airbus-sar"
+    },
+    {
+      "name": "samples-planet"
     }
   ],
   "users": [
@@ -33,7 +42,10 @@
         }
       ],
       "groups": [
-        "/test-workspace"
+        "/eodh-demos",
+        "/samples-airbus-optical",
+        "/samples-airbus-sar",
+        "/samples-planet"
       ]
     },
     {

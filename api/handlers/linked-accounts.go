@@ -12,9 +12,7 @@ func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -28,9 +26,7 @@ func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -44,9 +40,7 @@ func DeleteLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 

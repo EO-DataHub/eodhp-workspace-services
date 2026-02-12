@@ -71,10 +71,6 @@ var serveCmd = &cobra.Command{
 			httpSwagger.DomID("swagger-ui"),
 		)).Methods(http.MethodGet)
 
-		// Block download route (signed URL, no auth middleware)
-		r.HandleFunc(path.Join(appCfg.BasePath, "/workspaces/{workspace-id}/files/block/download"),
-			handlers.DownloadWorkspaceBlockFile(fileService)).Methods(http.MethodGet)
-
 		// Register the API routes
 		api := r.PathPrefix(appCfg.BasePath).Subrouter()
 
@@ -140,7 +136,7 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/files/object/metadata", handlers.GetWorkspaceObjectFileMetadata(fileService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/files/block/metadata", handlers.GetWorkspaceBlockFileMetadata(fileService)).Methods(http.MethodGet)
 
-		// Linked account routes (disabled if no K8s client)
+		// Linked account routes (disabled when K8s client is unavailable, e.g., local dev without kubeconfig)
 		if k8sClient != nil {
 			linkedAccountService := &services.LinkedAccountService{
 				Config:         appCfg,

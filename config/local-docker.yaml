@@ -25,12 +25,12 @@ aws:
     host: localhost
     roleArn: ""
     endpoint: {{.S3_ENDPOINT}}
-    publicEndpoint: http://127.0.0.1:9000
     forcePathStyle: true
     accessKey: {{.S3_ACCESS_KEY}}
     secretKey: {{.S3_SECRET_KEY}}
-download:
-  signingSecret: {{.DOWNLOAD_SIGNING_SECRET}}
+files:
+  responseTimeFormat: "2006-01-02T15:04:05Z"
+  maxUploadFormMemoryMB: 32
 providers:
   airbus:
     access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token

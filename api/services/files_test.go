@@ -1,14 +1,19 @@
 package services
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"strconv"
+	"path/filepath"
 	"testing"
-	"time"
 
+	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,60 +43,176 @@ func TestValidateFileName(t *testing.T) {
 	}
 }
 
-func TestBlockDownloadSignature(t *testing.T) {
-	svc := FileService{
-		Config: &appconfig.Config{
-			Download: appconfig.DownloadConfig{
-				SigningSecret: "test-secret",
-			},
-		},
-	}
+func TestListFilesServiceMissingClaimsReturnsUnauthorized(t *testing.T) {
+	svc := FileService{}
+	req := newListFilesRequest("ws-1", "", nil)
+	w := httptest.NewRecorder()
 
-	exp := time.Now().Add(5 * time.Minute).Unix()
-	sig := signBlockDownload("test-secret", "ws-1", "file.tif", exp)
+	svc.ListFilesService(w, req)
 
-	err := svc.validateBlockDownloadSignature("ws-1", "file.tif", strconv.FormatInt(exp, 10), sig)
-	require.NoError(t, err)
-
-	expired := time.Now().Add(-1 * time.Minute).Unix()
-	err = svc.validateBlockDownloadSignature("ws-1", "file.tif", strconv.FormatInt(expired, 10), sig)
-	require.Error(t, err)
-
-	err = svc.validateBlockDownloadSignature("ws-1", "file.tif", strconv.FormatInt(exp, 10), "bad")
-	require.Error(t, err)
+	require.Equal(t, http.StatusUnauthorized, w.Result().StatusCode)
 }
 
-func TestBlockDownloadURL(t *testing.T) {
+func TestListFilesServiceNonMemberReturnsForbidden(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	claims := authn.Claims{Username: "dev-user"}
+	claims.Subject = "user-123"
+
+	mockKC.On("GetUserGroups", "user-123").Return([]string{"another-workspace"}, nil).Once()
+
 	svc := FileService{
-		Config: &appconfig.Config{
-			Host:     "example.com",
-			BasePath: "/api",
-			Download: appconfig.DownloadConfig{
-				SigningSecret: "test-secret",
+		DB: mockDB,
+		KC: mockKC,
+	}
+	req := newListFilesRequest("ws-1", "", &claims)
+	w := httptest.NewRecorder()
+
+	svc.ListFilesService(w, req)
+
+	require.Equal(t, http.StatusForbidden, w.Result().StatusCode)
+	mockKC.AssertExpectations(t)
+}
+
+func TestListFilesServiceWorkspaceNotFoundReturnsNotFound(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	claims := hubAdminClaims()
+	workspaceID := "missing-ws"
+
+	mockDB.On("GetWorkspace", workspaceID).
+		Return(&ws_manager.WorkspaceSettings{}, errors.New("not found")).Once()
+
+	svc := FileService{
+		DB: mockDB,
+		KC: mockKC,
+	}
+	req := newListFilesRequest(workspaceID, "", &claims)
+	w := httptest.NewRecorder()
+
+	svc.ListFilesService(w, req)
+
+	require.Equal(t, http.StatusNotFound, w.Result().StatusCode)
+	mockDB.AssertExpectations(t)
+}
+
+func TestListFilesServiceInvalidStoreReturnsBadRequest(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	claims := hubAdminClaims()
+	workspaceID := "ws-1"
+	workspace := &ws_manager.WorkspaceSettings{Name: workspaceID}
+
+	mockDB.On("GetWorkspace", workspaceID).Return(workspace, nil).Once()
+
+	svc := FileService{
+		DB: mockDB,
+		KC: mockKC,
+	}
+	req := newListFilesRequest(workspaceID, "store=invalid", &claims)
+	w := httptest.NewRecorder()
+
+	svc.ListFilesService(w, req)
+
+	require.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
+	mockDB.AssertExpectations(t)
+}
+
+func TestListFilesServiceBlockStoreMissingDirectoryReturnsEmptyItems(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	claims := hubAdminClaims()
+	workspaceID := "ws-1"
+	missingPath := filepath.Join(t.TempDir(), "missing")
+	stores := []ws_manager.Stores{
+		{
+			Block: []ws_manager.BlockStore{
+				{Name: "block-store", MountPoint: missingPath},
 			},
 		},
 	}
+	workspace := &ws_manager.WorkspaceSettings{
+		Name:   workspaceID,
+		Stores: &stores,
+	}
 
-	req := httptest.NewRequest(http.MethodGet, "http://example.com", nil)
-	urlStr := svc.blockDownloadURL(req, "ws-1", "file.tif")
-	require.NotEmpty(t, urlStr)
+	mockDB.On("GetWorkspace", workspaceID).Return(workspace, nil).Once()
 
-	parsed, err := url.Parse(urlStr)
-	require.NoError(t, err)
-	require.Equal(t, "http", parsed.Scheme)
-	require.Equal(t, "example.com", parsed.Host)
-	require.Equal(t, "/api/workspaces/ws-1/files/block/download", parsed.Path)
+	svc := FileService{
+		DB: mockDB,
+		KC: mockKC,
+	}
+	req := newListFilesRequest(workspaceID, "store=block", &claims)
+	w := httptest.NewRecorder()
 
-	q := parsed.Query()
-	require.Equal(t, "file.tif", q.Get("file"))
-	require.NotEmpty(t, q.Get("exp"))
-	require.NotEmpty(t, q.Get("sig"))
+	svc.ListFilesService(w, req)
 
-	exp, err := strconv.ParseInt(q.Get("exp"), 10, 64)
-	require.NoError(t, err)
-	expectedSig := signBlockDownload("test-secret", "ws-1", "file.tif", exp)
-	require.Equal(t, expectedSig, q.Get("sig"))
+	require.Equal(t, http.StatusOK, w.Result().StatusCode)
 
-	svc.Config.Download.SigningSecret = ""
-	require.Empty(t, svc.blockDownloadURL(req, "ws-1", "file.tif"))
+	var resp FileListResponse
+	require.NoError(t, json.NewDecoder(w.Result().Body).Decode(&resp))
+	require.Equal(t, workspaceID, resp.Workspace)
+	require.Len(t, resp.Items, 0)
+	mockDB.AssertExpectations(t)
+}
+
+func TestResponseTimeFormatDefaultsWhenConfigIsMissing(t *testing.T) {
+	svc := FileService{}
+	require.Equal(t, defaultTimeFormat, svc.responseTimeFormat())
+}
+
+func TestResponseTimeFormatUsesConfiguredValue(t *testing.T) {
+	svc := FileService{
+		Config: &appconfig.Config{
+			Files: appconfig.FilesConfig{
+				ResponseTimeFormat: "2006-01-02",
+			},
+		},
+	}
+	require.Equal(t, "2006-01-02", svc.responseTimeFormat())
+}
+
+func TestMaxUploadFormMemoryBytesDefaultsWhenConfigIsMissing(t *testing.T) {
+	svc := FileService{}
+	require.Equal(t, defaultFormMemory, svc.maxUploadFormMemoryBytes())
+}
+
+func TestMaxUploadFormMemoryBytesUsesConfiguredValue(t *testing.T) {
+	svc := FileService{
+		Config: &appconfig.Config{
+			Files: appconfig.FilesConfig{
+				MaxUploadFormMemory: 64,
+			},
+		},
+	}
+	require.Equal(t, int64(64<<20), svc.maxUploadFormMemoryBytes())
+}
+
+func newListFilesRequest(workspaceID, query string, claims *authn.Claims) *http.Request {
+	url := "/api/workspaces/" + workspaceID + "/files"
+	if query != "" {
+		url = url + "?" + query
+	}
+
+	req := httptest.NewRequest(http.MethodGet, url, nil)
+	req = mux.SetURLVars(req, map[string]string{"workspace-id": workspaceID})
+	if claims == nil {
+		return req
+	}
+
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, *claims)
+	return req.WithContext(ctx)
+}
+
+// hubAdminClaims bypasses workspace membership checks so tests can focus on
+// specific handler/service behavior (validation and not-found paths).
+func hubAdminClaims() authn.Claims {
+	claims := authn.Claims{Username: "admin-user"}
+	claims.Subject = "admin-subject"
+	claims.RealmAccess.Roles = []string{"hub_admin"}
+	return claims
 }

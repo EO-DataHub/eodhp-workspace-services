@@ -141,8 +141,6 @@ definitions:
     type: object
   services.FileItem:
     properties:
-      downloadUrl:
-        type: string
       etag:
         type: string
       fileName:
@@ -538,60 +536,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Upload files to the workspace block store
-      tags:
-      - Workspace Files Management
-  /workspaces/{workspace-id}/files/block/download:
-    get:
-      consumes:
-      - application/json
-      description: Serves a block-store file using a short-lived signed URL (exp +
-        sig). Clients should use the downloadUrl returned by list/metadata instead
-        of calling this directly.
-      parameters:
-      - description: Workspace ID
-        in: path
-        name: workspace-id
-        required: true
-        type: string
-      - description: File name to download
-        in: query
-        name: file
-        required: true
-        type: string
-      - description: Expiry timestamp (unix)
-        in: query
-        name: exp
-        required: true
-        type: string
-      - description: Signature
-        in: query
-        name: sig
-        required: true
-        type: string
-      produces:
-      - application/octet-stream
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: file
-        "400":
-          description: Bad Request
-          schema:
-            type: string
-        "401":
-          description: Unauthorized
-          schema:
-            type: string
-        "404":
-          description: Not Found
-          schema:
-            type: string
-        "500":
-          description: Internal Server Error
-          schema:
-            type: string
-      summary: Download a file from the workspace block store
       tags:
       - Workspace Files Management
   /workspaces/{workspace-id}/files/block/metadata:

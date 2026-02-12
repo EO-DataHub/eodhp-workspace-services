@@ -414,83 +414,6 @@
                 }
             }
         },
-        "/workspaces/{workspace-id}/files/block/download": {
-            "get": {
-                "description": "Serves a block-store file using a short-lived signed URL (exp + sig). Clients should use the downloadUrl returned by list/metadata instead of calling this directly.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/octet-stream"
-                ],
-                "tags": [
-                    "Workspace Files Management"
-                ],
-                "summary": "Download a file from the workspace block store",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Workspace ID",
-                        "name": "workspace-id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "File name to download",
-                        "name": "file",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Expiry timestamp (unix)",
-                        "name": "exp",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Signature",
-                        "name": "sig",
-                        "in": "query",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "file"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
-            }
-        },
         "/workspaces/{workspace-id}/files/block/metadata": {
             "get": {
                 "security": [
@@ -1373,9 +1296,6 @@
         "services.FileItem": {
             "type": "object",
             "properties": {
-                "downloadUrl": {
-                    "type": "string"
-                },
                 "etag": {
                     "type": "string"
                 },
