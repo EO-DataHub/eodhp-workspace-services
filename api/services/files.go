@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -120,13 +121,13 @@ func resolveStoreSelection(storeType string, allowAll bool) (bool, bool, error) 
 		if allowAll {
 			return true, true, nil
 		}
-		return false, false, fmt.Errorf(invalidStoreType)
+		return false, false, errors.New(invalidStoreType)
 	case storeTypeObject:
 		return true, false, nil
 	case storeTypeBlock:
 		return false, true, nil
 	default:
-		return false, false, fmt.Errorf(invalidStoreType)
+		return false, false, errors.New(invalidStoreType)
 	}
 }
 
