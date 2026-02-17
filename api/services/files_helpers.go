@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"mime/multipart"
-	"os"
 	"path"
-	"path/filepath"
 	"strings"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
@@ -41,6 +39,28 @@ func selectBlockStore(stores []ws_manager.BlockStore) (ws_manager.BlockStore, er
 		return ws_manager.BlockStore{}, fmt.Errorf("no block store configured")
 	}
 	return stores[0], nil
+}
+
+func resolveBlockWorkspaceDir(store ws_manager.BlockStore, workspaceID string) (string, error) {
+	mountPoint := strings.TrimSpace(store.MountPoint)
+	if mountPoint == "" {
+		return "", fmt.Errorf("block store not provisioned")
+	}
+
+	cleanMount := path.Clean(strings.ReplaceAll(mountPoint, "\\", "/"))
+	workspaceDir := path.Base(cleanMount)
+	if workspaceDir == "." || workspaceDir == "/" || workspaceDir == "" {
+		return "", fmt.Errorf("invalid block store mount point")
+	}
+	if err := validateFileName(workspaceDir); err != nil {
+		return "", fmt.Errorf("invalid block store mount point")
+	}
+
+	if strings.TrimSpace(workspaceID) != "" && workspaceDir != workspaceID {
+		return "", fmt.Errorf("block store mount point does not match workspace")
+	}
+
+	return workspaceDir, nil
 }
 
 func collectMultipartFiles(form *multipart.Form) []*multipart.FileHeader {
@@ -126,41 +146,6 @@ func relativeS3Path(prefix, key string) string {
 	return key
 }
 
-func safeBlockPath(root, rel string) (string, error) {
-	cleanRoot := filepath.Clean(root)
-	if cleanRoot == "." || cleanRoot == "" {
-		return "", fmt.Errorf("invalid block store root")
-	}
-	if rel == "" {
-		return cleanRoot, nil
-	}
-	if strings.Contains(rel, "\\") {
-		return "", fmt.Errorf("invalid path separator")
-	}
-	if strings.Contains(rel, "/") {
-		return "", fmt.Errorf("nested paths are not supported")
-	}
-	if strings.HasPrefix(rel, ".") {
-		return "", fmt.Errorf("invalid file name")
-	}
-	cleanRel := filepath.Clean(rel)
-	if cleanRel == "." || cleanRel == "" {
-		return "", fmt.Errorf("invalid relative path")
-	}
-	if cleanRel == ".." || strings.HasPrefix(cleanRel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("invalid relative path")
-	}
-	full := filepath.Join(cleanRoot, cleanRel)
-	relToRoot, err := filepath.Rel(cleanRoot, full)
-	if err != nil {
-		return "", err
-	}
-	if relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path escapes workspace root")
-	}
-	return full, nil
-}
-
 func validateFileName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -225,42 +210,6 @@ func listS3Objects(ctx context.Context, client *s3.Client, store ws_manager.Obje
 		token = out.NextContinuationToken
 	}
 
-	return items, nil
-}
-
-func listBlockFiles(root, timeFormat string) ([]FileItem, error) {
-	var items []FileItem
-
-	info, err := os.Stat(root)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return items, nil
-		}
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, fmt.Errorf("block store root is not a directory")
-	}
-
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, err
-	}
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		entryInfo, err := entry.Info()
-		if err != nil {
-			return nil, err
-		}
-		items = append(items, FileItem{
-			StoreType:    storeTypeBlock,
-			FileName:     entry.Name(),
-			Size:         entryInfo.Size(),
-			LastModified: entryInfo.ModTime().UTC().Format(timeFormat),
-		})
-	}
 	return items, nil
 }
 

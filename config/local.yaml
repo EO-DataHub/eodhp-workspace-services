@@ -27,6 +27,8 @@ aws:
 files:
   responseTimeFormat: "2006-01-02T15:04:05Z"
   maxUploadFormMemoryMB: 32
+  blockBaseUrl: "http://localhost:8080"
+  blockTimeoutSeconds: 30
 providers:
   airbus:
     access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token

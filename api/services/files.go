@@ -3,12 +3,7 @@ package services
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"mime/multipart"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
@@ -16,11 +11,6 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
-	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
-	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
@@ -137,6 +127,8 @@ func (svc *FileService) ListFilesService(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
+	// Propagate the request context so downstream I/O is canceled on client disconnect/timeout.
+	ctx := r.Context()
 
 	storeType := r.URL.Query().Get("store")
 	var items []FileItem
@@ -156,7 +148,7 @@ func (svc *FileService) ListFilesService(w http.ResponseWriter, r *http.Request)
 		items = append(items, objItems...)
 	}
 	if wantBlock {
-		blkItems, err := svc.listBlockStoreItems(blockStores)
+		blkItems, err := svc.listBlockStoreItems(ctx, blockStores, workspaceID)
 		if err != nil {
 			WriteResponse(w, http.StatusBadRequest, err.Error())
 			return
@@ -176,6 +168,8 @@ func (svc *FileService) UploadFilesService(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
+	// Propagate the request context so downstream I/O is canceled on client disconnect/timeout.
+	ctx := r.Context()
 
 	if err := r.ParseMultipartForm(svc.maxUploadFormMemoryBytes()); err != nil {
 		WriteResponse(w, http.StatusBadRequest, "invalid multipart form data")
@@ -214,7 +208,7 @@ func (svc *FileService) UploadFilesService(w http.ResponseWriter, r *http.Reques
 			WriteResponse(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		uploaded, err := svc.uploadBlockStoreFiles(blockStore, files)
+		uploaded, err := svc.uploadBlockStoreFiles(ctx, workspaceID, blockStore, files)
 		if err != nil {
 			WriteResponse(w, http.StatusInternalServerError, err.Error())
 			return
@@ -234,6 +228,8 @@ func (svc *FileService) DeleteFilesService(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
+	// Propagate the request context so downstream I/O is canceled on client disconnect/timeout.
+	ctx := r.Context()
 
 	fileName := r.URL.Query().Get("file")
 	if fileName == "" {
@@ -273,7 +269,7 @@ func (svc *FileService) DeleteFilesService(w http.ResponseWriter, r *http.Reques
 			WriteResponse(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		deleted, failed, err = svc.deleteBlockStoreFiles(blockStore, []string{fileName})
+		deleted, failed, err = svc.deleteBlockStoreFiles(ctx, workspaceID, blockStore, []string{fileName})
 		if err != nil {
 			WriteResponse(w, http.StatusInternalServerError, err.Error())
 			return
@@ -298,6 +294,8 @@ func (svc *FileService) GetFileMetadataService(w http.ResponseWriter, r *http.Re
 	if !ok {
 		return
 	}
+	// Propagate the request context so downstream I/O is canceled on client disconnect/timeout.
+	ctx := r.Context()
 
 	fileName := r.URL.Query().Get("file")
 	if fileName == "" {
@@ -336,7 +334,7 @@ func (svc *FileService) GetFileMetadataService(w http.ResponseWriter, r *http.Re
 			WriteResponse(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		item, err = svc.getBlockStoreMetadata(blockStore, fileName)
+		item, err = svc.getBlockStoreMetadata(ctx, workspaceID, blockStore, fileName)
 		if err != nil {
 			WriteResponse(w, http.StatusNotFound, err.Error())
 			return
@@ -347,384 +345,4 @@ func (svc *FileService) GetFileMetadataService(w http.ResponseWriter, r *http.Re
 		Workspace: workspaceID,
 		Item:      item,
 	})
-}
-
-func (svc *FileService) listObjectStoreItems(r *http.Request, stores []ws_manager.ObjectStore) ([]FileItem, error) {
-	if len(stores) == 0 {
-		return nil, fmt.Errorf("no object store configured")
-	}
-	store, err := selectObjectStore(stores)
-	if err != nil {
-		return nil, err
-	}
-	if store.Bucket == "" || store.Prefix == "" {
-		return nil, fmt.Errorf("object store not provisioned")
-	}
-
-	s3Client, err := svc.newS3Client(r)
-	if err != nil {
-		return nil, err
-	}
-
-	prefix, err := safeS3Prefix(store.Prefix, "")
-	if err != nil {
-		return nil, err
-	}
-
-	items, err := listS3Objects(r.Context(), s3Client, store, prefix, svc.responseTimeFormat())
-	if err != nil {
-		return nil, err
-	}
-
-	return items, nil
-}
-
-func (svc *FileService) listBlockStoreItems(stores []ws_manager.BlockStore) ([]FileItem, error) {
-	if len(stores) == 0 {
-		return nil, fmt.Errorf("no block store configured")
-	}
-	store, err := selectBlockStore(stores)
-	if err != nil {
-		return nil, err
-	}
-	if store.MountPoint == "" {
-		return nil, fmt.Errorf("block store not provisioned")
-	}
-
-	root, err := safeBlockPath(store.MountPoint, "")
-	if err != nil {
-		return nil, err
-	}
-	return listBlockFiles(root, svc.responseTimeFormat())
-}
-
-func (svc *FileService) uploadObjectStoreFiles(r *http.Request, store ws_manager.ObjectStore, files []*multipart.FileHeader) ([]FileItem, error) {
-	if store.Bucket == "" || store.Prefix == "" {
-		return nil, fmt.Errorf("object store not provisioned")
-	}
-
-	s3Client, err := svc.newS3Client(r)
-	if err != nil {
-		return nil, err
-	}
-
-	var items []FileItem
-	for _, fh := range files {
-		if fh == nil || fh.Filename == "" {
-			continue
-		}
-		if err := validateFileName(fh.Filename); err != nil {
-			return nil, err
-		}
-
-		src, err := fh.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		key, err := safeS3Key(store.Prefix, fh.Filename)
-		if err != nil {
-			_ = src.Close()
-			return nil, err
-		}
-
-		_, err = s3Client.PutObject(r.Context(), &s3.PutObjectInput{
-			Bucket:      aws.String(store.Bucket),
-			Key:         aws.String(key),
-			Body:        src,
-			ContentType: aws.String(fh.Header.Get("Content-Type")),
-		})
-		if closeErr := src.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		items = append(items, FileItem{
-			StoreType: storeTypeObject,
-			FileName:  relativeS3Path(store.Prefix, key),
-			Size:      fh.Size,
-		})
-	}
-
-	return items, nil
-}
-
-func (svc *FileService) uploadBlockStoreFiles(store ws_manager.BlockStore, files []*multipart.FileHeader) ([]FileItem, error) {
-	if store.MountPoint == "" {
-		return nil, fmt.Errorf("block store not provisioned")
-	}
-
-	root, err := safeBlockPath(store.MountPoint, "")
-	if err != nil {
-		return nil, err
-	}
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		return nil, err
-	}
-
-	var items []FileItem
-	for _, fh := range files {
-		if fh == nil || fh.Filename == "" {
-			continue
-		}
-		if err := validateFileName(fh.Filename); err != nil {
-			return nil, err
-		}
-
-		src, err := fh.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		dstPath, err := safeBlockPath(root, fh.Filename)
-		if err != nil {
-			_ = src.Close()
-			return nil, err
-		}
-
-		dst, err := os.Create(dstPath)
-		if err != nil {
-			_ = src.Close()
-			return nil, err
-		}
-
-		written, err := io.Copy(dst, src)
-		if closeErr := dst.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-		if closeErr := src.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			return nil, err
-		}
-
-		info, err := os.Stat(dstPath)
-		if err != nil {
-			return nil, err
-		}
-
-		lastModified := ""
-		if !info.ModTime().IsZero() {
-			lastModified = info.ModTime().UTC().Format(svc.responseTimeFormat())
-		}
-
-		items = append(items, FileItem{
-			StoreType:    storeTypeBlock,
-			FileName:     fh.Filename,
-			Size:         written,
-			LastModified: lastModified,
-		})
-	}
-
-	return items, nil
-}
-
-func (svc *FileService) deleteObjectStoreFiles(r *http.Request, store ws_manager.ObjectStore, paths []string) ([]string, []FileFail, error) {
-	if store.Bucket == "" || store.Prefix == "" {
-		return nil, nil, fmt.Errorf("object store not provisioned")
-	}
-
-	s3Client, err := svc.newS3Client(r)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var deleted []string
-	var failed []FileFail
-	for _, p := range paths {
-		key, err := safeS3Key(store.Prefix, p)
-		if err != nil {
-			failed = append(failed, FileFail{FileName: p, Error: err.Error()})
-			continue
-		}
-
-		_, err = s3Client.DeleteObject(r.Context(), &s3.DeleteObjectInput{
-			Bucket: aws.String(store.Bucket),
-			Key:    aws.String(key),
-		})
-		if err != nil {
-			failed = append(failed, FileFail{FileName: p, Error: err.Error()})
-			continue
-		}
-		deleted = append(deleted, p)
-	}
-
-	return deleted, failed, nil
-}
-
-func (svc *FileService) deleteBlockStoreFiles(store ws_manager.BlockStore, paths []string) ([]string, []FileFail, error) {
-	if store.MountPoint == "" {
-		return nil, nil, fmt.Errorf("block store not provisioned")
-	}
-
-	root, err := safeBlockPath(store.MountPoint, "")
-	if err != nil {
-		return nil, nil, err
-	}
-
-	var deleted []string
-	var failed []FileFail
-	for _, p := range paths {
-		fullPath, err := safeBlockPath(root, p)
-		if err != nil {
-			failed = append(failed, FileFail{FileName: p, Error: err.Error()})
-			continue
-		}
-		info, err := os.Stat(fullPath)
-		if err != nil {
-			failed = append(failed, FileFail{FileName: p, Error: err.Error()})
-			continue
-		}
-		if info.IsDir() {
-			failed = append(failed, FileFail{FileName: p, Error: "file is a directory"})
-			continue
-		}
-		if err := os.Remove(fullPath); err != nil {
-			failed = append(failed, FileFail{FileName: p, Error: err.Error()})
-			continue
-		}
-		deleted = append(deleted, p)
-	}
-
-	return deleted, failed, nil
-}
-
-func (svc *FileService) getObjectStoreMetadata(r *http.Request, store ws_manager.ObjectStore, pathParam string) (FileItem, error) {
-	if store.Bucket == "" || store.Prefix == "" {
-		return FileItem{}, fmt.Errorf("object store not provisioned")
-	}
-
-	s3Client, err := svc.newS3Client(r)
-	if err != nil {
-		return FileItem{}, err
-	}
-
-	key, err := safeS3Key(store.Prefix, pathParam)
-	if err != nil {
-		return FileItem{}, err
-	}
-
-	resp, err := s3Client.HeadObject(r.Context(), &s3.HeadObjectInput{
-		Bucket: aws.String(store.Bucket),
-		Key:    aws.String(key),
-	})
-	if err != nil {
-		return FileItem{}, err
-	}
-
-	item := FileItem{
-		StoreType: storeTypeObject,
-		FileName:  relativeS3Path(store.Prefix, key),
-		Size:      aws.ToInt64(resp.ContentLength),
-	}
-	if resp.LastModified != nil {
-		item.LastModified = resp.LastModified.UTC().Format(svc.responseTimeFormat())
-	}
-	if resp.ETag != nil {
-		item.ETag = strings.Trim(*resp.ETag, "\"")
-	}
-	return item, nil
-}
-
-func (svc *FileService) getBlockStoreMetadata(store ws_manager.BlockStore, pathParam string) (FileItem, error) {
-	if store.MountPoint == "" {
-		return FileItem{}, fmt.Errorf("block store not provisioned")
-	}
-
-	root, err := safeBlockPath(store.MountPoint, "")
-	if err != nil {
-		return FileItem{}, err
-	}
-	fullPath, err := safeBlockPath(root, pathParam)
-	if err != nil {
-		return FileItem{}, err
-	}
-
-	info, err := os.Stat(fullPath)
-	if err != nil {
-		return FileItem{}, err
-	}
-	item := FileItem{
-		StoreType: storeTypeBlock,
-		FileName:  filepath.Base(fullPath),
-		Size:      info.Size(),
-	}
-	item.LastModified = info.ModTime().UTC().Format(svc.responseTimeFormat())
-	return item, nil
-}
-
-func (svc *FileService) newS3Client(r *http.Request) (*s3.Client, error) {
-	creds, err := svc.getS3Credentials(r)
-	if err != nil {
-		return nil, err
-	}
-	cfg, err := config.LoadDefaultConfig(r.Context(),
-		config.WithRegion(svc.Config.AWS.Region),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
-			creds.AccessKeyId,
-			creds.SecretAccessKey,
-			creds.SessionToken,
-		)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to configure S3 client: %w", err)
-	}
-	return awsclient.NewS3ClientWithEndpoint(cfg, svc.Config.AWS.S3.Endpoint, svc.Config.AWS.S3.ForcePathStyle), nil
-}
-
-func (svc *FileService) getS3Credentials(r *http.Request) (awsclient.S3Credentials, error) {
-	// Local/dev override: use static S3 keys when provided instead of STS.
-	if svc.Config.AWS.S3.AccessKey != "" && svc.Config.AWS.S3.SecretKey != "" {
-		return awsclient.S3Credentials{
-			AccessKeyId:     svc.Config.AWS.S3.AccessKey,
-			SecretAccessKey: svc.Config.AWS.S3.SecretKey,
-			SessionToken:    "",
-			Expiration:      "",
-		}, nil
-	}
-
-	token := extractBearerToken(r.Header.Get("Authorization"))
-	if token == "" {
-		return awsclient.S3Credentials{}, fmt.Errorf("authorization header missing")
-	}
-
-	roleARN := strings.TrimSpace(svc.Config.AWS.S3.RoleArn)
-	if roleARN == "" {
-		return awsclient.S3Credentials{}, fmt.Errorf("missing AWS role ARN for S3 credentials")
-	}
-
-	stsClient := svc.STS
-	if stsClient == nil {
-		cfg, err := config.LoadDefaultConfig(r.Context(), config.WithRegion(svc.Config.AWS.Region))
-		if err != nil {
-			return awsclient.S3Credentials{}, fmt.Errorf("failed to load AWS config: %w", err)
-		}
-		stsClient = sts.NewFromConfig(cfg)
-	}
-	out, err := stsClient.AssumeRoleWithWebIdentity(r.Context(), &sts.AssumeRoleWithWebIdentityInput{
-		RoleArn:          aws.String(roleARN),
-		RoleSessionName:  aws.String("workspace-services"),
-		WebIdentityToken: aws.String(token),
-	})
-	if err != nil {
-		return awsclient.S3Credentials{}, err
-	}
-	if out.Credentials == nil {
-		return awsclient.S3Credentials{}, fmt.Errorf("missing credentials from STS response")
-	}
-	resp := out
-
-	if resp.Credentials.AccessKeyId == nil || resp.Credentials.SecretAccessKey == nil || resp.Credentials.SessionToken == nil || resp.Credentials.Expiration == nil {
-		return awsclient.S3Credentials{}, fmt.Errorf("invalid credentials returned by STS")
-	}
-
-	return awsclient.S3Credentials{
-		AccessKeyId:     *resp.Credentials.AccessKeyId,
-		SecretAccessKey: *resp.Credentials.SecretAccessKey,
-		SessionToken:    *resp.Credentials.SessionToken,
-		Expiration:      resp.Credentials.Expiration.UTC().Format(svc.responseTimeFormat()),
-	}, nil
 }

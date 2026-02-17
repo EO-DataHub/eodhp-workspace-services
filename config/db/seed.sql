@@ -159,22 +159,21 @@ INSERT INTO block_stores (
 (
     '44444444-4444-4444-4444-444444444441',
     'local-ap',
-    '/data/block/eodh-demos'
+    '/eodh-demos'
 ),
 (
     '44444444-4444-4444-4444-444444444442',
     'local-ap',
-    '/data/block/samples-airbus-optical'
+    '/samples-airbus-optical'
 ),
 (
     '44444444-4444-4444-4444-444444444443',
     'local-ap',
-    '/data/block/samples-airbus-sar'
+    '/samples-airbus-sar'
 ),
 (
     '44444444-4444-4444-4444-444444444444',
     'local-ap',
-    '/data/block/samples-planet'
+    '/samples-planet'
 )
 ON CONFLICT (store_id) DO NOTHING;
-

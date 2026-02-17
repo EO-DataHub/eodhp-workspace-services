@@ -72,6 +72,8 @@ type AWSConfig struct {
 type FilesConfig struct {
 	ResponseTimeFormat  string `yaml:"responseTimeFormat"`
 	MaxUploadFormMemory int64  `yaml:"maxUploadFormMemoryMB"`
+	BlockBaseURL        string `yaml:"blockBaseUrl"`
+	BlockTimeoutSeconds int    `yaml:"blockTimeoutSeconds"`
 }
 
 type AirbusProviderConfig struct {
