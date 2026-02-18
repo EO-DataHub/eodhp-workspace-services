@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
@@ -127,11 +126,16 @@ func TestListFilesServiceBlockStoreMissingDirectoryReturnsEmptyItems(t *testing.
 
 	claims := hubAdminClaims()
 	workspaceID := "ws-1"
-	missingPath := filepath.Join(t.TempDir(), "missing")
+	blockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/ws-1/", r.URL.Path)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer blockServer.Close()
+
 	stores := []ws_manager.Stores{
 		{
 			Block: []ws_manager.BlockStore{
-				{Name: "block-store", MountPoint: missingPath},
+				{Name: "block-store", MountPoint: "/ws-1"},
 			},
 		},
 	}
@@ -145,6 +149,11 @@ func TestListFilesServiceBlockStoreMissingDirectoryReturnsEmptyItems(t *testing.
 	svc := FileService{
 		DB: mockDB,
 		KC: mockKC,
+		Config: &appconfig.Config{
+			Files: appconfig.FilesConfig{
+				BlockBaseURL: blockServer.URL,
+			},
+		},
 	}
 	req := newListFilesRequest(workspaceID, "store=block", &claims)
 	w := httptest.NewRecorder()
