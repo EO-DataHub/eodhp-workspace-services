@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
+// listObjectStoreItems lists files from the selected object store.
 func (svc *FileService) listObjectStoreItems(r *http.Request, stores []ws_manager.ObjectStore) ([]FileItem, error) {
 	if len(stores) == 0 {
 		return nil, fmt.Errorf("no object store configured")
@@ -45,6 +46,7 @@ func (svc *FileService) listObjectStoreItems(r *http.Request, stores []ws_manage
 	return items, nil
 }
 
+// uploadObjectStoreFiles uploads multipart files to the object store.
 func (svc *FileService) uploadObjectStoreFiles(r *http.Request, store ws_manager.ObjectStore, files []*multipart.FileHeader) ([]FileItem, error) {
 	if store.Bucket == "" || store.Prefix == "" {
 		return nil, fmt.Errorf("object store not provisioned")
@@ -98,6 +100,7 @@ func (svc *FileService) uploadObjectStoreFiles(r *http.Request, store ws_manager
 	return items, nil
 }
 
+// deleteObjectStoreFiles deletes object store files and reports per-file failures.
 func (svc *FileService) deleteObjectStoreFiles(r *http.Request, store ws_manager.ObjectStore, paths []string) ([]string, []FileFail, error) {
 	if store.Bucket == "" || store.Prefix == "" {
 		return nil, nil, fmt.Errorf("object store not provisioned")
@@ -131,6 +134,7 @@ func (svc *FileService) deleteObjectStoreFiles(r *http.Request, store ws_manager
 	return deleted, failed, nil
 }
 
+// getObjectStoreMetadata fetches metadata for a single object store file.
 func (svc *FileService) getObjectStoreMetadata(r *http.Request, store ws_manager.ObjectStore, pathParam string) (FileItem, error) {
 	if store.Bucket == "" || store.Prefix == "" {
 		return FileItem{}, fmt.Errorf("object store not provisioned")
@@ -168,6 +172,7 @@ func (svc *FileService) getObjectStoreMetadata(r *http.Request, store ws_manager
 	return item, nil
 }
 
+// newS3Client creates an S3 client using credentials resolved from the incoming request.
 func (svc *FileService) newS3Client(r *http.Request) (*s3.Client, error) {
 	creds, err := svc.getS3Credentials(r)
 	if err != nil {
@@ -187,6 +192,7 @@ func (svc *FileService) newS3Client(r *http.Request) (*s3.Client, error) {
 	return awsclient.NewS3ClientWithEndpoint(cfg, svc.Config.AWS.S3.Endpoint, svc.Config.AWS.S3.ForcePathStyle), nil
 }
 
+// getS3Credentials resolves either local static credentials or STS web identity credentials.
 func (svc *FileService) getS3Credentials(r *http.Request) (awsclient.S3Credentials, error) {
 	// Local/dev override: use static S3 keys when provided instead of STS.
 	if svc.Config.AWS.S3.AccessKey != "" && svc.Config.AWS.S3.SecretKey != "" {

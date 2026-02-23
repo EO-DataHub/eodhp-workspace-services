@@ -85,9 +85,9 @@ Run this with:
 
 `go run main.go reconcile --config {path-to-config.yaml}`
 
-## Alternative Local Setup
+## Local Setup
 
-### Docker Development Environment (Recommended)
+### Docker Development Environment
 This repository includes a local Docker Compose setup that runs:
 - Postgres
 - Pulsar (standalone)

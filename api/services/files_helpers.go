@@ -12,6 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+// collectStores flattens object and block stores from workspace settings.
 func collectStores(workspace *ws_manager.WorkspaceSettings) ([]ws_manager.ObjectStore, []ws_manager.BlockStore) {
 	var objectStores []ws_manager.ObjectStore
 	var blockStores []ws_manager.BlockStore
@@ -25,7 +26,7 @@ func collectStores(workspace *ws_manager.WorkspaceSettings) ([]ws_manager.Object
 	return objectStores, blockStores
 }
 
-// Select the active object store (single-store assumption).
+// selectObjectStore returns the active object store under the single-store assumption.
 func selectObjectStore(stores []ws_manager.ObjectStore) (ws_manager.ObjectStore, error) {
 	if len(stores) == 0 {
 		return ws_manager.ObjectStore{}, fmt.Errorf("no object store configured")
@@ -33,7 +34,7 @@ func selectObjectStore(stores []ws_manager.ObjectStore) (ws_manager.ObjectStore,
 	return stores[0], nil
 }
 
-// Select the active block store (single-store assumption).
+// selectBlockStore returns the active block store under the single-store assumption.
 func selectBlockStore(stores []ws_manager.BlockStore) (ws_manager.BlockStore, error) {
 	if len(stores) == 0 {
 		return ws_manager.BlockStore{}, fmt.Errorf("no block store configured")
@@ -41,6 +42,7 @@ func selectBlockStore(stores []ws_manager.BlockStore) (ws_manager.BlockStore, er
 	return stores[0], nil
 }
 
+// resolveBlockWorkspaceDir derives and validates the block store workspace directory name.
 func resolveBlockWorkspaceDir(store ws_manager.BlockStore, workspaceID string) (string, error) {
 	mountPoint := strings.TrimSpace(store.MountPoint)
 	if mountPoint == "" {
@@ -63,6 +65,7 @@ func resolveBlockWorkspaceDir(store ws_manager.BlockStore, workspaceID string) (
 	return workspaceDir, nil
 }
 
+// collectMultipartFiles extracts non-nil file headers from a parsed multipart form.
 func collectMultipartFiles(form *multipart.Form) []*multipart.FileHeader {
 	if form == nil || form.File == nil {
 		return nil
@@ -78,6 +81,7 @@ func collectMultipartFiles(form *multipart.Form) []*multipart.FileHeader {
 	return out
 }
 
+// safeS3Key validates a file name and returns its normalized key under the given prefix.
 func safeS3Key(prefix, rel string) (string, error) {
 	rel = strings.TrimSpace(rel)
 	if rel == "" {
@@ -108,6 +112,7 @@ func safeS3Key(prefix, rel string) (string, error) {
 	return path.Join(base, cleaned), nil
 }
 
+// safeS3Prefix validates and normalizes an S3 prefix for list operations.
 func safeS3Prefix(prefix, rel string) (string, error) {
 	base := strings.Trim(prefix, "/")
 	if base == "" {
@@ -133,6 +138,7 @@ func safeS3Prefix(prefix, rel string) (string, error) {
 	return path.Join(base, cleaned) + "/", nil
 }
 
+// relativeS3Path returns the key relative to the configured store prefix.
 func relativeS3Path(prefix, key string) string {
 	base := strings.Trim(prefix, "/")
 	if base == "" {
@@ -146,6 +152,7 @@ func relativeS3Path(prefix, key string) string {
 	return key
 }
 
+// validateFileName validates a single-level file name for upload, delete, and metadata operations.
 func validateFileName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -166,6 +173,7 @@ func validateFileName(name string) error {
 	return nil
 }
 
+// listS3Objects lists objects for a prefix and maps them into file items.
 func listS3Objects(ctx context.Context, client *s3.Client, store ws_manager.ObjectStore, prefix, timeFormat string) ([]FileItem, error) {
 	var items []FileItem
 	var token *string
@@ -213,6 +221,7 @@ func listS3Objects(ctx context.Context, client *s3.Client, store ws_manager.Obje
 	return items, nil
 }
 
+// extractBearerToken extracts a bearer token from an Authorization header.
 func extractBearerToken(authHeader string) string {
 	authHeader = strings.TrimSpace(authHeader)
 	if authHeader == "" {
@@ -229,6 +238,7 @@ func extractBearerToken(authHeader string) string {
 	return token
 }
 
+// responseTimeFormat returns the configured API response time format or a default value.
 func (svc *FileService) responseTimeFormat() string {
 	if svc != nil && svc.Config != nil {
 		if format := strings.TrimSpace(svc.Config.Files.ResponseTimeFormat); format != "" {
@@ -238,6 +248,7 @@ func (svc *FileService) responseTimeFormat() string {
 	return defaultTimeFormat
 }
 
+// maxUploadFormMemoryBytes returns the configured multipart form memory limit in bytes.
 func (svc *FileService) maxUploadFormMemoryBytes() int64 {
 	if svc != nil && svc.Config != nil && svc.Config.Files.MaxUploadFormMemory > 0 {
 		return svc.Config.Files.MaxUploadFormMemory << 20

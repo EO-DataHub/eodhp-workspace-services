@@ -10,6 +10,7 @@ import (
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 )
 
+// listBlockStoreItems lists files from the selected block store for a workspace.
 func (svc *FileService) listBlockStoreItems(ctx context.Context, stores []ws_manager.BlockStore, workspaceID string) ([]FileItem, error) {
 	if len(stores) == 0 {
 		return nil, fmt.Errorf("no block store configured")
@@ -29,6 +30,7 @@ func (svc *FileService) listBlockStoreItems(ctx context.Context, stores []ws_man
 	return client.listFiles(ctx, workspaceDir)
 }
 
+// uploadBlockStoreFiles uploads multipart files to the workspace block store.
 func (svc *FileService) uploadBlockStoreFiles(
 	ctx context.Context,
 	workspaceID string,
@@ -73,6 +75,7 @@ func (svc *FileService) uploadBlockStoreFiles(
 	return items, nil
 }
 
+// deleteBlockStoreFiles deletes block store files and reports per-file failures.
 func (svc *FileService) deleteBlockStoreFiles(
 	ctx context.Context,
 	workspaceID string,
@@ -106,6 +109,7 @@ func (svc *FileService) deleteBlockStoreFiles(
 	return deleted, failed, nil
 }
 
+// getBlockStoreMetadata returns metadata for a file in the block store.
 func (svc *FileService) getBlockStoreMetadata(
 	ctx context.Context,
 	workspaceID string,
@@ -123,6 +127,7 @@ func (svc *FileService) getBlockStoreMetadata(
 	return client.fileMetadata(ctx, workspaceDir, pathParam)
 }
 
+// newBlockNginxClient creates a block store HTTP client using file service configuration.
 func (svc *FileService) newBlockNginxClient() (*blockNginxClient, error) {
 	return newBlockNginxClient(
 		svc.blockBaseURL(),
@@ -131,6 +136,7 @@ func (svc *FileService) newBlockNginxClient() (*blockNginxClient, error) {
 	)
 }
 
+// blockBaseURL returns the configured base URL for the block store proxy.
 func (svc *FileService) blockBaseURL() string {
 	if svc != nil && svc.Config != nil {
 		return strings.TrimSpace(svc.Config.Files.BlockBaseURL)
@@ -138,6 +144,7 @@ func (svc *FileService) blockBaseURL() string {
 	return ""
 }
 
+// blockTimeout returns the configured block store timeout or the default timeout.
 func (svc *FileService) blockTimeout() time.Duration {
 	if svc != nil && svc.Config != nil && svc.Config.Files.BlockTimeoutSeconds > 0 {
 		return time.Duration(svc.Config.Files.BlockTimeoutSeconds) * time.Second

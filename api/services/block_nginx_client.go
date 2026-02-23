@@ -28,6 +28,7 @@ type nginxAutoindexEntry struct {
 	Size  json.RawMessage `json:"size"`
 }
 
+// newBlockNginxClient creates a block store HTTP client from base URL and timeout settings.
 func newBlockNginxClient(baseURL string, timeout time.Duration, timeFormat string) (*blockNginxClient, error) {
 	baseURL = strings.TrimSpace(baseURL)
 	if baseURL == "" {
@@ -53,6 +54,7 @@ func newBlockNginxClient(baseURL string, timeout time.Duration, timeFormat strin
 	}, nil
 }
 
+// listFiles lists files under a workspace directory exposed by the block store proxy.
 func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([]FileItem, error) {
 	listURL, err := c.workspaceURL(workspaceID, "", true)
 	if err != nil {
@@ -101,6 +103,7 @@ func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([
 	return items, nil
 }
 
+// uploadFile uploads a single file to the block store proxy workspace path.
 func (c *blockNginxClient) uploadFile(
 	ctx context.Context,
 	workspaceID string,
@@ -143,6 +146,7 @@ func (c *blockNginxClient) uploadFile(
 	}
 }
 
+// deleteFile deletes a single file from the block store proxy workspace path.
 func (c *blockNginxClient) deleteFile(ctx context.Context, workspaceID string, fileName string) error {
 	if err := validateFileName(fileName); err != nil {
 		return err
@@ -174,6 +178,7 @@ func (c *blockNginxClient) deleteFile(ctx context.Context, workspaceID string, f
 	}
 }
 
+// fileMetadata reads metadata for a single file from block store proxy response headers.
 func (c *blockNginxClient) fileMetadata(ctx context.Context, workspaceID string, fileName string) (FileItem, error) {
 	if err := validateFileName(fileName); err != nil {
 		return FileItem{}, err
@@ -224,6 +229,7 @@ func (c *blockNginxClient) fileMetadata(ctx context.Context, workspaceID string,
 	}, nil
 }
 
+// workspaceURL builds a block store URL for a workspace directory or file path.
 func (c *blockNginxClient) workspaceURL(workspaceID string, fileName string, directory bool) (string, error) {
 	workspaceID = strings.TrimSpace(workspaceID)
 	if workspaceID == "" {
@@ -251,6 +257,7 @@ func (c *blockNginxClient) workspaceURL(workspaceID string, fileName string, dir
 	return parsed.String(), nil
 }
 
+// parseAutoindexSize parses nginx autoindex size values from numeric or string JSON values.
 func parseAutoindexSize(raw json.RawMessage) int64 {
 	if len(raw) == 0 {
 		return 0
@@ -279,6 +286,7 @@ func parseAutoindexSize(raw json.RawMessage) int64 {
 	return parsed
 }
 
+// formatAutoindexTime normalizes nginx autoindex time values to API response format.
 func formatAutoindexTime(value string, timeFormat string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -292,6 +300,7 @@ func formatAutoindexTime(value string, timeFormat string) string {
 	return parsed.UTC().Format(timeFormat)
 }
 
+// formatHeaderTime parses an RFC1123 header time and normalizes it to API response format.
 func formatHeaderTime(value string, timeFormat string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -304,6 +313,7 @@ func formatHeaderTime(value string, timeFormat string) string {
 	return t.UTC().Format(timeFormat)
 }
 
+// parseNginxTime parses known nginx timestamp layouts.
 func parseNginxTime(value string) (time.Time, error) {
 	layouts := []string{
 		// Nginx autoindex commonly returns RFC1123-style timestamps (e.g. "Wed, 11 Feb 2026 12:53:04 GMT").

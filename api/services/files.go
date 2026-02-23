@@ -72,6 +72,7 @@ type FileMetadataResponse struct {
 	Item      FileItem `json:"item"`
 }
 
+// resolveAuthorizedWorkspace validates access to the requested workspace and loads its settings.
 func (svc *FileService) resolveAuthorizedWorkspace(w http.ResponseWriter, r *http.Request) (string, *ws_manager.WorkspaceSettings, bool) {
 	logger := zerolog.Ctx(r.Context())
 
@@ -105,6 +106,7 @@ func (svc *FileService) resolveAuthorizedWorkspace(w http.ResponseWriter, r *htt
 	return workspaceID, workspace, true
 }
 
+// resolveStoreSelection maps the store query value to object/block selection flags.
 func resolveStoreSelection(storeType string, allowAll bool) (bool, bool, error) {
 	switch strings.ToLower(strings.TrimSpace(storeType)) {
 	case "":
