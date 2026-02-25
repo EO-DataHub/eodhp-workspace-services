@@ -216,15 +216,10 @@ func (svc *FileService) getS3Credentials(r *http.Request) (awsclient.S3Credentia
 		return awsclient.S3Credentials{}, fmt.Errorf("missing AWS role ARN for S3 credentials")
 	}
 
-	stsClient := svc.STS
-	if stsClient == nil {
-		cfg, err := config.LoadDefaultConfig(r.Context(), config.WithRegion(svc.Config.AWS.Region))
-		if err != nil {
-			return awsclient.S3Credentials{}, fmt.Errorf("failed to load AWS config: %w", err)
-		}
-		stsClient = sts.NewFromConfig(cfg)
+	if svc.STS == nil {
+		return awsclient.S3Credentials{}, fmt.Errorf("sts client not configured")
 	}
-	out, err := stsClient.AssumeRoleWithWebIdentity(r.Context(), &sts.AssumeRoleWithWebIdentityInput{
+	out, err := svc.STS.AssumeRoleWithWebIdentity(r.Context(), &sts.AssumeRoleWithWebIdentityInput{
 		RoleArn:          aws.String(roleARN),
 		RoleSessionName:  aws.String("workspace-services"),
 		WebIdentityToken: aws.String(token),

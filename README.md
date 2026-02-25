@@ -47,6 +47,11 @@ aws:
     bucket: workspaces-eodhp-{{ENV}}
     host: s3-accesspoint.eu-west-2.amazonaws.com
     roleArn: arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/WorkspaceServices-{{AWS_CLUSTER_NAME}}
+files:
+  responseTimeFormat: "2006-01-02T15:04:05Z"
+  maxUploadFormMemoryMB: 32
+  blockBaseUrl: "http://efs-nginx:80"
+  blockTimeoutSeconds: 30
 providers:
   airbus:
     access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token
@@ -54,6 +59,12 @@ providers:
     sar_contracts_url: https://sar.api.oneatlas.airbus.com/v1/user/whoami
 ```
 The config map is defined in `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
+
+Files configuration:
+- `files.maxUploadFormMemoryMB`: Maximum multipart form memory (in MB) used when parsing upload requests.
+- `files.responseTimeFormat`: Go time layout used to format file timestamps in API responses.
+- `files.blockBaseUrl`: Base URL of the block-store nginx endpoint used for block file operations.
+- `files.blockTimeoutSeconds`: HTTP timeout (in seconds) for block-store requests.
 
 
 ## CLI Options
