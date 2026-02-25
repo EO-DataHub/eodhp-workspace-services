@@ -2,6 +2,7 @@ package services
 
 import (
 	"mime/multipart"
+	"strings"
 	"testing"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
@@ -161,4 +162,12 @@ func TestCollectMultipartFiles(t *testing.T) {
 	require.Len(t, files, 2)
 	got := []string{files[0].Filename, files[1].Filename}
 	require.ElementsMatch(t, []string{"a.tif", "b.tif"}, got)
+}
+
+func TestValidateFileNameLengthLimit(t *testing.T) {
+	valid := strings.Repeat("a", maxFileNameBytes)
+	require.NoError(t, validateFileName(valid))
+
+	tooLong := strings.Repeat("a", maxFileNameBytes+1)
+	require.EqualError(t, validateFileName(tooLong), "file name too long")
 }

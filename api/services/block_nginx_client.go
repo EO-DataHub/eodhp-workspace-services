@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 const defaultBlockTimeout = 30 * time.Second
@@ -56,6 +58,8 @@ func newBlockNginxClient(baseURL string, timeout time.Duration, timeFormat strin
 
 // listFiles lists files under a workspace directory exposed by the block store proxy.
 func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([]FileItem, int, error) {
+	logger := zerolog.Ctx(ctx)
+
 	listURL, err := c.workspaceURL(workspaceID, "", true)
 	if err != nil {
 		return nil, http.StatusInternalServerError, err
@@ -91,6 +95,11 @@ func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([
 			continue
 		}
 		if err := validateFileName(entry.Name); err != nil {
+			logger.Warn().
+				Str("workspace_id", workspaceID).
+				Str("file_name", entry.Name).
+				Err(err).
+				Msg("Skipping invalid file name from block list response")
 			continue
 		}
 		items = append(items, FileItem{

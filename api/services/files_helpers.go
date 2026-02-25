@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
+const maxFileNameBytes = 255
+
 // collectStores flattens object and block stores from workspace settings.
 func collectStores(workspace *ws_manager.WorkspaceSettings) ([]ws_manager.ObjectStore, []ws_manager.BlockStore) {
 	var objectStores []ws_manager.ObjectStore
@@ -157,6 +159,11 @@ func validateFileName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return fmt.Errorf("file name is required")
+	}
+	// Keep a conservative cross-store limit. Block/file-system backends commonly cap a single
+	// path segment at 255 bytes, while object stores may allow longer keys.
+	if len(name) > maxFileNameBytes {
+		return fmt.Errorf("file name too long")
 	}
 	if strings.Contains(name, "\\") {
 		return fmt.Errorf("invalid path separator")
