@@ -17,7 +17,8 @@ import (
 
 func TestListBlockStoreItemsNoStoreConfigured(t *testing.T) {
 	svc := FileService{}
-	_, err := svc.listBlockStoreItems(context.Background(), nil, "ws-1")
+	_, status, err := svc.listBlockStoreItems(context.Background(), nil, "ws-1")
+	require.Equal(t, http.StatusBadRequest, status)
 	require.EqualError(t, err, "no block store configured")
 }
 
@@ -44,10 +45,11 @@ func TestListBlockStoreItemsSuccess(t *testing.T) {
 			},
 		},
 	}
-	items, err := svc.listBlockStoreItems(context.Background(), []ws_manager.BlockStore{
+	items, status, err := svc.listBlockStoreItems(context.Background(), []ws_manager.BlockStore{
 		{MountPoint: "/ws-1"},
 	}, "ws-1")
 	require.NoError(t, err)
+	require.Equal(t, 0, status)
 	require.Len(t, items, 1)
 	require.Equal(t, "my-file.tif", items[0].FileName)
 	require.Equal(t, storeTypeBlock, items[0].StoreType)

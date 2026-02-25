@@ -157,10 +157,12 @@ func TestObjectStoreMethodsProvisioningValidation(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
-	_, err := svc.listObjectStoreItems(req, nil)
+	_, status, err := svc.listObjectStoreItems(req, nil)
+	require.Equal(t, http.StatusBadRequest, status)
 	require.EqualError(t, err, "no object store configured")
 
-	_, err = svc.listObjectStoreItems(req, []ws_manager.ObjectStore{{Bucket: "", Prefix: "prefix"}})
+	_, status, err = svc.listObjectStoreItems(req, []ws_manager.ObjectStore{{Bucket: "", Prefix: "prefix"}})
+	require.Equal(t, http.StatusBadRequest, status)
 	require.EqualError(t, err, "object store not provisioned")
 
 	_, err = svc.uploadObjectStoreFiles(req, ws_manager.ObjectStore{}, []*multipart.FileHeader{})
@@ -187,9 +189,10 @@ func TestListObjectStoreItemsInvalidPrefixReturnsError(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 
-	_, err := svc.listObjectStoreItems(req, []ws_manager.ObjectStore{
+	_, status, err := svc.listObjectStoreItems(req, []ws_manager.ObjectStore{
 		{Bucket: "bucket-1", Prefix: "/"},
 	})
+	require.Equal(t, http.StatusBadRequest, status)
 	require.EqualError(t, err, "object prefix is required")
 }
 

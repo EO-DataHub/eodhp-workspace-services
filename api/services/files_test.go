@@ -172,6 +172,50 @@ func TestListFilesServiceBlockStoreMissingDirectoryReturnsEmptyItems(t *testing.
 	mockDB.AssertExpectations(t)
 }
 
+func TestListFilesServiceBlockStoreDownstreamErrorReturnsInternalServerError(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	claims := hubAdminClaims()
+	workspaceID := "ws-1"
+	blockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "/ws-1/", r.URL.Path)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer blockServer.Close()
+
+	stores := []ws_manager.Stores{
+		{
+			Block: []ws_manager.BlockStore{
+				{Name: "block-store", MountPoint: "/ws-1"},
+			},
+		},
+	}
+	workspace := &ws_manager.WorkspaceSettings{
+		Name:   workspaceID,
+		Stores: &stores,
+	}
+
+	mockDB.On("GetWorkspace", workspaceID).Return(workspace, nil).Once()
+
+	svc := FileService{
+		DB: mockDB,
+		KC: mockKC,
+		Config: &appconfig.Config{
+			Files: appconfig.FilesConfig{
+				BlockBaseURL: blockServer.URL,
+			},
+		},
+	}
+	req := newListFilesRequest(workspaceID, "store=block", &claims)
+	w := httptest.NewRecorder()
+
+	svc.ListFilesService(w, req)
+
+	require.Equal(t, http.StatusInternalServerError, w.Result().StatusCode)
+	mockDB.AssertExpectations(t)
+}
+
 func TestUploadFilesServiceNoFilesReturnsBadRequest(t *testing.T) {
 	mockDB := new(MockWorkspaceDB)
 	claims := hubAdminClaims()

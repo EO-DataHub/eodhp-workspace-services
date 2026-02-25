@@ -2,8 +2,9 @@ package services
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"mime/multipart"
+	"net/http"
 	"strings"
 	"time"
 
@@ -11,21 +12,21 @@ import (
 )
 
 // listBlockStoreItems lists files from the selected block store for a workspace.
-func (svc *FileService) listBlockStoreItems(ctx context.Context, stores []ws_manager.BlockStore, workspaceID string) ([]FileItem, error) {
+func (svc *FileService) listBlockStoreItems(ctx context.Context, stores []ws_manager.BlockStore, workspaceID string) ([]FileItem, int, error) {
 	if len(stores) == 0 {
-		return nil, fmt.Errorf("no block store configured")
+		return nil, http.StatusBadRequest, errors.New("no block store configured")
 	}
 	store, err := selectBlockStore(stores)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusBadRequest, err
 	}
 	workspaceDir, err := resolveBlockWorkspaceDir(store, workspaceID)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusBadRequest, err
 	}
 	client, err := svc.newBlockNginxClient()
 	if err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
 	}
 	return client.listFiles(ctx, workspaceDir)
 }

@@ -142,17 +142,27 @@ func (svc *FileService) ListFilesService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if wantObject {
-		objItems, err := svc.listObjectStoreItems(r, objectStores)
+		objItems, status, err := svc.listObjectStoreItems(r, objectStores)
 		if err != nil {
-			WriteResponse(w, http.StatusBadRequest, err.Error())
+			// Status 0 means the downstream layer had no explicit HTTP status to propagate.
+			// If that happens on an error path, fall back to 500 so we always return a valid HTTP error status.
+			if status == 0 {
+				status = http.StatusInternalServerError
+			}
+			WriteResponse(w, status, err.Error())
 			return
 		}
 		items = append(items, objItems...)
 	}
 	if wantBlock {
-		blkItems, err := svc.listBlockStoreItems(ctx, blockStores, workspaceID)
+		blkItems, status, err := svc.listBlockStoreItems(ctx, blockStores, workspaceID)
 		if err != nil {
-			WriteResponse(w, http.StatusBadRequest, err.Error())
+			// Status 0 means the downstream layer had no explicit HTTP status to propagate.
+			// If that happens on an error path, fall back to 500 so we always return a valid HTTP error status.
+			if status == 0 {
+				status = http.StatusInternalServerError
+			}
+			WriteResponse(w, status, err.Error())
 			return
 		}
 		items = append(items, blkItems...)

@@ -55,33 +55,34 @@ func newBlockNginxClient(baseURL string, timeout time.Duration, timeFormat strin
 }
 
 // listFiles lists files under a workspace directory exposed by the block store proxy.
-func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([]FileItem, error) {
+func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([]FileItem, int, error) {
 	listURL, err := c.workspaceURL(workspaceID, "", true)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, listURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotFound {
-		return []FileItem{}, nil
+		// Status 0 means "no HTTP error to propagate" to the caller.
+		return []FileItem{}, 0, nil
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("block list failed with status %d", resp.StatusCode)
+		return nil, resp.StatusCode, fmt.Errorf("block list failed with status %d", resp.StatusCode)
 	}
 
 	var entries []nginxAutoindexEntry
 	if err := json.NewDecoder(resp.Body).Decode(&entries); err != nil {
-		return nil, fmt.Errorf("failed to decode block list response: %w", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("failed to decode block list response: %w", err)
 	}
 
 	items := make([]FileItem, 0, len(entries))
@@ -100,7 +101,8 @@ func (c *blockNginxClient) listFiles(ctx context.Context, workspaceID string) ([
 		})
 	}
 
-	return items, nil
+	// Status 0 means there is no error status code to propagate.
+	return items, 0, nil
 }
 
 // uploadFile uploads a single file to the block store proxy workspace path.

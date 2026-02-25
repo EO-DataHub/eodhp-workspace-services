@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -16,34 +17,35 @@ import (
 )
 
 // listObjectStoreItems lists files from the selected object store.
-func (svc *FileService) listObjectStoreItems(r *http.Request, stores []ws_manager.ObjectStore) ([]FileItem, error) {
+func (svc *FileService) listObjectStoreItems(r *http.Request, stores []ws_manager.ObjectStore) ([]FileItem, int, error) {
 	if len(stores) == 0 {
-		return nil, fmt.Errorf("no object store configured")
+		return nil, http.StatusBadRequest, errors.New("no object store configured")
 	}
 	store, err := selectObjectStore(stores)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusBadRequest, err
 	}
 	if store.Bucket == "" || store.Prefix == "" {
-		return nil, fmt.Errorf("object store not provisioned")
+		return nil, http.StatusBadRequest, errors.New("object store not provisioned")
 	}
 
 	s3Client, err := svc.newS3Client(r)
 	if err != nil {
-		return nil, err
+		return nil, http.StatusInternalServerError, err
 	}
 
 	prefix, err := safeS3Prefix(store.Prefix, "")
 	if err != nil {
-		return nil, err
+		return nil, http.StatusBadRequest, err
 	}
 
 	items, err := listS3Objects(r.Context(), s3Client, store, prefix, svc.responseTimeFormat())
 	if err != nil {
-		return nil, err
+		return nil, httpStatusFromError(err, http.StatusInternalServerError), err
 	}
 
-	return items, nil
+	// Status 0 means there is no error status code to propagate.
+	return items, 0, nil
 }
 
 // uploadObjectStoreFiles uploads multipart files to the object store.
@@ -245,4 +247,16 @@ func (svc *FileService) getS3Credentials(r *http.Request) (awsclient.S3Credentia
 		SessionToken:    *resp.Credentials.SessionToken,
 		Expiration:      resp.Credentials.Expiration.UTC().Format(svc.responseTimeFormat()),
 	}, nil
+}
+
+// httpStatusFromError extracts an HTTP status from downstream errors, or returns fallback.
+func httpStatusFromError(err error, fallback int) int {
+	var statusCoder interface{ HTTPStatusCode() int }
+	if errors.As(err, &statusCoder) {
+		code := statusCoder.HTTPStatusCode()
+		if code >= 400 && code <= 599 {
+			return code
+		}
+	}
+	return fallback
 }

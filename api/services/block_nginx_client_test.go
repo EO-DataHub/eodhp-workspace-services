@@ -63,8 +63,9 @@ func TestBlockNginxClientListFilesFiltersAndNormalizes(t *testing.T) {
 	client, err := newBlockNginxClient(ts.URL, 0, defaultTimeFormat)
 	require.NoError(t, err)
 
-	items, err := client.listFiles(context.Background(), "ws-1")
+	items, status, err := client.listFiles(context.Background(), "ws-1")
 	require.NoError(t, err)
+	require.Equal(t, 0, status)
 	require.Len(t, items, 1)
 	require.Equal(t, storeTypeBlock, items[0].StoreType)
 	require.Equal(t, "my-file.tif", items[0].FileName)
@@ -81,8 +82,9 @@ func TestBlockNginxClientListFilesNotFoundReturnsEmpty(t *testing.T) {
 	client, err := newBlockNginxClient(ts.URL, 0, defaultTimeFormat)
 	require.NoError(t, err)
 
-	items, err := client.listFiles(context.Background(), "ws-1")
+	items, status, err := client.listFiles(context.Background(), "ws-1")
 	require.NoError(t, err)
+	require.Equal(t, 0, status)
 	require.Len(t, items, 0)
 }
 
@@ -95,8 +97,9 @@ func TestBlockNginxClientListFilesUnexpectedStatusReturnsError(t *testing.T) {
 	client, err := newBlockNginxClient(ts.URL, 0, defaultTimeFormat)
 	require.NoError(t, err)
 
-	_, err = client.listFiles(context.Background(), "ws-1")
+	_, status, err := client.listFiles(context.Background(), "ws-1")
 	require.Error(t, err)
+	require.Equal(t, http.StatusInternalServerError, status)
 	require.Contains(t, err.Error(), "block list failed with status 500")
 }
 
