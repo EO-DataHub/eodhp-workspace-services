@@ -58,24 +58,30 @@ func TestSelectObjectStore(t *testing.T) {
 	_, err := selectObjectStore(nil)
 	require.EqualError(t, err, "no object store configured")
 
-	store, err := selectObjectStore([]ws_manager.ObjectStore{
+	store, err := selectObjectStore([]ws_manager.ObjectStore{{Bucket: "bucket-a", Prefix: "prefix-a"}})
+	require.NoError(t, err)
+	require.Equal(t, "bucket-a", store.Bucket)
+
+	_, err = selectObjectStore([]ws_manager.ObjectStore{
 		{Bucket: "bucket-a", Prefix: "prefix-a"},
 		{Bucket: "bucket-b", Prefix: "prefix-b"},
 	})
-	require.NoError(t, err)
-	require.Equal(t, "bucket-a", store.Bucket)
+	require.EqualError(t, err, "multiple object stores configured; expected exactly one")
 }
 
 func TestSelectBlockStore(t *testing.T) {
 	_, err := selectBlockStore(nil)
 	require.EqualError(t, err, "no block store configured")
 
-	store, err := selectBlockStore([]ws_manager.BlockStore{
+	store, err := selectBlockStore([]ws_manager.BlockStore{{MountPoint: "/mnt/ws-1"}})
+	require.NoError(t, err)
+	require.Equal(t, "/mnt/ws-1", store.MountPoint)
+
+	_, err = selectBlockStore([]ws_manager.BlockStore{
 		{MountPoint: "/mnt/ws-1"},
 		{MountPoint: "/mnt/ws-2"},
 	})
-	require.NoError(t, err)
-	require.Equal(t, "/mnt/ws-1", store.MountPoint)
+	require.EqualError(t, err, "multiple block stores configured; expected exactly one")
 }
 
 func TestResolveBlockWorkspaceDir(t *testing.T) {

@@ -28,18 +28,24 @@ func collectStores(workspace *ws_manager.WorkspaceSettings) ([]ws_manager.Object
 	return objectStores, blockStores
 }
 
-// selectObjectStore returns the active object store under the single-store assumption.
+// selectObjectStore returns the configured object store when exactly one is present.
 func selectObjectStore(stores []ws_manager.ObjectStore) (ws_manager.ObjectStore, error) {
 	if len(stores) == 0 {
 		return ws_manager.ObjectStore{}, fmt.Errorf("no object store configured")
 	}
+	if len(stores) > 1 {
+		return ws_manager.ObjectStore{}, fmt.Errorf("multiple object stores configured; expected exactly one")
+	}
 	return stores[0], nil
 }
 
-// selectBlockStore returns the active block store under the single-store assumption.
+// selectBlockStore returns the configured block store when exactly one is present.
 func selectBlockStore(stores []ws_manager.BlockStore) (ws_manager.BlockStore, error) {
 	if len(stores) == 0 {
 		return ws_manager.BlockStore{}, fmt.Errorf("no block store configured")
+	}
+	if len(stores) > 1 {
+		return ws_manager.BlockStore{}, fmt.Errorf("multiple block stores configured; expected exactly one")
 	}
 	return stores[0], nil
 }
