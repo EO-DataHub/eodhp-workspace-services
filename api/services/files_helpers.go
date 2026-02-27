@@ -52,6 +52,11 @@ func selectBlockStore(stores []ws_manager.BlockStore) (ws_manager.BlockStore, er
 
 // resolveBlockWorkspaceDir derives and validates the block store workspace directory name.
 func resolveBlockWorkspaceDir(store ws_manager.BlockStore, workspaceID string) (string, error) {
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return "", fmt.Errorf("workspace id is required")
+	}
+
 	mountPoint := strings.TrimSpace(store.MountPoint)
 	if mountPoint == "" {
 		return "", fmt.Errorf("block store not provisioned")
@@ -66,7 +71,7 @@ func resolveBlockWorkspaceDir(store ws_manager.BlockStore, workspaceID string) (
 		return "", fmt.Errorf("invalid block store mount point")
 	}
 
-	if strings.TrimSpace(workspaceID) != "" && workspaceDir != workspaceID {
+	if workspaceDir != workspaceID {
 		return "", fmt.Errorf("block store mount point does not match workspace")
 	}
 

@@ -85,7 +85,10 @@ func TestSelectBlockStore(t *testing.T) {
 }
 
 func TestResolveBlockWorkspaceDir(t *testing.T) {
-	_, err := resolveBlockWorkspaceDir(ws_manager.BlockStore{}, "ws-1")
+	_, err := resolveBlockWorkspaceDir(ws_manager.BlockStore{MountPoint: "/mnt/ws-1"}, "")
+	require.EqualError(t, err, "workspace id is required")
+
+	_, err = resolveBlockWorkspaceDir(ws_manager.BlockStore{}, "ws-1")
 	require.EqualError(t, err, "block store not provisioned")
 
 	_, err = resolveBlockWorkspaceDir(ws_manager.BlockStore{MountPoint: "/"}, "ws-1")
