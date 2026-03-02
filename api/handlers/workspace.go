@@ -18,9 +18,7 @@ func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -42,9 +40,7 @@ func GetWorkspaces(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -68,9 +64,7 @@ func GetWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -84,9 +78,7 @@ func DeleteWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -138,9 +130,7 @@ func GetUsers(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -166,9 +156,7 @@ func GetUser(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -194,9 +182,7 @@ func AddUser(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 
@@ -222,9 +208,7 @@ func RemoveUser(svc *services.WorkspaceService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 

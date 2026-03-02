@@ -47,6 +47,11 @@ aws:
     bucket: workspaces-eodhp-{{ENV}}
     host: s3-accesspoint.eu-west-2.amazonaws.com
     roleArn: arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/WorkspaceServices-{{AWS_CLUSTER_NAME}}
+files:
+  responseTimeFormat: "2006-01-02T15:04:05Z"
+  maxUploadFormMemoryMB: 32
+  blockBaseUrl: "http://efs-nginx:80"
+  blockTimeoutSeconds: 30
 providers:
   airbus:
     access_token_url: https://authenticate.foundation.api.oneatlas.airbus.com/auth/realms/IDP/protocol/openid-connect/token
@@ -54,6 +59,12 @@ providers:
     sar_contracts_url: https://sar.api.oneatlas.airbus.com/v1/user/whoami
 ```
 The config map is defined in `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
+
+Files configuration:
+- `files.maxUploadFormMemoryMB`: Maximum multipart form memory (in MB) used when parsing upload requests.
+- `files.responseTimeFormat`: Go time layout used to format file timestamps in API responses.
+- `files.blockBaseUrl`: Base URL of the block-store nginx endpoint used for block file operations.
+- `files.blockTimeoutSeconds`: HTTP timeout (in seconds) for block-store requests.
 
 
 ## CLI Options
@@ -86,6 +97,49 @@ Run this with:
 `go run main.go reconcile --config {path-to-config.yaml}`
 
 ## Local Setup
+
+### Docker Development Environment
+This repository includes a local Docker Compose setup that runs:
+- Postgres
+- Pulsar (standalone)
+- MinIO (S3-compatible)
+- Keycloak (dev realm)
+- Workspace Services API
+
+Start the environment:
+```
+docker compose up --build
+```
+
+Key files:
+- `docker-compose.yml`
+- `config/local-docker.yaml`
+- `config/keycloak/realm-eodhp.json`
+- `config/db/seed.sql`
+
+Default local endpoints:
+- API: http://localhost:8080
+- Keycloak: http://localhost:8081
+- MinIO Console: http://localhost:9001 (user: `minio`, pass: `minio123`)
+
+Expected container state:
+- Running: `eodhp-workspace-services`, `eodhp-postgres`, `eodhp-pulsar`, `eodhp-minio`, `eodhp-keycloak`
+- Exited (one-off jobs): `workspace-migrate-1`, `db-seed-1`, `minio-init-1`, `pulsar-init-1`
+
+Keycloak dev user:
+- username: `dev-user`
+- password: `devpass`
+- client: `eodh-workspaces`
+- client secret: `eodh-workspaces-secret`
+
+Obtain a token:
+```
+curl -X POST http://localhost:8081/realms/eodhp/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=password&client_id=eodh-workspaces&client_secret=eodh-workspaces-secret&username=dev-user&password=devpass"
+```
+
+MinIO bucket (created automatically): `workspaces-eodhp-local`
 
 ### Database
 To connect to the database, setup an SSH tunnel:

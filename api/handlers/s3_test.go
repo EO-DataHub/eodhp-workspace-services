@@ -12,6 +12,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
 	services "github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/aws/aws-sdk-go/aws"
@@ -73,7 +74,7 @@ func TestGetS3Credentials_WorkspaceScopedRequest(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code, "handler returned wrong status code")
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"), "handler returned wrong content type")
 
-	var creds S3Credentials
+	var creds awsclient.S3Credentials
 	err = json.Unmarshal(w.Body.Bytes(), &creds)
 
 	assert.NoError(t, err, "failed to unmarshal response body")
@@ -137,7 +138,7 @@ func TestGetS3Credentials_UserScopedRequest(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code, "handler returned wrong status code")
 	assert.Equal(t, "application/json", w.Header().Get("Content-Type"), "handler returned wrong content type")
 
-	var creds S3Credentials
+	var creds awsclient.S3Credentials
 	err = json.Unmarshal(w.Body.Bytes(), &creds)
 
 	assert.NoError(t, err, "failed to unmarshal response body")

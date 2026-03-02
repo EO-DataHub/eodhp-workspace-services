@@ -27,6 +27,27 @@ type DataLoaderFilesDelete struct {
 	Keys []string `json:"keys"`
 }
 
+func resolveDataLoaderS3Credentials(appCfg *appconfig.Config, c STSClient, k services.KeycloakClient, r *http.Request) (awsclient.S3Credentials, int, error) {
+	// Local/dev override: use static S3 keys when provided instead of STS.
+	if appCfg.AWS.S3.AccessKey != "" && appCfg.AWS.S3.SecretKey != "" {
+		return awsclient.S3Credentials{
+			AccessKeyId:     appCfg.AWS.S3.AccessKey,
+			SecretAccessKey: appCfg.AWS.S3.SecretKey,
+			SessionToken:    "",
+		}, http.StatusOK, nil
+	}
+
+	creds, err := GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
+	if err != nil {
+		if httpErr, ok := err.(*services.HTTPError); ok {
+			return awsclient.S3Credentials{}, httpErr.Status, err
+		}
+		return awsclient.S3Credentials{}, http.StatusInternalServerError, err
+	}
+
+	return creds, http.StatusOK, nil
+}
+
 // AddFileDataLoader is a handler that uploads a file to S3
 func AddFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.KeycloakClient) http.HandlerFunc {
 
@@ -51,14 +72,8 @@ func AddFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keycloa
 		// Create a prefix for storing eodh-config files
 		objectKey := fmt.Sprintf("%s/%s/%s", workspaceID, "eodh-config", payload.FileName)
 
-		creds, err := GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
+		creds, status, err := resolveDataLoaderS3Credentials(appCfg, c, k, r)
 		if err != nil {
-			var status int
-			if httpErr, ok := err.(*services.HTTPError); ok {
-				status = httpErr.Status
-			} else {
-				status = http.StatusInternalServerError
-			}
 			http.Error(w, err.Error(), status)
 			return
 		}
@@ -79,7 +94,7 @@ func AddFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keycloa
 		}
 
 		// Create an S3 client
-		s3Client := awsclient.NewS3Client(cfg)
+		s3Client := awsclient.NewS3ClientWithEndpoint(cfg, appCfg.AWS.S3.Endpoint, appCfg.AWS.S3.ForcePathStyle)
 
 		// Upload the file to S3
 		_, err = s3Client.PutObject(r.Context(), &s3.PutObjectInput{
@@ -124,15 +139,9 @@ func DeleteFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keyc
 			return
 		}
 
-		// Get temporary credentials
-		creds, err := GetS3Credentials(appCfg.AWS.S3.RoleArn, c, k, r)
+		// Get credentials (static local/dev credentials or STS credentials)
+		creds, status, err := resolveDataLoaderS3Credentials(appCfg, c, k, r)
 		if err != nil {
-			var status int
-			if httpErr, ok := err.(*services.HTTPError); ok {
-				status = httpErr.Status
-			} else {
-				status = http.StatusInternalServerError
-			}
 			http.Error(w, err.Error(), status)
 			return
 		}
@@ -150,7 +159,7 @@ func DeleteFileDataLoader(appCfg *appconfig.Config, c STSClient, k services.Keyc
 			return
 		}
 
-		s3Client := awsclient.NewS3Client(cfg)
+		s3Client := awsclient.NewS3ClientWithEndpoint(cfg, appCfg.AWS.S3.Endpoint, appCfg.AWS.S3.ForcePathStyle)
 
 		var objects []s3types.ObjectIdentifier
 		for _, key := range payload.Keys {

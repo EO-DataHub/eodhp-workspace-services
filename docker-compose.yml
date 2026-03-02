@@ -1,0 +1,191 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: eodhp-postgres
+    environment:
+      POSTGRES_USER: eodhp
+      POSTGRES_PASSWORD: eodhp
+      POSTGRES_DB: eodhp
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eodhp -d eodhp -h localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  pulsar:
+    image: apachepulsar/pulsar:3.0.2
+    container_name: eodhp-pulsar
+    command: ["bin/pulsar", "standalone"]
+    environment:
+      PULSAR_PREFIX_allowAutoTopicCreation: "true"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/admin/v2/brokers/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    ports:
+      - "6650:6650"
+      - "8085:8080"
+
+  minio:
+    image: minio/minio:latest
+    container_name: eodhp-minio
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sleep 5
+        mc alias set local http://minio:9000 minio minio123
+        mc mb -p local/workspaces-eodhp-local
+
+  efs-nginx:
+    image: public.ecr.aws/docker/library/nginx:latest
+    container_name: eodhp-efs-nginx
+    user: "0:0"
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkdir -p /usr/share/nginx/html
+        chmod -R 0777 /usr/share/nginx/html
+        exec nginx -g 'daemon off;'
+    ports:
+      - "8082:80"
+    volumes:
+      - block_data:/usr/share/nginx/html
+      - ./config/efs-nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+  pulsar-init:
+    image: apachepulsar/pulsar:3.0.2
+    depends_on:
+      pulsar:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until curl -sSf http://pulsar:8080/admin/v2/brokers/health; do
+          echo "waiting for pulsar admin..."
+          sleep 3
+        done
+        bin/pulsar-admin --admin-url http://pulsar:8080 tenants create public --allowed-clusters standalone || true
+        bin/pulsar-admin --admin-url http://pulsar:8080 namespaces create public/default || true
+        for i in $(seq 1 20); do
+          bin/pulsar-admin --admin-url http://pulsar:8080 topics create persistent://public/default/workspace-settings && \
+          bin/pulsar-admin --admin-url http://pulsar:8080 topics create persistent://public/default/workspace-status && exit 0
+          echo "waiting for topics..."
+          sleep 3
+        done
+        exit 1
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    container_name: eodhp-keycloak
+    command: ["start-dev", "--features=token-exchange", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./config/keycloak:/opt/keycloak/data/import
+
+  workspace-migrate:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ENV: local
+      SQL_USER: eodhp
+      SQL_PASSWORD: eodhp
+      SQL_HOST: postgres
+      SQL_PORT: "5432"
+      SQL_DATABASE: eodhp
+      SQL_SCHEMA: public
+      AWS_ACCOUNT_ID: "000000000000"
+      AWS_CLUSTER_NAME: local
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minio
+      S3_SECRET_KEY: minio123
+      KEYCLOAK_CLIENT_SECRET: eodh-workspaces-secret
+    command: ["init-db-migrate", "--config", "/config/local-docker.yaml"]
+    volumes:
+      - ./config/local-docker.yaml:/config/local-docker.yaml
+
+  db-seed:
+    image: postgres:15
+    depends_on:
+      workspace-migrate:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: eodhp
+    command: ["psql", "-h", "postgres", "-U", "eodhp", "-d", "eodhp", "-f", "/seed/seed.sql"]
+    volumes:
+      - ./config/db:/seed
+
+  workspace-services:
+    build: .
+    container_name: eodhp-workspace-services
+    user: "0:0"
+    depends_on:
+      postgres:
+        condition: service_started
+      pulsar:
+        condition: service_healthy
+      pulsar-init:
+        condition: service_completed_successfully
+      keycloak:
+        condition: service_started
+      minio:
+        condition: service_started
+      efs-nginx:
+        condition: service_started
+      workspace-migrate:
+        condition: service_completed_successfully
+      db-seed:
+        condition: service_completed_successfully
+    environment:
+      ENV: local
+      SQL_USER: eodhp
+      SQL_PASSWORD: eodhp
+      SQL_HOST: postgres
+      SQL_PORT: "5432"
+      SQL_DATABASE: eodhp
+      SQL_SCHEMA: public
+      AWS_ACCOUNT_ID: "000000000000"
+      AWS_CLUSTER_NAME: local
+      S3_ENDPOINT: http://minio:9000
+      S3_ACCESS_KEY: minio
+      S3_SECRET_KEY: minio123
+      KEYCLOAK_CLIENT_SECRET: eodh-workspaces-secret
+    ports:
+      - "8080:8080"
+    command: ["serve", "--host=0.0.0.0", "--port=8080", "--config", "/config/local-docker.yaml"]
+    volumes:
+      - ./config/local-docker.yaml:/config/local-docker.yaml
+
+volumes:
+  pgdata:
+  minio_data:
+  block_data:

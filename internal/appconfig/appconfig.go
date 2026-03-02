@@ -21,6 +21,7 @@ type Config struct {
 	Pulsar    PulsarConfig    `yaml:"pulsar"`
 	Keycloak  KeycloakConfig  `yaml:"keycloak"`
 	AWS       AWSConfig       `yaml:"aws"`
+	Files     FilesConfig     `yaml:"files"`
 	Providers ProvidersConfig `yaml:"providers"`
 }
 
@@ -52,9 +53,13 @@ type KeycloakConfig struct {
 }
 
 type S3Config struct {
-	Bucket  string `yaml:"bucket"`
-	Host    string `yaml:"host"`
-	RoleArn string `yaml:"roleArn"`
+	Bucket         string `yaml:"bucket"`
+	Host           string `yaml:"host"`
+	RoleArn        string `yaml:"roleArn"`
+	Endpoint       string `yaml:"endpoint"`
+	ForcePathStyle bool   `yaml:"forcePathStyle"`
+	AccessKey      string `yaml:"accessKey"`
+	SecretKey      string `yaml:"secretKey"`
 }
 
 type AWSConfig struct {
@@ -62,6 +67,13 @@ type AWSConfig struct {
 	Region          string   `yaml:"region"`
 	WorkspaceDomain string   `yaml:"workspace_domain"`
 	S3              S3Config `yaml:"s3"`
+}
+
+type FilesConfig struct {
+	ResponseTimeFormat  string `yaml:"responseTimeFormat"`
+	MaxUploadFormMemory int64  `yaml:"maxUploadFormMemoryMB"`
+	BlockBaseURL        string `yaml:"blockBaseUrl"`
+	BlockTimeoutSeconds int    `yaml:"blockTimeoutSeconds"`
 }
 
 type AirbusProviderConfig struct {

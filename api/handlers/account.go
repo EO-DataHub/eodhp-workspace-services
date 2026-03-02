@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 
 	services "github.com/EO-DataHub/eodhp-workspace-services/api/services"
@@ -79,10 +78,7 @@ func AccountStatusHandler(svc *services.BillingAccountService, accountStatusRequ
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Get a token from keycloak so we can interact with it's API
-		err := svc.KC.GetToken()
-		if err != nil {
-			fmt.Println("Error getting token from Keycloak:", err)
-			http.Error(w, "Authentication failed.", http.StatusInternalServerError)
+		if !ensureKeycloakToken(w, svc.KC) {
 			return
 		}
 

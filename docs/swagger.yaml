@@ -47,7 +47,6 @@ definitions:
         type: array
     type: object
   models.BlockStore:
-    description: Configuration for a block store.
     properties:
       access_point_id:
         type: string
@@ -59,7 +58,6 @@ definitions:
         type: string
     type: object
   models.ObjectStore:
-    description: Configuration for an object store.
     properties:
       access_point_arn:
         type: string
@@ -79,7 +77,6 @@ definitions:
         type: string
     type: object
   models.Stores:
-    description: Object and block storage configurations for the workspace.
     properties:
       block:
         items:
@@ -111,9 +108,9 @@ definitions:
         type: string
       last_updated:
         type: string
-      owner:
-        type: string
       name:
+        type: string
+      owner:
         type: string
       status:
         type: string
@@ -121,6 +118,64 @@ definitions:
         items:
           $ref: '#/definitions/models.Stores'
         type: array
+    type: object
+  services.FileDeleteResponse:
+    properties:
+      deleted:
+        items:
+          type: string
+        type: array
+      failed:
+        items:
+          $ref: '#/definitions/services.FileFail'
+        type: array
+      workspace:
+        type: string
+    type: object
+  services.FileFail:
+    properties:
+      error:
+        type: string
+      fileName:
+        type: string
+    type: object
+  services.FileItem:
+    properties:
+      etag:
+        type: string
+      fileName:
+        type: string
+      lastModified:
+        type: string
+      size:
+        type: integer
+      storeType:
+        type: string
+    type: object
+  services.FileListResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.FileItem'
+        type: array
+      workspace:
+        type: string
+    type: object
+  services.FileMetadataResponse:
+    properties:
+      item:
+        $ref: '#/definitions/services.FileItem'
+      workspace:
+        type: string
+    type: object
+  services.FileUploadResponse:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/services.FileItem'
+        type: array
+      workspace:
+        type: string
     type: object
 info:
   contact: {}
@@ -153,7 +208,7 @@ paths:
             type: string
       summary: Get billing accounts
       tags:
-      - Billing Accounts
+      - Billing and Billing Accounts
   /accounts/{id}:
     get:
       consumes:
@@ -190,7 +245,7 @@ paths:
             type: string
       summary: Get a billing account
       tags:
-      - Billing Accounts
+      - Billing and Billing Accounts
   /workspaces:
     get:
       consumes:
@@ -215,7 +270,7 @@ paths:
             type: string
       summary: Get a list of workspaces you are a member of
       tags:
-      - Workspaces
+      - Workspace Management
   /workspaces/{workspace-id}:
     get:
       consumes:
@@ -249,7 +304,7 @@ paths:
             type: string
       summary: Get a workspace by ID
       tags:
-      - Workspaces
+      - Workspace Management
   /workspaces/{workspace-id}/{user-id}/s3-tokens:
     post:
       consumes:
@@ -290,7 +345,7 @@ paths:
             type: string
       summary: Request S3 session credentials
       tags:
-      - Workspaces
+      - Workspace Management
   /workspaces/{workspace-id}/{user-id}/sessions:
     post:
       consumes:
@@ -336,7 +391,348 @@ paths:
             type: string
       summary: Request workspace scoped session credentials
       tags:
-      - Workspaces
+      - Workspace Management
+  /workspaces/{workspace-id}/files:
+    get:
+      consumes:
+      - application/json
+      description: List files for object and/or block stores in a workspace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: 'Store type: object or block'
+        in: query
+        name: store
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.FileListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: List files in a workspace
+      tags:
+      - Workspace Files Management
+  /workspaces/{workspace-id}/files/block:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a file from the workspace block store.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: File name to delete
+        in: query
+        name: file
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.FileDeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/services.FileDeleteResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Delete a file from the workspace block store
+      tags:
+      - Workspace Files Management
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload files to the workspace block store.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Files to upload
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.FileUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Upload files to the workspace block store
+      tags:
+      - Workspace Files Management
+  /workspaces/{workspace-id}/files/block/metadata:
+    get:
+      consumes:
+      - application/json
+      description: Get metadata for a single file in the workspace block store.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: File name within the workspace
+        in: query
+        name: file
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.FileMetadataResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get block store file metadata
+      tags:
+      - Workspace Files Management
+  /workspaces/{workspace-id}/files/object:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a file from the workspace object store.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: File name to delete
+        in: query
+        name: file
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.FileDeleteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/services.FileDeleteResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Delete a file from the workspace object store
+      tags:
+      - Workspace Files Management
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload files to the workspace object store.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Files to upload
+        in: formData
+        name: files
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/services.FileUploadResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Upload files to the workspace object store
+      tags:
+      - Workspace Files Management
+  /workspaces/{workspace-id}/files/object/metadata:
+    get:
+      consumes:
+      - application/json
+      description: Get metadata for a single file in the workspace object store.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: File name within the workspace
+        in: query
+        name: file
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.FileMetadataResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get object store file metadata
+      tags:
+      - Workspace Files Management
   /workspaces/{workspace-id}/users:
     get:
       consumes:
@@ -371,7 +767,7 @@ paths:
             type: string
       summary: Get users of a workspace
       tags:
-      - Workspaces
+      - Workspace Management
   /workspaces/{workspace-id}/users/{username}:
     delete:
       consumes:
@@ -414,7 +810,7 @@ paths:
             type: string
       summary: Remove a user from a workspace
       tags:
-      - Workspaces
+      - Workspace Management
     get:
       consumes:
       - application/json
@@ -456,7 +852,7 @@ paths:
             type: string
       summary: Get a user of a workspace
       tags:
-      - Workspaces
+      - Workspace Management
     put:
       consumes:
       - application/json
@@ -498,5 +894,10 @@ paths:
             type: string
       summary: Add a user to a workspace
       tags:
-      - Workspaces
+      - Workspace Management
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

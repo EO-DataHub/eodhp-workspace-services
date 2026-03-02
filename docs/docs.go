@@ -25,7 +25,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Billing Accounts"
+                    "Billing and Billing Accounts"
                 ],
                 "summary": "Get billing accounts",
                 "responses": {
@@ -63,7 +63,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Billing Accounts"
+                    "Billing and Billing Accounts"
                 ],
                 "summary": "Get a billing account",
                 "parameters": [
@@ -119,7 +119,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Get a list of workspaces you are a member of",
                 "responses": {
@@ -157,7 +157,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Get a workspace by ID",
                 "parameters": [
@@ -197,6 +197,531 @@ const docTemplate = `{
                 }
             }
         },
+        "/workspaces/{workspace-id}/files": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "List files for object and/or block stores in a workspace.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "List files in a workspace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Store type: object or block",
+                        "name": "store",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspace-id}/files/block": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload files to the workspace block store.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Upload files to the workspace block store",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Files to upload",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a file from the workspace block store.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Delete a file from the workspace block store",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File name to delete",
+                        "name": "file",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileDeleteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileDeleteResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspace-id}/files/block/metadata": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get metadata for a single file in the workspace block store.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Get block store file metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File name within the workspace",
+                        "name": "file",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileMetadataResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspace-id}/files/object": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload files to the workspace object store.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Upload files to the workspace object store",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Files to upload",
+                        "name": "files",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileUploadResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a file from the workspace object store.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Delete a file from the workspace object store",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File name to delete",
+                        "name": "file",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileDeleteResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileDeleteResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspace-id}/files/object/metadata": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get metadata for a single file in the workspace object store.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Get object store file metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File name within the workspace",
+                        "name": "file",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileMetadataResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/workspaces/{workspace-id}/users": {
             "get": {
                 "description": "Retrieve a list of users who are members of the specified workspace.",
@@ -207,7 +732,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Get users of a workspace",
                 "parameters": [
@@ -260,7 +785,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Get a user of a workspace",
                 "parameters": [
@@ -321,7 +846,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Add a user to a workspace",
                 "parameters": [
@@ -382,7 +907,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Remove a user from a workspace",
                 "parameters": [
@@ -445,7 +970,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Request S3 session credentials",
                 "parameters": [
@@ -504,7 +1029,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Workspaces"
+                    "Workspace Management"
                 ],
                 "summary": "Request workspace scoped session credentials",
                 "parameters": [
@@ -634,7 +1159,6 @@ const docTemplate = `{
             }
         },
         "models.BlockStore": {
-            "description": "Configuration for a block store.",
             "type": "object",
             "properties": {
                 "access_point_id": {
@@ -652,7 +1176,6 @@ const docTemplate = `{
             }
         },
         "models.ObjectStore": {
-            "description": "Configuration for an object store.",
             "type": "object",
             "properties": {
                 "access_point_arn": {
@@ -682,7 +1205,6 @@ const docTemplate = `{
             }
         },
         "models.Stores": {
-            "description": "Object and block storage configurations for the workspace.",
             "type": "object",
             "properties": {
                 "block": {
@@ -731,10 +1253,10 @@ const docTemplate = `{
                 "last_updated": {
                     "type": "string"
                 },
-                "owner": {
+                "name": {
                     "type": "string"
                 },
-                "name": {
+                "owner": {
                     "type": "string"
                 },
                 "status": {
@@ -747,6 +1269,103 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "services.FileDeleteResponse": {
+            "type": "object",
+            "properties": {
+                "deleted": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "failed": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.FileFail"
+                    }
+                },
+                "workspace": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.FileFail": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.FileItem": {
+            "type": "object",
+            "properties": {
+                "etag": {
+                    "type": "string"
+                },
+                "fileName": {
+                    "type": "string"
+                },
+                "lastModified": {
+                    "type": "string"
+                },
+                "size": {
+                    "type": "integer"
+                },
+                "storeType": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.FileListResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.FileItem"
+                    }
+                },
+                "workspace": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.FileMetadataResponse": {
+            "type": "object",
+            "properties": {
+                "item": {
+                    "$ref": "#/definitions/services.FileItem"
+                },
+                "workspace": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.FileUploadResponse": {
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.FileItem"
+                    }
+                },
+                "workspace": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
         }
     }
 }`

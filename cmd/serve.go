@@ -25,6 +25,9 @@ import (
 // @title EODHP Workspace Services API
 // @version v1
 // @description This is the API for the EODHP Workspace Services.
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Run the HTTP server for handling API requests",
@@ -40,16 +43,35 @@ var serveCmd = &cobra.Command{
 		}
 		defer publisher.Close()
 
-		// Initialize Kubernetes client
+		// Initialize Kubernetes client (optional in local dev)
 		k8sClient, err := initializeK8sClient()
 		if err != nil {
-			log.Fatal().Err(err).Msg("Failed to initialize Kubernetes client")
+			log.Warn().Err(err).Msg("Failed to initialize Kubernetes client")
+		}
+
+		// Shared clients/services
+		sts_client := awsclient.NewSTSClient(awsCfg)
+		fileService := &services.FileService{
+			Config: appCfg,
+			DB:     workspaceDB,
+			KC:     keycloakClient,
+			STS:    sts_client,
 		}
 
 		// Create routes
 		r := mux.NewRouter()
 
-		// Register the routes
+		// Docs (register before API prefix to avoid /api swallowing docs routes)
+		docs.SwaggerInfo.Host = appCfg.Host
+		docs.SwaggerInfo.BasePath = appCfg.BasePath
+		r.PathPrefix(appCfg.DocsPath).Handler(httpSwagger.Handler(
+			httpSwagger.URL(path.Join(appCfg.DocsPath, "/doc.json")),
+			httpSwagger.DeepLinking(true),
+			httpSwagger.DocExpansion("none"),
+			httpSwagger.DomID("swagger-ui"),
+		)).Methods(http.MethodGet)
+
+		// Register the API routes
 		api := r.PathPrefix(appCfg.BasePath).Subrouter()
 
 		// Apply the middleware to the API routes
@@ -103,36 +125,38 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/sessions", handlers.CreateWorkspaceSession(keycloakClient)).Methods(http.MethodPost)
 
 		// S3 token routes
-		sts_client := awsclient.NewSTSClient(awsCfg)
 		api.HandleFunc("/workspaces/{workspace-id}/{user-id}/s3-tokens", handlers.RequestS3CredentialsHandler(appCfg.AWS.S3.RoleArn, sts_client, *keycloakClient)).Methods(http.MethodPost)
 
-		// Linked account routes
-		linkedAccountService := &services.LinkedAccountService{
-			Config:         appCfg,
-			DB:             workspaceDB,
-			SecretsManager: secretsManagerClient,
-			K8sClient:      k8sClient,
-			KC:             keycloakClient,
+		// File management routes
+		api.HandleFunc("/workspaces/{workspace-id}/files", handlers.GetWorkspaceFiles(fileService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/files/object", handlers.UploadWorkspaceObjectFiles(fileService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/files/block", handlers.UploadWorkspaceBlockFiles(fileService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/files/object", handlers.DeleteWorkspaceObjectFile(fileService)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/files/block", handlers.DeleteWorkspaceBlockFile(fileService)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/files/object/metadata", handlers.GetWorkspaceObjectFileMetadata(fileService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/files/block/metadata", handlers.GetWorkspaceBlockFileMetadata(fileService)).Methods(http.MethodGet)
+
+		// Linked account routes (disabled when K8s client is unavailable, e.g., local dev without kubeconfig)
+		if k8sClient != nil {
+			linkedAccountService := &services.LinkedAccountService{
+				Config:         appCfg,
+				DB:             workspaceDB,
+				SecretsManager: secretsManagerClient,
+				K8sClient:      k8sClient,
+				KC:             keycloakClient,
+			}
+			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
+			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
+			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
+			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/airbus/validate", handlers.ValidateAirbusLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
+			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/planet/validate", handlers.ValidatePlanetLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
+		} else {
+			log.Warn().Msg("Skipping linked-accounts routes (Kubernetes client unavailable)")
 		}
-		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.CreateLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
-		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts", handlers.GetLinkedAccounts(linkedAccountService)).Methods(http.MethodGet)
-		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/{provider}", handlers.DeleteLinkedAccount(linkedAccountService)).Methods(http.MethodDelete)
-		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/airbus/validate", handlers.ValidateAirbusLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
-		api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/planet/validate", handlers.ValidatePlanetLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 
 		// Data Loader routes
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.DeleteFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodDelete)
-
-		// Docs
-		docs.SwaggerInfo.Host = appCfg.Host
-		docs.SwaggerInfo.BasePath = appCfg.BasePath
-		r.PathPrefix(appCfg.DocsPath).Handler(httpSwagger.Handler(
-			httpSwagger.URL(path.Join(appCfg.DocsPath, "/doc.json")),
-			httpSwagger.DeepLinking(true),
-			httpSwagger.DocExpansion("none"),
-			httpSwagger.DomID("swagger-ui"),
-		)).Methods(http.MethodGet)
 
 		log.Info().Msg(fmt.Sprintf("Server started at %s:%d", host, port))
 
