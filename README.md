@@ -3,7 +3,7 @@ An API gateway to the EO DataHub to manage workspace related API requests and pr
 
 ## Getting Started
 ### Requisites
-- Go 1.16 or higher
+- Go 1.24 or higher
 - Access to a PostgresSQL database
 - Apache Pulsar installed locally or access to a Pulsar cluster
 
