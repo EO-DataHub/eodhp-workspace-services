@@ -12,7 +12,6 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2/types"
@@ -120,7 +119,7 @@ func (svc *BillingAccountService) GetAccountsService(w http.ResponseWriter, r *h
 
 	// Ensure accounts is not nil, return an empty slice if no accounts are found
 	if accounts == nil {
-		accounts = []models.Account{}
+		accounts = []ws_services.Account{}
 	}
 
 	WriteResponse(w, http.StatusOK, accounts)
@@ -289,7 +288,8 @@ func (svc *BillingAccountService) AccountApprovalService(w http.ResponseWriter, 
 	}
 
 	// Send confirmation email to the account owner
-	if accountStatusRequest == AccountStatusApproved {
+	switch accountStatusRequest {
+	case AccountStatusApproved:
 		err = svc.SendAccountApprovalEmail(account, user.Email)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to send account confirmation email")
@@ -297,7 +297,7 @@ func (svc *BillingAccountService) AccountApprovalService(w http.ResponseWriter, 
 			return
 		}
 		logger.Info().Str("account_id", account.ID.String()).Msg("Account confirmation email sent successfully")
-	} else if accountStatusRequest == AccountStatusDenied {
+	case AccountStatusDenied:
 		err = svc.SendAccountDenialEmail(account, user.Email)
 		if err != nil {
 			logger.Error().Err(err).Msg("Failed to send account denial email")
