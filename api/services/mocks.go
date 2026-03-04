@@ -5,7 +5,6 @@ import (
 	"database/sql"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
-	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	ws_services "github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/aws/aws-sdk-go-v2/service/sesv2"
 	"github.com/google/uuid"
@@ -38,9 +37,9 @@ func (m *MockWorkspaceDB) CreateAccount(account *ws_services.Account) (*ws_servi
 	return args.Get(0).(*ws_services.Account), args.Error(1)
 }
 
-func (m *MockWorkspaceDB) GetAccounts(username string) ([]models.Account, error) {
+func (m *MockWorkspaceDB) GetAccounts(username string) ([]ws_services.Account, error) {
 	args := m.Called(username)
-	return args.Get(0).([]models.Account), args.Error(1)
+	return args.Get(0).([]ws_services.Account), args.Error(1)
 }
 
 func (m *MockWorkspaceDB) GetAccount(accountID uuid.UUID) (*ws_services.Account, error) {
@@ -179,24 +178,24 @@ func (m *MockKeycloakClient) ExchangeToken(accessToken, scope string) (*TokenRes
 	return args.Get(0).(*TokenResponse), args.Error(1)
 }
 
-func (m *MockKeycloakClient) GetGroup(groupName string) (*models.Group, error) {
+func (m *MockKeycloakClient) GetGroup(groupName string) (*ws_services.Group, error) {
 	args := m.Called(groupName)
-	return args.Get(0).(*models.Group), args.Error(1)
+	return args.Get(0).(*ws_services.Group), args.Error(1)
 }
 
-func (m *MockKeycloakClient) GetGroupMembers(groupID string) ([]models.User, error) {
+func (m *MockKeycloakClient) GetGroupMembers(groupID string) ([]ws_services.User, error) {
 	args := m.Called(groupID)
-	return args.Get(0).([]models.User), args.Error(1)
+	return args.Get(0).([]ws_services.User), args.Error(1)
 }
 
-func (m *MockKeycloakClient) GetGroupMember(groupID, userID string) (*models.User, error) {
+func (m *MockKeycloakClient) GetGroupMember(groupID, userID string) (*ws_services.User, error) {
 	args := m.Called(groupID)
-	return args.Get(0).(*models.User), args.Error(1)
+	return args.Get(0).(*ws_services.User), args.Error(1)
 }
 
-func (m *MockKeycloakClient) GetUser(username string) (*models.User, error) {
+func (m *MockKeycloakClient) GetUser(username string) (*ws_services.User, error) {
 	args := m.Called(username)
-	return args.Get(0).(*models.User), args.Error(1)
+	return args.Get(0).(*ws_services.User), args.Error(1)
 }
 
 func (m *MockKeycloakClient) GetUserGroups(userID string) ([]string, error) {

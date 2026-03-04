@@ -210,7 +210,7 @@ func (db *WorkspaceDB) IsUserAccountOwner(username, workspaceID string) (bool, e
 
 	// Check for errors
 	if err != nil {
-		return false, fmt.Errorf("Database error retrieving workspace: %w", err)
+		return false, fmt.Errorf("database error retrieving workspace: %w", err)
 	}
 
 	// Get account information
@@ -218,7 +218,7 @@ func (db *WorkspaceDB) IsUserAccountOwner(username, workspaceID string) (bool, e
 
 	// Check for errors
 	if err != nil {
-		return false, fmt.Errorf("Database error retrieving account: %w", err)
+		return false, fmt.Errorf("database error retrieving account: %w", err)
 	}
 
 	// Check if the user is the account owner
