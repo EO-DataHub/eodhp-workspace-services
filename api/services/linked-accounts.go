@@ -272,7 +272,8 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 }
 
 // ValidateAirbusLinkedAccountService validates the Airbus key and returns the associated contracts.
-// The key is used to obtain an access token, which is then used to fetch the contracts from the Airbus API.
+// The key is used to obtain an access token, then optical contracts and SAR whoami are queried.
+// Validation succeeds if at least one of those requests succeeds (some keys have only optical or only SAR access).
 func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.ResponseWriter, r *http.Request) {
 
 	logger := zerolog.Ctx(r.Context())
@@ -333,21 +334,27 @@ func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.Respo
 		return
 	}
 
-	// Get OPTICAL contracts from Airbus
-	opticalContracts, err := svc.getAirbusOpticalContracts(token)
-	if err != nil {
-		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to get Airbus contracts")
+	opticalContracts, opticalErr := svc.getAirbusOpticalContracts(token)
+	sarContracts, sarErr := svc.getAirbusSARContracts(token)
+
+	if opticalErr != nil && sarErr != nil {
+		logger.Error().Str("workspace_id", workspaceID).
+			Msgf("Failed to get Airbus optical contracts and SAR whoami: optical=%v sar=%v", opticalErr, sarErr)
 		WriteResponse(w, http.StatusInternalServerError, nil)
-		fmt.Println("Error getting contracts:", err)
 		return
 	}
 
-	sarContracts, err := svc.getAirbusSARContracts(token)
-	if err != nil {
-		WriteResponse(w, http.StatusInternalServerError, nil)
+	if opticalErr != nil {
+		logger.Warn().Err(opticalErr).Str("workspace_id", workspaceID).
+			Msg("Airbus optical contracts unavailable; relying on SAR validation")
+		opticalContracts = nil
+	}
+	if sarErr != nil {
+		logger.Warn().Err(sarErr).Str("workspace_id", workspaceID).
+			Msg("Airbus SAR whoami unavailable; relying on optical validation")
+		sarContracts = false
 	}
 
-	// Prepare the response payload
 	payload.Contracts = AirbusContractsData{
 		Optical: opticalContracts,
 		SAR:     sarContracts,
