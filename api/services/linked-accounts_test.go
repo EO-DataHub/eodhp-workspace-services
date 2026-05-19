@@ -1,10 +1,19 @@
 package services
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -120,4 +129,123 @@ func TestDeleteSecretKeyFromAWS(t *testing.T) {
 
 	// Check that the mock expectations were met for the second case
 	mockService.AssertExpectations(t)
+}
+
+func TestValidateAirbusLinkedAccountService_OpticalOrSAR(t *testing.T) {
+	t.Parallel()
+
+	hubAdminClaims := authn.Claims{}
+	hubAdminClaims.RealmAccess.Roles = []string{"hub_admin"}
+
+	tests := []struct {
+		name            string
+		opticalStatus   int
+		opticalBody     string
+		sarStatus       int
+		sarBody         string
+		wantHTTPStatus  int
+		wantOptical     map[string]string
+		wantSAR         bool
+		skipBodyAsserts bool
+	}{
+		{
+			name:           "both_upstream_fail",
+			opticalStatus:  http.StatusInternalServerError,
+			sarStatus:      http.StatusForbidden,
+			wantHTTPStatus: http.StatusInternalServerError,
+			skipBodyAsserts: true,
+		},
+		{
+			name:           "optical_ok_sar_fails",
+			opticalStatus:  http.StatusOK,
+			opticalBody:    `{"contracts":[{"contractId":"CTR1","name":"EODH_TEST"}]}`,
+			sarStatus:      http.StatusForbidden,
+			sarBody:        `{"code":0,"message":"account expired"}`,
+			wantHTTPStatus: http.StatusOK,
+			wantOptical:    map[string]string{"CTR1": "EODH_TEST"},
+			wantSAR:        false,
+		},
+		{
+			name:           "optical_fails_sar_ok_with_radar",
+			opticalStatus:  http.StatusInternalServerError,
+			sarStatus:      http.StatusOK,
+			sarBody:        `{"services":["radar"]}`,
+			wantHTTPStatus: http.StatusOK,
+			wantOptical:    nil,
+			wantSAR:        true,
+		},
+		{
+			name:           "both_ok",
+			opticalStatus:  http.StatusOK,
+			opticalBody:    `{"contracts":[{"contractId":"C1","name":"N1"}]}`,
+			sarStatus:      http.StatusOK,
+			sarBody:        `{"services":["other","radar"]}`,
+			wantHTTPStatus: http.StatusOK,
+			wantOptical:    map[string]string{"C1": "N1"},
+			wantSAR:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch {
+				case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/token"):
+					w.Header().Set("Content-Type", "application/json")
+					_ = json.NewEncoder(w).Encode(map[string]string{"access_token": "test-access-token"})
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/contracts"):
+					w.WriteHeader(tt.opticalStatus)
+					if tt.opticalStatus == http.StatusOK {
+						_, _ = w.Write([]byte(tt.opticalBody))
+					}
+				case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/whoami"):
+					w.WriteHeader(tt.sarStatus)
+					if tt.sarStatus == http.StatusOK {
+						_, _ = w.Write([]byte(tt.sarBody))
+					}
+				default:
+					w.WriteHeader(http.StatusNotFound)
+				}
+			}))
+			t.Cleanup(srv.Close)
+
+			svc := &LinkedAccountService{
+				Config: &appconfig.Config{
+					Providers: appconfig.ProvidersConfig{
+						Airbus: appconfig.AirbusProviderConfig{
+							AcessTokenURL:       srv.URL + "/token",
+							OpticalContractsURL: srv.URL + "/contracts",
+							SARContractsURL:     srv.URL + "/whoami",
+						},
+					},
+				},
+			}
+
+			payload := []byte(`{"name":"airbus","key":"test-api-key"}`)
+			req := httptest.NewRequest(http.MethodPost, "/workspaces/ws-airbus/linked-accounts/airbus/validate", bytes.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req = mux.SetURLVars(req, map[string]string{"workspace-id": "ws-airbus"})
+			ctx := context.WithValue(req.Context(), middleware.ClaimsKey, hubAdminClaims)
+			req = req.WithContext(ctx)
+
+			rec := httptest.NewRecorder()
+			svc.ValidateAirbusLinkedAccountService(rec, req)
+
+			res := rec.Result()
+			t.Cleanup(func() { _ = res.Body.Close() })
+
+			require.Equal(t, tt.wantHTTPStatus, res.StatusCode)
+			if tt.skipBodyAsserts {
+				return
+			}
+
+			var got Payload
+			require.NoError(t, json.NewDecoder(res.Body).Decode(&got))
+			require.Equal(t, "airbus", got.Name)
+			require.Equal(t, tt.wantOptical, got.Contracts.Optical)
+			require.Equal(t, tt.wantSAR, got.Contracts.SAR)
+		})
+	}
 }
