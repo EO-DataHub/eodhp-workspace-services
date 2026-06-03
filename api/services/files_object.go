@@ -49,14 +49,9 @@ func (svc *FileService) listObjectStoreItems(r *http.Request, stores []ws_manage
 }
 
 // uploadObjectStoreFiles uploads multipart files to the object store.
-func (svc *FileService) uploadObjectStoreFiles(r *http.Request, store ws_manager.ObjectStore, files []*multipart.FileHeader) ([]FileItem, error) {
+func (svc *FileService) uploadObjectStoreFiles(r *http.Request, s3Client *s3.Client, store ws_manager.ObjectStore, files []*multipart.FileHeader) ([]FileItem, error) {
 	if store.Bucket == "" || store.Prefix == "" {
 		return nil, fmt.Errorf("object store not provisioned")
-	}
-
-	s3Client, err := svc.newS3Client(r)
-	if err != nil {
-		return nil, err
 	}
 
 	var items []FileItem
