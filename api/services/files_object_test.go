@@ -165,7 +165,7 @@ func TestObjectStoreMethodsProvisioningValidation(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, status)
 	require.EqualError(t, err, "object store not provisioned")
 
-	_, err = svc.uploadObjectStoreFiles(req, ws_manager.ObjectStore{}, []*multipart.FileHeader{})
+	_, err = svc.uploadObjectStoreFiles(req, nil, ws_manager.ObjectStore{}, []*multipart.FileHeader{})
 	require.EqualError(t, err, "object store not provisioned")
 
 	_, _, err = svc.deleteObjectStoreFiles(req, ws_manager.ObjectStore{}, []string{"a.tif"})
@@ -213,7 +213,7 @@ func TestObjectStorePathValidationWithoutS3Call(t *testing.T) {
 	files := []*multipart.FileHeader{
 		{Filename: "bad/name.tif"},
 	}
-	_, err := svc.uploadObjectStoreFiles(req, ws_manager.ObjectStore{
+	_, err := svc.uploadObjectStoreFiles(req, nil, ws_manager.ObjectStore{
 		Bucket: "bucket-1",
 		Prefix: "workspace/ws-1",
 	}, files)

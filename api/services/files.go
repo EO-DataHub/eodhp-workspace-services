@@ -11,6 +11,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
@@ -183,6 +184,24 @@ func (svc *FileService) UploadFilesService(w http.ResponseWriter, r *http.Reques
 	// Propagate the request context so downstream I/O is canceled on client disconnect/timeout.
 	ctx := r.Context()
 
+	var items []FileItem
+	wantObject, _, err := resolveStoreSelection(storeType, false)
+	if err != nil {
+		WriteResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Resolve S3 credentials before reading the request body so the JWT is
+	// still valid. ParseMultipartForm below can take minutes for large files.
+	var s3Client *s3.Client
+	if wantObject {
+		s3Client, err = svc.newS3Client(r)
+		if err != nil {
+			WriteResponse(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
 	if err := r.ParseMultipartForm(svc.maxUploadFormMemoryBytes()); err != nil {
 		WriteResponse(w, http.StatusBadRequest, "invalid multipart form data")
 		return
@@ -193,13 +212,6 @@ func (svc *FileService) UploadFilesService(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	var items []FileItem
-	wantObject, _, err := resolveStoreSelection(storeType, false)
-	if err != nil {
-		WriteResponse(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
 	if wantObject {
 		objectStores, _ := collectStores(workspace)
 		objectStore, err := selectObjectStore(objectStores)
@@ -207,7 +219,7 @@ func (svc *FileService) UploadFilesService(w http.ResponseWriter, r *http.Reques
 			WriteResponse(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		uploaded, err := svc.uploadObjectStoreFiles(r, objectStore, files)
+		uploaded, err := svc.uploadObjectStoreFiles(r, s3Client, objectStore, files)
 		if err != nil {
 			WriteResponse(w, http.StatusInternalServerError, err.Error())
 			return
