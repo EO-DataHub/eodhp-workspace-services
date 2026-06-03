@@ -73,6 +73,12 @@ type FileMetadataResponse struct {
 	Item      FileItem `json:"item"`
 }
 
+type FileUploadURLResponse struct {
+	Workspace string `json:"workspace"`
+	URL       string `json:"url"`
+	FileName  string `json:"fileName"`
+}
+
 // resolveAuthorizedWorkspace validates access to the requested workspace and loads its settings.
 func (svc *FileService) resolveAuthorizedWorkspace(w http.ResponseWriter, r *http.Request) (string, *ws_manager.WorkspaceSettings, bool) {
 	logger := zerolog.Ctx(r.Context())
@@ -368,5 +374,37 @@ func (svc *FileService) GetFileMetadataService(w http.ResponseWriter, r *http.Re
 	WriteResponse(w, http.StatusOK, FileMetadataResponse{
 		Workspace: workspaceID,
 		Item:      item,
+	})
+}
+
+func (svc *FileService) GetUploadURLService(w http.ResponseWriter, r *http.Request) {
+	workspaceID, workspace, ok := svc.resolveAuthorizedWorkspace(w, r)
+	if !ok {
+		return
+	}
+
+	filename := r.URL.Query().Get("filename")
+	if filename == "" {
+		WriteResponse(w, http.StatusBadRequest, "filename query parameter is required")
+		return
+	}
+
+	objectStores, _ := collectStores(workspace)
+	objectStore, err := selectObjectStore(objectStores)
+	if err != nil {
+		WriteResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	uploadURL, err := svc.getObjectStoreUploadURL(r, objectStore, filename)
+	if err != nil {
+		WriteResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	WriteResponse(w, http.StatusOK, FileUploadURLResponse{
+		Workspace: workspaceID,
+		URL:       uploadURL,
+		FileName:  filename,
 	})
 }

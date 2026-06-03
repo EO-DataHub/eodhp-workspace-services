@@ -6,6 +6,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
@@ -167,6 +168,38 @@ func (svc *FileService) getObjectStoreMetadata(r *http.Request, store ws_manager
 		item.ETag = strings.Trim(*resp.ETag, "\"")
 	}
 	return item, nil
+}
+
+// getObjectStoreUploadURL generates a presigned S3 PutObject URL for a single file.
+// newS3Client is called before any data is read, so the JWT is still valid at credential exchange time.
+func (svc *FileService) getObjectStoreUploadURL(r *http.Request, store ws_manager.ObjectStore, filename string) (string, error) {
+	if store.Bucket == "" || store.Prefix == "" {
+		return "", fmt.Errorf("object store not provisioned")
+	}
+	if err := validateFileName(filename); err != nil {
+		return "", err
+	}
+
+	s3Client, err := svc.newS3Client(r)
+	if err != nil {
+		return "", err
+	}
+
+	key, err := safeS3Key(store.Prefix, filename)
+	if err != nil {
+		return "", err
+	}
+
+	presignClient := s3.NewPresignClient(s3Client)
+	req, err := presignClient.PresignPutObject(r.Context(), &s3.PutObjectInput{
+		Bucket: aws.String(store.Bucket),
+		Key:    aws.String(key),
+	}, s3.WithPresignExpires(time.Hour))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate upload URL: %w", err)
+	}
+
+	return req.URL, nil
 }
 
 // newS3Client creates an S3 client using credentials resolved from the incoming request.
