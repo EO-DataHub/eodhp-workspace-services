@@ -172,7 +172,7 @@ func (svc *FileService) getObjectStoreMetadata(r *http.Request, store ws_manager
 
 // getObjectStoreUploadURL generates a presigned S3 PutObject URL for a single file.
 // newS3Client is called before any data is read, so the JWT is still valid at credential exchange time.
-func (svc *FileService) getObjectStoreUploadURL(r *http.Request, store ws_manager.ObjectStore, filename string) (string, error) {
+func (svc *FileService) getObjectStoreUploadURL(r *http.Request, store ws_manager.ObjectStore, filename string, size int64) (string, error) {
 	if store.Bucket == "" || store.Prefix == "" {
 		return "", fmt.Errorf("object store not provisioned")
 	}
@@ -192,8 +192,9 @@ func (svc *FileService) getObjectStoreUploadURL(r *http.Request, store ws_manage
 
 	presignClient := s3.NewPresignClient(s3Client)
 	req, err := presignClient.PresignPutObject(r.Context(), &s3.PutObjectInput{
-		Bucket: aws.String(store.Bucket),
-		Key:    aws.String(key),
+		Bucket:        aws.String(store.Bucket),
+		Key:           aws.String(key),
+		ContentLength: aws.Int64(size),
 	}, s3.WithPresignExpires(time.Hour))
 	if err != nil {
 		return "", fmt.Errorf("failed to generate upload URL: %w", err)

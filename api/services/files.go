@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
@@ -23,6 +24,7 @@ const (
 	invalidStoreType  = "invalid store type"
 	defaultTimeFormat = "2006-01-02T15:04:05Z"
 	defaultFormMemory = int64(32 << 20) // 32MB
+	maxUploadBytes    = int64(6 << 30)  // 6GB
 )
 
 // STSClient defines the minimal interface needed for STS AssumeRoleWithWebIdentity.
@@ -383,9 +385,19 @@ func (svc *FileService) GetUploadURLService(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	filename := r.URL.Query().Get("filename")
+	filename := r.URL.Query().Get("file")
 	if filename == "" {
-		WriteResponse(w, http.StatusBadRequest, "filename query parameter is required")
+		WriteResponse(w, http.StatusBadRequest, "file query parameter is required")
+		return
+	}
+
+	size, err := strconv.ParseInt(r.URL.Query().Get("size"), 10, 64)
+	if err != nil || size <= 0 {
+		WriteResponse(w, http.StatusBadRequest, "size query parameter must be a positive integer")
+		return
+	}
+	if size > maxUploadBytes {
+		WriteResponse(w, http.StatusBadRequest, "file exceeds maximum upload size")
 		return
 	}
 
@@ -396,7 +408,7 @@ func (svc *FileService) GetUploadURLService(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	uploadURL, err := svc.getObjectStoreUploadURL(r, objectStore, filename)
+	uploadURL, err := svc.getObjectStoreUploadURL(r, objectStore, filename, size)
 	if err != nil {
 		WriteResponse(w, http.StatusInternalServerError, err.Error())
 		return
