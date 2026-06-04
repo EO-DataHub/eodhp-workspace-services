@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -538,6 +539,51 @@ func newMultipartWorkspaceRequest(
 	req := newWorkspaceRequest(method, workspaceID, "", &body, claims)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	return req
+}
+
+func workspaceWithObjectStore(workspaceID string) *ws_manager.WorkspaceSettings {
+	stores := []ws_manager.Stores{
+		{
+			Object: []ws_manager.ObjectStore{
+				{Bucket: "bucket-1", Prefix: "workspace/" + workspaceID},
+			},
+		},
+	}
+	return &ws_manager.WorkspaceSettings{
+		Name:   workspaceID,
+		Stores: &stores,
+	}
+}
+
+func TestGetUploadURLServiceParameterValidation(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"missing file param", "size=1024"},
+		{"missing size param", "file=foo.tif"},
+		{"size is zero", "file=foo.tif&size=0"},
+		{"size is negative", "file=foo.tif&size=-1"},
+		{"size exceeds limit", fmt.Sprintf("file=foo.tif&size=%d", maxUploadBytes+1)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			mockDB := new(MockWorkspaceDB)
+			claims := hubAdminClaims()
+			workspaceID := "ws-1"
+			mockDB.On("GetWorkspace", workspaceID).Return(workspaceWithObjectStore(workspaceID), nil).Once()
+
+			svc := FileService{DB: mockDB}
+			req := newWorkspaceRequest(http.MethodGet, workspaceID, tc.query, nil, &claims)
+			w := httptest.NewRecorder()
+
+			svc.GetUploadURLService(w, req)
+
+			require.Equal(t, http.StatusBadRequest, w.Result().StatusCode)
+			mockDB.AssertExpectations(t)
+		})
+	}
 }
 
 func workspaceWithBlockStore(workspaceID string) *ws_manager.WorkspaceSettings {

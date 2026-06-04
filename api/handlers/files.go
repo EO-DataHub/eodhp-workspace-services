@@ -37,7 +37,7 @@ func GetWorkspaceFiles(svc *services.FileService) http.HandlerFunc {
 // @Security BearerAuth
 // @Produce json
 // @Param workspace-id path string true "Workspace ID"
-// @Param file query string true "Filename to upload"
+// @Param file query string true "File path within the workspace"
 // @Param size query integer true "File size in bytes"
 // @Success 200 {object} services.FileUploadURLResponse
 // @Failure 400 {object} string

@@ -173,6 +173,9 @@ func TestObjectStoreMethodsProvisioningValidation(t *testing.T) {
 
 	_, err = svc.getObjectStoreMetadata(req, ws_manager.ObjectStore{}, "a.tif")
 	require.EqualError(t, err, "object store not provisioned")
+
+	_, err = svc.getObjectStoreUploadURL(req, ws_manager.ObjectStore{}, "file.tif", 1024)
+	require.EqualError(t, err, "object store not provisioned")
 }
 
 func TestListObjectStoreItemsInvalidPrefixReturnsError(t *testing.T) {
@@ -233,6 +236,40 @@ func TestObjectStorePathValidationWithoutS3Call(t *testing.T) {
 		Prefix: "workspace/ws-1",
 	}, "bad/name.tif")
 	require.EqualError(t, err, "nested paths are not supported")
+
+	_, err = svc.getObjectStoreUploadURL(req, ws_manager.ObjectStore{
+		Bucket: "bucket-1",
+		Prefix: "workspace/ws-1",
+	}, "bad/name.tif", 1024)
+	require.EqualError(t, err, "nested paths are not supported")
+}
+
+func TestGetObjectStoreUploadURL(t *testing.T) {
+	svc := FileService{
+		Config: &appconfig.Config{
+			AWS: appconfig.AWSConfig{
+				Region: "us-east-1",
+				S3: appconfig.S3Config{
+					AccessKey: "local-key",
+					SecretKey: "local-secret",
+				},
+			},
+		},
+	}
+	store := ws_manager.ObjectStore{Bucket: "bucket-1", Prefix: "workspace/ws-1"}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+
+	t.Run("success returns non-empty URL containing filename", func(t *testing.T) {
+		url, err := svc.getObjectStoreUploadURL(req, store, "file.tif", 1024)
+		require.NoError(t, err)
+		require.NotEmpty(t, url)
+		require.Contains(t, url, "file.tif")
+	})
+
+	t.Run("size at limit is accepted", func(t *testing.T) {
+		_, err := svc.getObjectStoreUploadURL(req, store, "file.tif", maxUploadBytes)
+		require.NoError(t, err)
+	})
 }
 
 type mockSTSClient struct {
