@@ -133,6 +133,7 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/files/block", handlers.UploadWorkspaceBlockFiles(fileService)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/files/object", handlers.DeleteWorkspaceObjectFile(fileService)).Methods(http.MethodDelete)
 		api.HandleFunc("/workspaces/{workspace-id}/files/block", handlers.DeleteWorkspaceBlockFile(fileService)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/files/object/upload-url", handlers.GetWorkspaceObjectFileUploadURL(fileService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/files/object/metadata", handlers.GetWorkspaceObjectFileMetadata(fileService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/files/block/metadata", handlers.GetWorkspaceBlockFileMetadata(fileService)).Methods(http.MethodGet)
 

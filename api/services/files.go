@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
@@ -23,6 +24,7 @@ const (
 	invalidStoreType  = "invalid store type"
 	defaultTimeFormat = "2006-01-02T15:04:05Z"
 	defaultFormMemory = int64(32 << 20) // 32MB
+	maxUploadBytes    = int64(6 << 30)  // 6GB
 )
 
 // STSClient defines the minimal interface needed for STS AssumeRoleWithWebIdentity.
@@ -71,6 +73,12 @@ type FileFail struct {
 type FileMetadataResponse struct {
 	Workspace string   `json:"workspace"`
 	Item      FileItem `json:"item"`
+}
+
+type FileUploadURLResponse struct {
+	Workspace string `json:"workspace"`
+	URL       string `json:"url"`
+	FileName  string `json:"fileName"`
 }
 
 // resolveAuthorizedWorkspace validates access to the requested workspace and loads its settings.
@@ -368,5 +376,47 @@ func (svc *FileService) GetFileMetadataService(w http.ResponseWriter, r *http.Re
 	WriteResponse(w, http.StatusOK, FileMetadataResponse{
 		Workspace: workspaceID,
 		Item:      item,
+	})
+}
+
+func (svc *FileService) GetUploadURLService(w http.ResponseWriter, r *http.Request) {
+	workspaceID, workspace, ok := svc.resolveAuthorizedWorkspace(w, r)
+	if !ok {
+		return
+	}
+
+	filename := r.URL.Query().Get("file")
+	if filename == "" {
+		WriteResponse(w, http.StatusBadRequest, "file query parameter is required")
+		return
+	}
+
+	size, err := strconv.ParseInt(r.URL.Query().Get("size"), 10, 64)
+	if err != nil || size <= 0 {
+		WriteResponse(w, http.StatusBadRequest, "size query parameter must be a positive integer")
+		return
+	}
+	if size > maxUploadBytes {
+		WriteResponse(w, http.StatusBadRequest, "file exceeds maximum upload size")
+		return
+	}
+
+	objectStores, _ := collectStores(workspace)
+	objectStore, err := selectObjectStore(objectStores)
+	if err != nil {
+		WriteResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	uploadURL, err := svc.getObjectStoreUploadURL(r, objectStore, filename, size)
+	if err != nil {
+		WriteResponse(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	WriteResponse(w, http.StatusOK, FileUploadURLResponse{
+		Workspace: workspaceID,
+		URL:       uploadURL,
+		FileName:  filename,
 	})
 }

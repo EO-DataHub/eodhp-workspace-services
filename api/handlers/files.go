@@ -31,6 +31,31 @@ func GetWorkspaceFiles(svc *services.FileService) http.HandlerFunc {
 	}
 }
 
+// @Summary Get a presigned upload URL for the workspace object store
+// @Description Returns a presigned S3 PutObject URL. The client uploads the file directly to S3 using the returned URL, bypassing this service entirely for the data transfer.
+// @Tags Workspace Files Management
+// @Security BearerAuth
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param file query string true "File path within the workspace"
+// @Param size query integer true "File size in bytes"
+// @Success 200 {object} services.FileUploadURLResponse
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 403 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/files/object/upload-url [get]
+func GetWorkspaceObjectFileUploadURL(svc *services.FileService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.GetUploadURLService(w, r)
+	}
+}
+
 // @Summary Upload files to the workspace object store
 // @Description Upload files to the workspace object store.
 // @Tags Workspace Files Management
