@@ -437,6 +437,13 @@ func (w *WorkspaceDB) UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) e
 
 	// Update block_store table
 	for _, efs := range status.AWS.EFS.AccessPoints {
+		// RootDirectory is omitempty and can be blank in partial reconcile statuses.
+		// Skip these so we never overwrite an already-provisioned mount_point with an
+		// empty value, which would make the block store appear "not provisioned".
+		if strings.TrimSpace(efs.RootDirectory) == "" {
+			continue
+		}
+
 		err = w.execQuery(tx, `
 			UPDATE block_stores
 			SET access_point_id = $1, mount_point = $2
