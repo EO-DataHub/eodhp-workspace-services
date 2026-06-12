@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
@@ -51,7 +52,7 @@ type LinkedAccountService struct {
 	Config         *appconfig.Config
 	DB             *db.WorkspaceDB
 	SecretsManager *secretsmanager.Client
-	K8sClient      *kubernetes.Clientset
+	K8sClient      kubernetes.Interface
 	KC             KeycloakClientInterface
 }
 
@@ -62,10 +63,77 @@ type Payload struct {
 	Contracts AirbusContractsData `json:"contracts,omitempty"` // Airbus only
 }
 
+type OpenCosmosUser struct {
+	Sub   string `json:"sub,omitempty"`
+	Name  string `json:"name,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
+type OpenCosmosSessionPayload struct {
+	AccessToken  string          `json:"accessToken"`
+	RefreshToken string          `json:"refreshToken,omitempty"`
+	ExpiresAt    int64           `json:"expiresAt"`
+	Scope        string          `json:"scope,omitempty"`
+	TokenType    string          `json:"tokenType,omitempty"`
+	User         *OpenCosmosUser `json:"user,omitempty"`
+}
+
+func sanitizeOpenCosmosUserSub(userSub string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(userSub))
+
+	// Replace characters that are common in identity subjects but invalid or awkward in
+	// Kubernetes secret names. We collapse them all to "-" so consumers can apply the
+	// same deterministic transformation when reconstructing the secret name.
+	replacer := strings.NewReplacer(
+		":", "-",
+		"/", "-",
+		"\\", "-",
+		"_", "-",
+		".", "-",
+		"@", "-",
+		" ", "-",
+	)
+	normalized = replacer.Replace(normalized)
+
+	// Keep only lowercase letters, digits and hyphens because Kubernetes resource
+	// names must be DNS-label friendly. Any other character becomes "-".
+	var builder strings.Builder
+	builder.Grow(len(normalized))
+	for _, r := range normalized {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			builder.WriteRune(r)
+			continue
+		}
+		builder.WriteByte('-')
+	}
+
+	sanitized := builder.String()
+
+	// Collapse repeated hyphens so equivalent subjects do not produce visually noisy
+	// names like "auth0---user". This also makes reproduction easier for consumers.
+	for strings.Contains(sanitized, "--") {
+		sanitized = strings.ReplaceAll(sanitized, "--", "-")
+	}
+
+	// Trim leading and trailing hyphens because Kubernetes names cannot start or end
+	// with a separator.
+	sanitized = strings.Trim(sanitized, "-")
+
+	// Refuse to store the session if the subject sanitizes down to nothing. That would
+	// create an ambiguous secret name and make it impossible to attribute the secret to
+	// a concrete user later.
+	if sanitized == "" {
+		return "", fmt.Errorf("user sub %q is invalid after sanitization", userSub)
+	}
+
+	return sanitized, nil
+}
+
 type LinkedAccountServiceInterface interface {
 	GetLinkedAccounts(w http.ResponseWriter, r *http.Request)
 	DeleteLinkedAccountService(w http.ResponseWriter, r *http.Request)
 	CreateLinkedAccountService(w http.ResponseWriter, r *http.Request)
+	CreateOpenCosmosSessionService(w http.ResponseWriter, r *http.Request)
 	storeOTPSecret(otpKey, secretName, namespace string) error
 	storeCiphertextInAWSSecrets(ciphertext, secretName, payloadName string) error
 	getSecretKeysFromAWS(secretName string) ([]string, error)
@@ -269,6 +337,85 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 	}
 	WriteResponse(w, http.StatusCreated, nil)
 
+}
+
+// CreateOpenCosmosSessionService stores an Open Cosmos OAuth session in a workspace-scoped Kubernetes secret.
+func (svc *LinkedAccountService) CreateOpenCosmosSessionService(w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	workspaceID := mux.Vars(r)["workspace-id"]
+	namespace := "ws-" + workspaceID
+
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to read request body")
+		WriteResponse(w, http.StatusBadRequest, "Failed to read request body")
+		return
+	}
+	defer r.Body.Close()
+
+	var payload OpenCosmosSessionPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Invalid JSON payload")
+		WriteResponse(w, http.StatusBadRequest, "Invalid JSON payload")
+		return
+	}
+
+	if payload.AccessToken == "" {
+		WriteResponse(w, http.StatusBadRequest, "Field 'accessToken' is required and cannot be empty")
+		return
+	}
+
+	if payload.RefreshToken == "" {
+		WriteResponse(w, http.StatusBadRequest, "Field 'refreshToken' is required and cannot be empty")
+		return
+	}
+
+	if payload.ExpiresAt <= 0 {
+		WriteResponse(w, http.StatusBadRequest, "Field 'expiresAt' is required and must be a positive timestamp")
+		return
+	}
+
+	if payload.User == nil || payload.User.Sub == "" {
+		WriteResponse(w, http.StatusBadRequest, "Field 'user.sub' is required and cannot be empty")
+		return
+	}
+
+	sanitizedUserSub, err := sanitizeOpenCosmosUserSub(payload.User.Sub)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Invalid Open Cosmos user subject for secret naming")
+		WriteResponse(w, http.StatusBadRequest, "Field 'user.sub' is invalid for secret naming")
+		return
+	}
+
+	k8sSecretName := "oauth-opencosmos-" + sanitizedUserSub
+	if err := svc.storeOpenCosmosSessionSecret(payload, k8sSecretName, namespace); err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to store Open Cosmos session in Kubernetes")
+		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store Open Cosmos session in Kubernetes: %v", err))
+		return
+	}
+
+	WriteResponse(w, http.StatusCreated, nil)
 }
 
 // ValidateAirbusLinkedAccountService validates the Airbus key and returns the associated contracts.
@@ -519,6 +666,49 @@ func (svc *LinkedAccountService) storeK8sSecrets(otpKey, secretName, namespace s
 			return fmt.Errorf("failed to create Kubernetes secret: %v", err)
 		}
 	}
+	return nil
+}
+
+func (svc *LinkedAccountService) storeOpenCosmosSessionSecret(session OpenCosmosSessionPayload, secretName, namespace string) error {
+	secretsData := map[string][]byte{
+		"access_token":  []byte(session.AccessToken),
+		"refresh_token": []byte(session.RefreshToken),
+		"expires_at":    []byte(strconv.FormatInt(session.ExpiresAt, 10)),
+	}
+
+	if session.Scope != "" {
+		secretsData["scope"] = []byte(session.Scope)
+	}
+
+	if session.TokenType != "" {
+		secretsData["token_type"] = []byte(session.TokenType)
+	}
+
+	if session.User != nil {
+		if session.User.Sub != "" {
+			secretsData["user_sub"] = []byte(session.User.Sub)
+		}
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: secretName,
+		},
+		Data: secretsData,
+	}
+
+	_, err := svc.K8sClient.CoreV1().Secrets(namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+	if err != nil {
+		if k8sErrors.IsAlreadyExists(err) {
+			_, err = svc.K8sClient.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
+			if err != nil {
+				return fmt.Errorf("failed to update existing Kubernetes secret: %v", err)
+			}
+		} else {
+			return fmt.Errorf("failed to create Kubernetes secret: %v", err)
+		}
+	}
+
 	return nil
 }
 

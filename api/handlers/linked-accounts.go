@@ -20,6 +20,20 @@ func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 	}
 }
 
+// CreateOpenCosmosSession handles HTTP requests for persisting an Open Cosmos session for a workspace.
+func CreateOpenCosmosSession(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with its API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.CreateOpenCosmosSessionService(w, r)
+	}
+}
+
 // GetAccounts handles HTTP requests for retrieving accounts.
 func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 
