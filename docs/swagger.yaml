@@ -1,4 +1,15 @@
 definitions:
+  awsclient.S3Credentials:
+    properties:
+      accessKeyId:
+        type: string
+      expiration:
+        type: string
+      secretAccessKey:
+        type: string
+      sessionToken:
+        type: string
+    type: object
   handlers.AuthSessionResponse:
     properties:
       access:
@@ -10,17 +21,6 @@ definitions:
       refreshExpiry:
         type: string
       scope:
-        type: string
-    type: object
-  handlers.S3Credentials:
-    properties:
-      accessKeyId:
-        type: string
-      expiration:
-        type: string
-      secretAccessKey:
-        type: string
-      sessionToken:
         type: string
     type: object
   models.Account:
@@ -177,6 +177,39 @@ definitions:
       workspace:
         type: string
     type: object
+  services.FileUploadURLResponse:
+    properties:
+      fileName:
+        type: string
+      url:
+        type: string
+      workspace:
+        type: string
+    type: object
+  services.OpenCosmosSessionPayload:
+    properties:
+      accessToken:
+        type: string
+      expiresAt:
+        type: integer
+      refreshToken:
+        type: string
+      scope:
+        type: string
+      tokenType:
+        type: string
+      user:
+        $ref: '#/definitions/services.OpenCosmosUser'
+    type: object
+  services.OpenCosmosUser:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      sub:
+        type: string
+    type: object
 info:
   contact: {}
   description: This is the API for the EODHP Workspace Services.
@@ -330,7 +363,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/handlers.S3Credentials'
+            $ref: '#/definitions/awsclient.S3Credentials'
         "400":
           description: Bad Request
           schema:
@@ -733,6 +766,103 @@ paths:
       summary: Get object store file metadata
       tags:
       - Workspace Files Management
+  /workspaces/{workspace-id}/files/object/upload-url:
+    get:
+      description: Returns a presigned S3 PutObject URL. The client uploads the file
+        directly to S3 using the returned URL, bypassing this service entirely for
+        the data transfer.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: File path within the workspace
+        in: query
+        name: file
+        required: true
+        type: string
+      - description: File size in bytes
+        in: query
+        name: size
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/services.FileUploadURLResponse'
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Get a presigned upload URL for the workspace object store
+      tags:
+      - Workspace Files Management
+  /workspaces/{workspace-id}/open-cosmos/session:
+    post:
+      consumes:
+      - application/json
+      description: Creates or updates the authenticated user's Open Cosmos OAuth session
+        in the workspace Kubernetes namespace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Open Cosmos OAuth session
+        in: body
+        name: session
+        required: true
+        schema:
+          $ref: '#/definitions/services.OpenCosmosSessionPayload'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "403":
+          description: Forbidden
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Store an Open Cosmos OAuth session
+      tags:
+      - Linked Accounts
   /workspaces/{workspace-id}/users:
     get:
       consumes:

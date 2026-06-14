@@ -1,6 +1,54 @@
 version: "3.9"
 
 services:
+  k3s:
+    image: rancher/k3s:v1.32.1-k3s1
+    container_name: eodhp-k3s
+    command:
+      - server
+      - --disable-agent
+      - --disable=traefik
+      - --disable=servicelb
+      - --disable=metrics-server
+      - --tls-san=k3s
+    volumes:
+      - k3s_data:/var/lib/rancher/k3s
+      - k3s_server_config:/etc/rancher/k3s
+
+  k3s-init:
+    image: rancher/k3s:v1.32.1-k3s1
+    depends_on:
+      - k3s
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until [ -f /source/k3s.yaml ]; do
+          echo "waiting for the local Kubernetes kubeconfig..."
+          sleep 2
+        done
+
+        cp /source/k3s.yaml /output/config
+        sed -i 's/127.0.0.1/k3s/' /output/config
+        chmod 0644 /output/config
+
+        until kubectl --kubeconfig /output/config get --raw=/readyz >/dev/null 2>&1; do
+          echo "waiting for the local Kubernetes API..."
+          sleep 2
+        done
+
+        for namespace in \
+          ws-eodh-demos \
+          ws-samples-airbus-optical \
+          ws-samples-airbus-sar \
+          ws-samples-planet; do
+          kubectl --kubeconfig /output/config create namespace "$${namespace}" \
+            --dry-run=client -o yaml | \
+            kubectl --kubeconfig /output/config apply -f -
+        done
+    volumes:
+      - k3s_server_config:/source:ro
+      - k3s_client_config:/output
+
   postgres:
     image: postgres:15
     container_name: eodhp-postgres
@@ -165,6 +213,8 @@ services:
         condition: service_completed_successfully
       db-seed:
         condition: service_completed_successfully
+      k3s-init:
+        condition: service_completed_successfully
     environment:
       ENV: local
       SQL_USER: eodhp
@@ -184,8 +234,12 @@ services:
     command: ["serve", "--host=0.0.0.0", "--port=8080", "--config", "/config/local-docker.yaml"]
     volumes:
       - ./config/local-docker.yaml:/config/local-docker.yaml
+      - k3s_client_config:/root/.kube:ro
 
 volumes:
   pgdata:
   minio_data:
   block_data:
+  k3s_data:
+  k3s_server_config:
+  k3s_client_config:

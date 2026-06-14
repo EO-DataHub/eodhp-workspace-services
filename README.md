@@ -100,6 +100,7 @@ Run this with:
 
 ### Docker Development Environment
 This repository includes a local Docker Compose setup that runs:
+- K3s (local Kubernetes cluster)
 - Postgres
 - Pulsar (standalone)
 - MinIO (S3-compatible)
@@ -123,8 +124,8 @@ Default local endpoints:
 - MinIO Console: http://localhost:9001 (user: `minio`, pass: `minio123`)
 
 Expected container state:
-- Running: `eodhp-workspace-services`, `eodhp-postgres`, `eodhp-pulsar`, `eodhp-minio`, `eodhp-keycloak`
-- Exited (one-off jobs): `workspace-migrate-1`, `db-seed-1`, `minio-init-1`, `pulsar-init-1`
+- Running: `eodhp-workspace-services`, `eodhp-k3s`, `eodhp-postgres`, `eodhp-pulsar`, `eodhp-minio`, `eodhp-keycloak`
+- Exited (one-off jobs): `workspace-migrate-1`, `db-seed-1`, `k3s-init-1`, `minio-init-1`, `pulsar-init-1`
 
 Keycloak dev user:
 - username: `dev-user`
@@ -140,6 +141,37 @@ curl -X POST http://localhost:8081/realms/eodhp/protocol/openid-connect/token \
 ```
 
 MinIO bucket (created automatically): `workspaces-eodhp-local`
+
+### Local Kubernetes secrets
+
+The Compose environment starts a local K3s cluster and mounts its internal kubeconfig into Workspace Services. This enables the linked-account and Open Cosmos session routes without requiring a developer's host kubeconfig.
+
+The `k3s-init` service creates namespaces for the workspaces in `config/db/seed.sql`:
+
+```text
+ws-eodh-demos
+ws-samples-airbus-optical
+ws-samples-airbus-sar
+ws-samples-planet
+```
+
+List the secrets for a local workspace:
+
+```bash
+docker compose exec k3s kubectl -n ws-eodh-demos get secrets
+```
+
+Inspect an Open Cosmos user secret:
+
+```bash
+docker compose exec k3s kubectl -n ws-eodh-demos get secret oauth-opencosmos-<user-sub> -o yaml
+```
+
+The values under `data` are Base64 encoded by Kubernetes. Decode an individual value with:
+
+```bash
+docker compose exec k3s kubectl -n ws-eodh-demos get secret oauth-opencosmos-<user-sub> -o jsonpath='{.data.user_sub}' | base64 -d
+```
 
 ### Database
 To connect to the database, setup an SSH tunnel:
