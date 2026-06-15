@@ -20,6 +20,34 @@ func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 	}
 }
 
+// CreateOpenCosmosSession handles HTTP requests for persisting an Open Cosmos session for a workspace.
+// @Summary Store an Open Cosmos OAuth session
+// @Description Creates or updates the authenticated user's Open Cosmos OAuth session in the workspace Kubernetes namespace.
+// @Tags Linked Accounts
+// @Security BearerAuth
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param session body services.OpenCosmosSessionPayload true "Open Cosmos OAuth session"
+// @Success 201
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 403 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/open-cosmos/session [post]
+func CreateOpenCosmosSession(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with its API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.CreateOpenCosmosSessionService(w, r)
+	}
+}
+
 // GetAccounts handles HTTP requests for retrieving accounts.
 func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 

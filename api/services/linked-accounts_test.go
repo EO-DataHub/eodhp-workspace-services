@@ -16,6 +16,9 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 type MockLinkedAccountService struct {
@@ -33,6 +36,10 @@ func (m *MockLinkedAccountService) DeleteLinkedAccountService(w http.ResponseWri
 func (m *MockLinkedAccountService) CreateLinkedAccountService(w http.ResponseWriter, r *http.Request) {
 	m.Called(w, r)
 	//w.WriteHeader(http.StatusCreated) // Ensure the mock sets the correct status code
+}
+
+func (m *MockLinkedAccountService) CreateOpenCosmosSessionService(w http.ResponseWriter, r *http.Request) {
+	m.Called(w, r)
 }
 
 func (m *MockLinkedAccountService) storeOTPSecret(otpKey, secretName, namespace string) error {
@@ -131,6 +138,53 @@ func TestDeleteSecretKeyFromAWS(t *testing.T) {
 	mockService.AssertExpectations(t)
 }
 
+func TestStoreOpenCosmosSessionSecret(t *testing.T) {
+	t.Parallel()
+
+	namespace := "ws-test-workspace"
+	secretName := "oauth-opencosmos-auth0-user-sub-example-com"
+	svc := &LinkedAccountService{
+		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		}),
+	}
+
+	payload := OpenCosmosSessionPayload{
+		AccessToken:  "access-token",
+		RefreshToken: "refresh-token",
+		ExpiresAt:    1780862369915,
+		Scope:        "openid profile email data offline_access",
+		TokenType:    "Bearer",
+		User: &OpenCosmosUser{
+			Sub:   "auth0|User_Sub@example.com",
+			Name:  "David Tamayo",
+			Email: "dtamayo@sparkeo.com",
+		},
+	}
+
+	sanitizedUserSub, err := sanitizeOpenCosmosUserSub(payload.User.Sub)
+	require.NoError(t, err)
+	require.Equal(t, secretName, "oauth-opencosmos-"+sanitizedUserSub)
+
+	err = svc.storeOpenCosmosSessionSecret(payload, secretName, namespace)
+	require.NoError(t, err)
+
+	secret, err := svc.K8sClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Equal(t, payload.AccessToken, string(secret.Data["access_token"]))
+	require.Equal(t, payload.RefreshToken, string(secret.Data["refresh_token"]))
+	require.Equal(t, "1780862369915", string(secret.Data["expires_at"]))
+	require.Equal(t, payload.Scope, string(secret.Data["scope"]))
+	require.Equal(t, payload.TokenType, string(secret.Data["token_type"]))
+	require.Equal(t, payload.User.Sub, string(secret.Data["user_sub"]))
+	_, hasUserEmail := secret.Data["user_email"]
+	require.False(t, hasUserEmail)
+	_, hasUserName := secret.Data["user_name"]
+	require.False(t, hasUserName)
+	_, hasSession := secret.Data["session"]
+	require.False(t, hasSession)
+}
+
 func TestValidateAirbusLinkedAccountService_OpticalOrSAR(t *testing.T) {
 	t.Parallel()
 
@@ -149,10 +203,10 @@ func TestValidateAirbusLinkedAccountService_OpticalOrSAR(t *testing.T) {
 		skipBodyAsserts bool
 	}{
 		{
-			name:           "both_upstream_fail",
-			opticalStatus:  http.StatusInternalServerError,
-			sarStatus:      http.StatusForbidden,
-			wantHTTPStatus: http.StatusInternalServerError,
+			name:            "both_upstream_fail",
+			opticalStatus:   http.StatusInternalServerError,
+			sarStatus:       http.StatusForbidden,
+			wantHTTPStatus:  http.StatusInternalServerError,
 			skipBodyAsserts: true,
 		},
 		{

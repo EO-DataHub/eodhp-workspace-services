@@ -714,6 +714,151 @@
                 }
             }
         },
+        "/workspaces/{workspace-id}/files/object/upload-url": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Returns a presigned S3 PutObject URL. The client uploads the file directly to S3 using the returned URL, bypassing this service entirely for the data transfer.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Files Management"
+                ],
+                "summary": "Get a presigned upload URL for the workspace object store",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File path within the workspace",
+                        "name": "file",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "File size in bytes",
+                        "name": "size",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.FileUploadURLResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/workspaces/{workspace-id}/open-cosmos/session": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Creates or updates the authenticated user's Open Cosmos OAuth session in the workspace Kubernetes namespace.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Linked Accounts"
+                ],
+                "summary": "Store an Open Cosmos OAuth session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Open Cosmos OAuth session",
+                        "name": "session",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/services.OpenCosmosSessionPayload"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/workspaces/{workspace-id}/users": {
             "get": {
                 "description": "Retrieve a list of users who are members of the specified workspace.",
@@ -987,7 +1132,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handlers.S3Credentials"
+                            "$ref": "#/definitions/awsclient.S3Credentials"
                         }
                     },
                     "400": {
@@ -1078,6 +1223,23 @@
         }
     },
     "definitions": {
+        "awsclient.S3Credentials": {
+            "type": "object",
+            "properties": {
+                "accessKeyId": {
+                    "type": "string"
+                },
+                "expiration": {
+                    "type": "string"
+                },
+                "secretAccessKey": {
+                    "type": "string"
+                },
+                "sessionToken": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.AuthSessionResponse": {
             "type": "object",
             "properties": {
@@ -1094,23 +1256,6 @@
                     "type": "string"
                 },
                 "scope": {
-                    "type": "string"
-                }
-            }
-        },
-        "handlers.S3Credentials": {
-            "type": "object",
-            "properties": {
-                "accessKeyId": {
-                    "type": "string"
-                },
-                "expiration": {
-                    "type": "string"
-                },
-                "secretAccessKey": {
-                    "type": "string"
-                },
-                "sessionToken": {
                     "type": "string"
                 }
             }
@@ -1348,6 +1493,57 @@
                     }
                 },
                 "workspace": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.FileUploadURLResponse": {
+            "type": "object",
+            "properties": {
+                "fileName": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                },
+                "workspace": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.OpenCosmosSessionPayload": {
+            "type": "object",
+            "properties": {
+                "accessToken": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "integer"
+                },
+                "refreshToken": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "tokenType": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/services.OpenCosmosUser"
+                }
+            }
+        },
+        "services.OpenCosmosUser": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "sub": {
                     "type": "string"
                 }
             }
