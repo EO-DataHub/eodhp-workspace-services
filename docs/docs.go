@@ -807,7 +807,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Creates or updates the authenticated user's Open Cosmos OAuth session in the workspace Kubernetes namespace.",
+                "description": "Creates or replaces the Open Cosmos OAuth session shared by the workspace in its Kubernetes namespace.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1535,23 +1535,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "tokenType": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/services.OpenCosmosUser"
-                }
-            }
-        },
-        "services.OpenCosmosUser": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "sub": {
                     "type": "string"
                 }
             }

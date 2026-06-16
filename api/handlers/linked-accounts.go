@@ -22,7 +22,7 @@ func CreateLinkedAccount(svc *services.LinkedAccountService) http.HandlerFunc {
 
 // CreateOpenCosmosSession handles HTTP requests for persisting an Open Cosmos session for a workspace.
 // @Summary Store an Open Cosmos OAuth session
-// @Description Creates or updates the authenticated user's Open Cosmos OAuth session in the workspace Kubernetes namespace.
+// @Description Creates or replaces the Open Cosmos OAuth session shared by the workspace in its Kubernetes namespace.
 // @Tags Linked Accounts
 // @Security BearerAuth
 // @Accept json

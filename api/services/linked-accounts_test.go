@@ -142,7 +142,7 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	t.Parallel()
 
 	namespace := "ws-test-workspace"
-	secretName := "oauth-opencosmos-auth0-user-sub-example-com"
+	secretName := openCosmosSecretName
 	svc := &LinkedAccountService{
 		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{Name: namespace},
@@ -155,18 +155,9 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 		ExpiresAt:    1780862369915,
 		Scope:        "openid profile email data offline_access",
 		TokenType:    "Bearer",
-		User: &OpenCosmosUser{
-			Sub:   "auth0|User_Sub@example.com",
-			Name:  "David Tamayo",
-			Email: "dtamayo@sparkeo.com",
-		},
 	}
 
-	sanitizedUserSub, err := sanitizeOpenCosmosUserSub(payload.User.Sub)
-	require.NoError(t, err)
-	require.Equal(t, secretName, "oauth-opencosmos-"+sanitizedUserSub)
-
-	err = svc.storeOpenCosmosSessionSecret(payload, secretName, namespace)
+	err := svc.storeOpenCosmosSessionSecret(payload, secretName, namespace)
 	require.NoError(t, err)
 
 	secret, err := svc.K8sClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, metav1.GetOptions{})
@@ -176,13 +167,30 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	require.Equal(t, "1780862369915", string(secret.Data["expires_at"]))
 	require.Equal(t, payload.Scope, string(secret.Data["scope"]))
 	require.Equal(t, payload.TokenType, string(secret.Data["token_type"]))
-	require.Equal(t, payload.User.Sub, string(secret.Data["user_sub"]))
-	_, hasUserEmail := secret.Data["user_email"]
-	require.False(t, hasUserEmail)
-	_, hasUserName := secret.Data["user_name"]
-	require.False(t, hasUserName)
-	_, hasSession := secret.Data["session"]
-	require.False(t, hasSession)
+	_, hasUserSub := secret.Data["user_sub"]
+	require.False(t, hasUserSub)
+
+	replacementPayload := OpenCosmosSessionPayload{
+		AccessToken:  "replacement-access-token",
+		RefreshToken: "replacement-refresh-token",
+		ExpiresAt:    1780869999999,
+		Scope:        "openid offline_access",
+		TokenType:    "Bearer",
+	}
+
+	err = svc.storeOpenCosmosSessionSecret(replacementPayload, secretName, namespace)
+	require.NoError(t, err)
+
+	secrets, err := svc.K8sClient.CoreV1().Secrets(namespace).List(context.Background(), metav1.ListOptions{})
+	require.NoError(t, err)
+	require.Len(t, secrets.Items, 1)
+
+	replacedSecret, err := svc.K8sClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, metav1.GetOptions{})
+	require.NoError(t, err)
+	require.Equal(t, replacementPayload.AccessToken, string(replacedSecret.Data["access_token"]))
+	require.Equal(t, replacementPayload.RefreshToken, string(replacedSecret.Data["refresh_token"]))
+	require.Equal(t, "1780869999999", string(replacedSecret.Data["expires_at"]))
+	require.Equal(t, replacementPayload.Scope, string(replacedSecret.Data["scope"]))
 }
 
 func TestValidateAirbusLinkedAccountService_OpticalOrSAR(t *testing.T) {
