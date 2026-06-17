@@ -1528,6 +1528,9 @@ const docTemplate = `{
                 "expiresAt": {
                     "type": "integer"
                 },
+                "organization_id": {
+                    "type": "integer"
+                },
                 "refreshToken": {
                     "type": "string"
                 },

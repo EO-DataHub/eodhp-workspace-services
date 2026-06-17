@@ -141,6 +141,8 @@ func TestDeleteSecretKeyFromAWS(t *testing.T) {
 func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	t.Parallel()
 
+	organizationID := int64(0)
+	replacementOrganizationID := int64(166)
 	namespace := "ws-test-workspace"
 	secretName := openCosmosSecretName
 	svc := &LinkedAccountService{
@@ -150,11 +152,12 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	}
 
 	payload := OpenCosmosSessionPayload{
-		AccessToken:  "access-token",
-		RefreshToken: "refresh-token",
-		ExpiresAt:    1780862369915,
-		Scope:        "openid profile email data offline_access",
-		TokenType:    "Bearer",
+		AccessToken:    "access-token",
+		RefreshToken:   "refresh-token",
+		ExpiresAt:      1780862369915,
+		Scope:          "openid profile email data offline_access",
+		TokenType:      "Bearer",
+		OrganizationID: &organizationID,
 	}
 
 	err := svc.storeOpenCosmosSessionSecret(payload, secretName, namespace)
@@ -165,17 +168,19 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	require.Equal(t, payload.AccessToken, string(secret.Data["access_token"]))
 	require.Equal(t, payload.RefreshToken, string(secret.Data["refresh_token"]))
 	require.Equal(t, "1780862369915", string(secret.Data["expires_at"]))
+	require.Equal(t, "0", string(secret.Data["organization_id"]))
 	require.Equal(t, payload.Scope, string(secret.Data["scope"]))
 	require.Equal(t, payload.TokenType, string(secret.Data["token_type"]))
 	_, hasUserSub := secret.Data["user_sub"]
 	require.False(t, hasUserSub)
 
 	replacementPayload := OpenCosmosSessionPayload{
-		AccessToken:  "replacement-access-token",
-		RefreshToken: "replacement-refresh-token",
-		ExpiresAt:    1780869999999,
-		Scope:        "openid offline_access",
-		TokenType:    "Bearer",
+		AccessToken:    "replacement-access-token",
+		RefreshToken:   "replacement-refresh-token",
+		ExpiresAt:      1780869999999,
+		Scope:          "openid offline_access",
+		TokenType:      "Bearer",
+		OrganizationID: &replacementOrganizationID,
 	}
 
 	err = svc.storeOpenCosmosSessionSecret(replacementPayload, secretName, namespace)
@@ -190,6 +195,7 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	require.Equal(t, replacementPayload.AccessToken, string(replacedSecret.Data["access_token"]))
 	require.Equal(t, replacementPayload.RefreshToken, string(replacedSecret.Data["refresh_token"]))
 	require.Equal(t, "1780869999999", string(replacedSecret.Data["expires_at"]))
+	require.Equal(t, "166", string(replacedSecret.Data["organization_id"]))
 	require.Equal(t, replacementPayload.Scope, string(replacedSecret.Data["scope"]))
 }
 
