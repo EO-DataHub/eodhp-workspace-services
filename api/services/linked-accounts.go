@@ -64,11 +64,12 @@ type Payload struct {
 }
 
 type OpenCosmosSessionPayload struct {
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken,omitempty"`
-	ExpiresAt    int64  `json:"expiresAt"`
-	Scope        string `json:"scope,omitempty"`
-	TokenType    string `json:"tokenType,omitempty"`
+	AccessToken    string `json:"accessToken"`
+	RefreshToken   string `json:"refreshToken,omitempty"`
+	ExpiresAt      int64  `json:"expiresAt"`
+	Scope          string `json:"scope,omitempty"`
+	TokenType      string `json:"tokenType,omitempty"`
+	OrganizationID *int64 `json:"organization_id"`
 }
 
 const openCosmosSecretName = "oauth-opencosmos"
@@ -340,6 +341,11 @@ func (svc *LinkedAccountService) CreateOpenCosmosSessionService(w http.ResponseW
 		return
 	}
 
+	if payload.OrganizationID == nil || *payload.OrganizationID < 0 {
+		WriteResponse(w, http.StatusBadRequest, "Field 'organization_id' is required and must be a non-negative number")
+		return
+	}
+
 	if err := svc.storeOpenCosmosSessionSecret(payload, openCosmosSecretName, namespace); err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to store Open Cosmos session in Kubernetes")
 		WriteResponse(w, http.StatusInternalServerError, fmt.Sprintf("Failed to store Open Cosmos session in Kubernetes: %v", err))
@@ -602,9 +608,10 @@ func (svc *LinkedAccountService) storeK8sSecrets(otpKey, secretName, namespace s
 
 func (svc *LinkedAccountService) storeOpenCosmosSessionSecret(session OpenCosmosSessionPayload, secretName, namespace string) error {
 	secretsData := map[string][]byte{
-		"access_token":  []byte(session.AccessToken),
-		"refresh_token": []byte(session.RefreshToken),
-		"expires_at":    []byte(strconv.FormatInt(session.ExpiresAt, 10)),
+		"access_token":    []byte(session.AccessToken),
+		"refresh_token":   []byte(session.RefreshToken),
+		"expires_at":      []byte(strconv.FormatInt(session.ExpiresAt, 10)),
+		"organization_id": []byte(strconv.FormatInt(*session.OrganizationID, 10)),
 	}
 
 	if session.Scope != "" {
