@@ -72,7 +72,7 @@ type OpenCosmosSessionPayload struct {
 	OrganizationID *int64 `json:"organization_id"`
 }
 
-const openCosmosSecretName = "oauth-opencosmos"
+const openCosmosSecretName = "oauth-open-cosmos"
 
 type LinkedAccountServiceInterface interface {
 	GetLinkedAccounts(w http.ResponseWriter, r *http.Request)

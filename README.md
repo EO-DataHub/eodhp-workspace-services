@@ -164,13 +164,13 @@ docker compose exec k3s kubectl -n ws-eodh-demos get secrets
 Inspect an Open Cosmos user secret:
 
 ```bash
-docker compose exec k3s kubectl -n ws-eodh-demos get secret oauth-opencosmos-<user-sub> -o yaml
+docker compose exec k3s kubectl -n ws-eodh-demos get secret oauth-open-cosmos-<user-sub> -o yaml
 ```
 
 The values under `data` are Base64 encoded by Kubernetes. Decode an individual value with:
 
 ```bash
-docker compose exec k3s kubectl -n ws-eodh-demos get secret oauth-opencosmos-<user-sub> -o jsonpath='{.data.user_sub}' | base64 -d
+docker compose exec k3s kubectl -n ws-eodh-demos get secret oauth-open-cosmos-<user-sub> -o jsonpath='{.data.user_sub}' | base64 -d
 ```
 
 ### Database
