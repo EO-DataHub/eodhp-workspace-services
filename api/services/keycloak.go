@@ -244,9 +244,13 @@ func (kc *KeycloakClient) RemoveMemberFromGroup(userID, groupID string) error {
 
 // GetUser retrieves a user ID by username from Keycloak.
 func (kc *KeycloakClient) GetUser(username string) (*models.User, error) {
-	url := fmt.Sprintf("%s/admin/realms/%s/users?username=%s", kc.BaseURL, kc.Realm, username)
+	query := url.Values{}
+	query.Set("username", username)
+	query.Set("exact", "true")
 
-	respBody, statusCode, err := kc.makeRequest(http.MethodGet, url, "application/json", nil)
+	requestURL := fmt.Sprintf("%s/admin/realms/%s/users?%s", kc.BaseURL, kc.Realm, query.Encode())
+
+	respBody, statusCode, err := kc.makeRequest(http.MethodGet, requestURL, "application/json", nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch user by username: %w", err)
 	}
@@ -260,11 +264,13 @@ func (kc *KeycloakClient) GetUser(username string) (*models.User, error) {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	if len(users) == 0 {
-		return nil, fmt.Errorf("user '%s' not found", username)
+	for i := range users {
+		if users[i].Username == username {
+			return &users[i], nil
+		}
 	}
 
-	return &users[0], nil
+	return nil, fmt.Errorf("user '%s' not found", username)
 }
 
 // GetUserGroups retrieves a list of group names that a user is a member of.
