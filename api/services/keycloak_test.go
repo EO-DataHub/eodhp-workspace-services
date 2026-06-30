@@ -80,6 +80,44 @@ func TestGetGroupMembers(t *testing.T) {
 	assert.Equal(t, "user2", members[1].ID)
 }
 
+func TestGetUser(t *testing.T) {
+	mockResponse := `[{"id": "user-lizzie", "username": "lizzie-d"}, {"id": "user-liz", "username": "liz"}]`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/admin/realms/test-realm/users", r.URL.Path)
+		assert.Equal(t, "liz", r.URL.Query().Get("username"))
+		assert.Equal(t, "true", r.URL.Query().Get("exact"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+		_, _ = w.Write([]byte(mockResponse))
+	}))
+	defer server.Close()
+
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
+	client.Token = "mocked-token"
+
+	user, err := client.GetUser("liz")
+	assert.NoError(t, err)
+	assert.Equal(t, "user-liz", user.ID)
+	assert.Equal(t, "liz", user.Username)
+}
+
+func TestGetUserReturnsNotFoundForFuzzyMatch(t *testing.T) {
+	mockResponse := `[{"id": "user-lizzie", "username": "lizzie-d"}]`
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/admin/realms/test-realm/users", r.URL.Path)
+		assert.Equal(t, "liz", r.URL.Query().Get("username"))
+		assert.Equal(t, "true", r.URL.Query().Get("exact"))
+		_, _ = w.Write([]byte(mockResponse))
+	}))
+	defer server.Close()
+
+	client := NewKeycloakClient(server.URL, "client-id", "client-secret", "test-realm")
+	client.Token = "mocked-token"
+
+	user, err := client.GetUser("liz")
+	assert.Nil(t, user)
+	assert.ErrorContains(t, err, "user 'liz' not found")
+}
+
 func TestAddMemberToGroup(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/admin/realms/test-realm/users/user-id/groups/group-id", r.URL.Path)
