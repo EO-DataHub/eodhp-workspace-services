@@ -1,3 +1,13 @@
 dist/
 tmp/
 .cache/
+
+# personal teaching workspace (see /teach)
+MISSION.md
+RESOURCES.md
+NOTES.md
+/reference/
+/lessons/
+/assets/
+/learning-records/
+/learn-go/

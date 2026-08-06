@@ -344,12 +344,9 @@ func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.
 	subject := fmt.Sprintf("EO DataHub Billing Account Confirmation - %s", account.Name)
 
 	body := fmt.Sprintf(`
-	Dear %s,
+	Hi %s,
 
-	We are pleased to inform you that your billing account has been successfully approved. 
-	Thank you for your patience throughout the approval process.
-
-	Below are the details of your approved account:
+	We are pleased to inform you that your billing account has been successfully approved.
 
 	Account Owner: %s
 	Account Name: %s
@@ -357,20 +354,32 @@ func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.
 	Billing Address: %s
 	Account Opening Reason: %s
 
-	You can now begin setting up workspaces through the EO DataHub platform. To get started, visit https://%s/workspaces/.
+	Since you have recently created an EODH account, we wanted to make sure you have everything you need to get started.
 
-	A workspace is essential to fully utilize the EO DataHub. It provides a secure, hosted environment for storing workflows, 
-	datasets, and results. With a workspace, you can analyze data, process datasets, place commercial orders, and generate value-added outputs 
-	directly on the Hub.
+	NEXT STEPS
+	The next step is to begin setting up a workspace on the platform, to enable you to fully utilise the capabilities of EO Data Hub. It provides a secure, collaborative environment to store and process datasets, run analysis, and place commercial orders. To create a workspace, visit https://%s/workspaces/.
 
-	For guidance on how to create and manage your workspaces, please refer to our documentation at https://%s/docs/account-setup/workspaces/.
+	MEET THE TEAM
+	The team would be happy to hop on a call to talk through your use case or give a walkthrough demo of the platform. Book time with the User Support team: https://outlook.office.com/bookwithme/user/fbf28cdd9c2e41bc90c83715727de7d7@leicester.ac.uk?anonymous&ismsaljsauthenabled&ep=pcard
 
-	If you have any questions or require assistance, please dont hesitate to contact our support team at enquiries@eodatahub.org.uk.
+	HELPFUL RESOURCES
+	- EODH Documentation site: https://docs.eodatahub.org.uk/
+	- EODH Training YouTube channel: https://www.youtube.com/@eodatahub
+
+	JOIN OUR USER COMMUNITY
+	- GitHub Community Forum: https://github.com/EO-DataHub/eodh-userdocs/discussions (introduce yourself in our community poll: https://github.com/EO-DataHub/eodh-userdocs/discussions/24)
+	- Follow us on LinkedIn: https://linkedin.com/company/eo-datahub/
+	- Subscribe to our mailing list: https://www.jiscmail.ac.uk/cgi-bin/wa-jisc.exe?SUBED1=EODH-ALL&A=1
+
+	USER INFORMATION FORM
+	To help us better understand the organisations and sectors represented within our users, please complete this short form (less than 2 minutes) to tell us who you are: https://forms.gle/LKEasfe4UysL13tE6
+
+	Happy exploring! If you have any questions at all, don't hesitate to reach out to enquiries@eodatahub.org.uk.
 
 	Regards,
 	EO DataHub Team
 	`, account.AccountOwner, account.AccountOwner, account.Name, *account.OrganizationName, account.BillingAddress,
-		*account.AccountOpeningReason, svc.Config.Host, svc.Config.Host)
+		*account.AccountOpeningReason, svc.Config.Host)
 
 	return svc.sendEmail(svc.Config.Accounts.ServiceAccountEmail, recipient, subject, body)
 }
