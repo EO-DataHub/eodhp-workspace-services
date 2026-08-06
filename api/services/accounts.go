@@ -357,7 +357,7 @@ func (svc *BillingAccountService) SendAccountApprovalEmail(account *ws_services.
 	Since you have recently created an EODH account, we wanted to make sure you have everything you need to get started.
 
 	NEXT STEPS
-	The next step is to begin setting up a workspace on the platform, to enable you to fully utilise the capabilities of EO Data Hub. It provides a secure, collaborative environment to store and process datasets, run analysis, and place commercial orders. To create a workspace, visit https://%s/workspaces/.
+	The next step is to begin setting up a workspace on the platform, to enable you to fully utilise the capabilities of EO Data Hub. It provides a secure, collaborative environment to store and process datasets, run analyses, and place commercial orders. To create a workspace, visit https://%s/workspaces/.
 
 	MEET THE TEAM
 	The team would be happy to hop on a call to talk through your use case or give a walkthrough demo of the platform. Book time with the User Support team: https://outlook.office.com/bookwithme/user/fbf28cdd9c2e41bc90c83715727de7d7@leicester.ac.uk?anonymous&ismsaljsauthenabled&ep=pcard
