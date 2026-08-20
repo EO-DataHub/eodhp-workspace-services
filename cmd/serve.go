@@ -152,6 +152,8 @@ var serveCmd = &cobra.Command{
 			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/airbus/validate", handlers.ValidateAirbusLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 			api.HandleFunc("/workspaces/{workspace-id}/linked-accounts/planet/validate", handlers.ValidatePlanetLinkedAccount(linkedAccountService)).Methods(http.MethodPost)
 			api.HandleFunc("/workspaces/{workspace-id}/open-cosmos/session", handlers.CreateOpenCosmosSession(linkedAccountService)).Methods(http.MethodPost)
+			api.HandleFunc("/workspaces/{workspace-id}/open-cosmos/session", handlers.GetOpenCosmosSession(linkedAccountService)).Methods(http.MethodGet)
+			api.HandleFunc("/workspaces/{workspace-id}/open-cosmos/session", handlers.DeleteOpenCosmosSession(linkedAccountService)).Methods(http.MethodDelete)
 		} else {
 			log.Warn().Msg("Skipping linked-accounts routes (Kubernetes client unavailable)")
 		}

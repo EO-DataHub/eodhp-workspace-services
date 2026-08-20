@@ -548,6 +548,198 @@ paths:
             application/json:
               schema:
                 type: string
+  "/workspaces/{workspace-id}/files/object/upload-url":
+    get:
+      security:
+        - BearerAuth: []
+      description: Returns a presigned S3 PutObject URL. The client uploads the file
+        directly to S3 using the returned URL, bypassing this service entirely
+        for the data transfer.
+      tags:
+        - Workspace Files Management
+      summary: Get a presigned upload URL for the workspace object store
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: File path within the workspace
+          name: file
+          in: query
+          required: true
+          schema:
+            type: string
+        - description: File size in bytes
+          name: size
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/services.FileUploadURLResponse"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+  "/workspaces/{workspace-id}/open-cosmos/session":
+    get:
+      security:
+        - BearerAuth: []
+      description: Reports whether an Open Cosmos OAuth session is currently stored
+        for the workspace.
+      tags:
+        - Linked Accounts
+      summary: Get the Open Cosmos OAuth session status
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/services.OpenCosmosSessionStatus"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+    post:
+      security:
+        - BearerAuth: []
+      description: Creates or replaces the Open Cosmos OAuth session shared by the
+        workspace in its Kubernetes namespace.
+      tags:
+        - Linked Accounts
+      summary: Store an Open Cosmos OAuth session
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/services.OpenCosmosSessionPayload"
+        description: Open Cosmos OAuth session
+        required: true
+      responses:
+        "201":
+          description: Created
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+    delete:
+      security:
+        - BearerAuth: []
+      description: Revokes the Open Cosmos OAuth session stored for the workspace's
+        Kubernetes namespace.
+      tags:
+        - Linked Accounts
+      summary: Delete the Open Cosmos OAuth session
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            "*/*":
+              schema:
+                type: string
   "/workspaces/{workspace-id}/users":
     get:
       description: Retrieve a list of users who are members of the specified workspace.
@@ -768,7 +960,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/handlers.S3Credentials"
+                $ref: "#/components/schemas/awsclient.S3Credentials"
         "400":
           description: Bad Request
           content:
@@ -862,6 +1054,17 @@ components:
       name: Authorization
       in: header
   schemas:
+    awsclient.S3Credentials:
+      type: object
+      properties:
+        accessKeyId:
+          type: string
+        expiration:
+          type: string
+        secretAccessKey:
+          type: string
+        sessionToken:
+          type: string
     handlers.AuthSessionResponse:
       type: object
       properties:
@@ -874,17 +1077,6 @@ components:
         refreshExpiry:
           type: string
         scope:
-          type: string
-    handlers.S3Credentials:
-      type: object
-      properties:
-        accessKeyId:
-          type: string
-        expiration:
-          type: string
-        secretAccessKey:
-          type: string
-        sessionToken:
           type: string
     models.Account:
       type: object
@@ -1040,3 +1232,32 @@ components:
             $ref: "#/components/schemas/services.FileItem"
         workspace:
           type: string
+    services.FileUploadURLResponse:
+      type: object
+      properties:
+        fileName:
+          type: string
+        url:
+          type: string
+        workspace:
+          type: string
+    services.OpenCosmosSessionPayload:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        expiresAt:
+          type: integer
+        organization_id:
+          type: integer
+        refreshToken:
+          type: string
+        scope:
+          type: string
+        tokenType:
+          type: string
+    services.OpenCosmosSessionStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
