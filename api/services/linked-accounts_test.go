@@ -42,6 +42,14 @@ func (m *MockLinkedAccountService) CreateOpenCosmosSessionService(w http.Respons
 	m.Called(w, r)
 }
 
+func (m *MockLinkedAccountService) GetOpenCosmosSessionService(w http.ResponseWriter, r *http.Request) {
+	m.Called(w, r)
+}
+
+func (m *MockLinkedAccountService) DeleteOpenCosmosSessionService(w http.ResponseWriter, r *http.Request) {
+	m.Called(w, r)
+}
+
 func (m *MockLinkedAccountService) storeOTPSecret(otpKey, secretName, namespace string) error {
 	args := m.Called(otpKey, secretName, namespace)
 	return args.Error(0)
@@ -64,6 +72,16 @@ func (m *MockLinkedAccountService) deleteOTPSecret(secretName, namespace string)
 
 func (m *MockLinkedAccountService) deleteSecretKeyFromAWS(secretName, keyToRemove string) error {
 	args := m.Called(secretName, keyToRemove)
+	return args.Error(0)
+}
+
+func (m *MockLinkedAccountService) openCosmosSessionExists(secretName, namespace string) (bool, error) {
+	args := m.Called(secretName, namespace)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockLinkedAccountService) deleteOpenCosmosSessionSecret(secretName, namespace string) error {
+	args := m.Called(secretName, namespace)
 	return args.Error(0)
 }
 
@@ -197,6 +215,211 @@ func TestStoreOpenCosmosSessionSecret(t *testing.T) {
 	require.Equal(t, "1780869999999", string(replacedSecret.Data["expires_at"]))
 	require.Equal(t, "166", string(replacedSecret.Data["organization_id"]))
 	require.Equal(t, replacementPayload.Scope, string(replacedSecret.Data["scope"]))
+}
+
+func TestOpenCosmosSessionExists(t *testing.T) {
+	t.Parallel()
+
+	namespace := "ws-test-workspace-exists"
+	secretName := openCosmosSecretName
+	svc := &LinkedAccountService{
+		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		}),
+	}
+
+	connected, err := svc.openCosmosSessionExists(secretName, namespace)
+	require.NoError(t, err)
+	require.False(t, connected)
+
+	organizationID := int64(0)
+	payload := OpenCosmosSessionPayload{
+		AccessToken:    "access-token",
+		RefreshToken:   "refresh-token",
+		ExpiresAt:      1780862369915,
+		OrganizationID: &organizationID,
+	}
+	require.NoError(t, svc.storeOpenCosmosSessionSecret(payload, secretName, namespace))
+
+	connected, err = svc.openCosmosSessionExists(secretName, namespace)
+	require.NoError(t, err)
+	require.True(t, connected)
+}
+
+func TestDeleteOpenCosmosSessionSecret(t *testing.T) {
+	t.Parallel()
+
+	namespace := "ws-test-workspace-delete"
+	secretName := openCosmosSecretName
+	svc := &LinkedAccountService{
+		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		}),
+	}
+
+	// Deleting a session that was never created is a no-op, not an error.
+	require.NoError(t, svc.deleteOpenCosmosSessionSecret(secretName, namespace))
+
+	organizationID := int64(0)
+	payload := OpenCosmosSessionPayload{
+		AccessToken:    "access-token",
+		RefreshToken:   "refresh-token",
+		ExpiresAt:      1780862369915,
+		OrganizationID: &organizationID,
+	}
+	require.NoError(t, svc.storeOpenCosmosSessionSecret(payload, secretName, namespace))
+
+	require.NoError(t, svc.deleteOpenCosmosSessionSecret(secretName, namespace))
+
+	_, err := svc.K8sClient.CoreV1().Secrets(namespace).Get(context.Background(), secretName, metav1.GetOptions{})
+	require.Error(t, err)
+}
+
+func TestGetOpenCosmosSessionService(t *testing.T) {
+	t.Parallel()
+
+	hubAdminClaims := authn.Claims{}
+	hubAdminClaims.RealmAccess.Roles = []string{"hub_admin"}
+
+	namespace := "ws-ws-get-session"
+	svc := &LinkedAccountService{
+		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		}),
+	}
+
+	newRequest := func() *http.Request {
+		req := httptest.NewRequest(http.MethodGet, "/workspaces/ws-get-session/open-cosmos/session", nil)
+		req = mux.SetURLVars(req, map[string]string{"workspace-id": "ws-get-session"})
+		ctx := context.WithValue(req.Context(), middleware.ClaimsKey, hubAdminClaims)
+		return req.WithContext(ctx)
+	}
+
+	rec := httptest.NewRecorder()
+	svc.GetOpenCosmosSessionService(rec, newRequest())
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var status OpenCosmosSessionStatus
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &status))
+	require.False(t, status.Connected)
+
+	organizationID := int64(0)
+	payload := OpenCosmosSessionPayload{
+		AccessToken:    "access-token",
+		RefreshToken:   "refresh-token",
+		ExpiresAt:      1780862369915,
+		OrganizationID: &organizationID,
+	}
+	require.NoError(t, svc.storeOpenCosmosSessionSecret(payload, openCosmosSecretName, namespace))
+
+	rec = httptest.NewRecorder()
+	svc.GetOpenCosmosSessionService(rec, newRequest())
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &status))
+	require.True(t, status.Connected)
+}
+
+func TestDeleteOpenCosmosSessionService(t *testing.T) {
+	t.Parallel()
+
+	hubAdminClaims := authn.Claims{}
+	hubAdminClaims.RealmAccess.Roles = []string{"hub_admin"}
+
+	namespace := "ws-ws-delete-session"
+	svc := &LinkedAccountService{
+		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		}),
+	}
+
+	organizationID := int64(0)
+	payload := OpenCosmosSessionPayload{
+		AccessToken:    "access-token",
+		RefreshToken:   "refresh-token",
+		ExpiresAt:      1780862369915,
+		OrganizationID: &organizationID,
+	}
+	require.NoError(t, svc.storeOpenCosmosSessionSecret(payload, openCosmosSecretName, namespace))
+
+	req := httptest.NewRequest(http.MethodDelete, "/workspaces/ws-delete-session/open-cosmos/session", nil)
+	req = mux.SetURLVars(req, map[string]string{"workspace-id": "ws-delete-session"})
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, hubAdminClaims)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	svc.DeleteOpenCosmosSessionService(rec, req)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	_, err := svc.K8sClient.CoreV1().Secrets(namespace).Get(context.Background(), openCosmosSecretName, metav1.GetOptions{})
+	require.Error(t, err)
+}
+
+// TestGetOpenCosmosSessionServiceMemberAllowed confirms any workspace member, not just the
+// account owner, can check the Open Cosmos session status.
+func TestGetOpenCosmosSessionServiceMemberAllowed(t *testing.T) {
+	t.Parallel()
+
+	memberClaims := authn.Claims{Username: "member-user"}
+	memberClaims.Subject = "member-subject"
+
+	workspaceID := "ws-get-member"
+	namespace := "ws-" + workspaceID
+
+	mockKC := new(MockKeycloakClient)
+	mockKC.On("GetUserGroups", "member-subject").Return([]string{workspaceID}, nil)
+
+	svc := &LinkedAccountService{
+		KC: mockKC,
+		K8sClient: fake.NewSimpleClientset(&corev1.Namespace{
+			ObjectMeta: metav1.ObjectMeta{Name: namespace},
+		}),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/workspaces/"+workspaceID+"/open-cosmos/session", nil)
+	req = mux.SetURLVars(req, map[string]string{"workspace-id": workspaceID})
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, memberClaims)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	svc.GetOpenCosmosSessionService(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	mockKC.AssertExpectations(t)
+}
+
+// TestDeleteOpenCosmosSessionServiceMemberForbidden confirms a workspace member who is not the
+// account owner cannot revoke the Open Cosmos session.
+func TestDeleteOpenCosmosSessionServiceMemberForbidden(t *testing.T) {
+	t.Parallel()
+
+	memberClaims := authn.Claims{Username: "member-user"}
+	memberClaims.Subject = "member-subject"
+
+	workspaceID := "ws-delete-member"
+
+	mockKC := new(MockKeycloakClient)
+	mockKC.On("GetUserGroups", "member-subject").Return([]string{workspaceID}, nil)
+
+	mockDB := new(MockWorkspaceDB)
+	mockDB.On("IsUserAccountOwner", "member-user", workspaceID).Return(false, nil)
+
+	svc := &LinkedAccountService{
+		DB: mockDB,
+		KC: mockKC,
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/workspaces/"+workspaceID+"/open-cosmos/session", nil)
+	req = mux.SetURLVars(req, map[string]string{"workspace-id": workspaceID})
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, memberClaims)
+	req = req.WithContext(ctx)
+
+	rec := httptest.NewRecorder()
+	svc.DeleteOpenCosmosSessionService(rec, req)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+
+	mockKC.AssertExpectations(t)
+	mockDB.AssertExpectations(t)
 }
 
 func TestValidateAirbusLinkedAccountService_OpticalOrSAR(t *testing.T) {

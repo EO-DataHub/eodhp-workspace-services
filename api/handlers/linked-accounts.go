@@ -48,6 +48,55 @@ func CreateOpenCosmosSession(svc *services.LinkedAccountService) http.HandlerFun
 	}
 }
 
+// GetOpenCosmosSession handles HTTP requests for checking whether an Open Cosmos session exists for a workspace.
+// @Summary Get the Open Cosmos OAuth session status
+// @Description Reports whether an Open Cosmos OAuth session is currently stored for the workspace.
+// @Tags Linked Accounts
+// @Security BearerAuth
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Success 200 {object} services.OpenCosmosSessionStatus
+// @Failure 401 {object} string
+// @Failure 403 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/open-cosmos/session [get]
+func GetOpenCosmosSession(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with its API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.GetOpenCosmosSessionService(w, r)
+	}
+}
+
+// DeleteOpenCosmosSession handles HTTP requests for revoking the stored Open Cosmos session for a workspace.
+// @Summary Delete the Open Cosmos OAuth session
+// @Description Revokes the Open Cosmos OAuth session stored for the workspace's Kubernetes namespace.
+// @Tags Linked Accounts
+// @Security BearerAuth
+// @Param workspace-id path string true "Workspace ID"
+// @Success 204
+// @Failure 401 {object} string
+// @Failure 403 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/open-cosmos/session [delete]
+func DeleteOpenCosmosSession(svc *services.LinkedAccountService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with its API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.DeleteOpenCosmosSessionService(w, r)
+	}
+}
+
 // GetAccounts handles HTTP requests for retrieving accounts.
 func GetLinkedAccounts(svc *services.LinkedAccountService) http.HandlerFunc {
 

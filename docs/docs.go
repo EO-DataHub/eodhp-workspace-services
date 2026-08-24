@@ -801,6 +801,56 @@ const docTemplate = `{
             }
         },
         "/workspaces/{workspace-id}/open-cosmos/session": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Reports whether an Open Cosmos OAuth session is currently stored for the workspace.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Linked Accounts"
+                ],
+                "summary": "Get the Open Cosmos OAuth session status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/services.OpenCosmosSessionStatus"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -845,6 +895,50 @@ const docTemplate = `{
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revokes the Open Cosmos OAuth session stored for the workspace's Kubernetes namespace.",
+                "tags": [
+                    "Linked Accounts"
+                ],
+                "summary": "Delete the Open Cosmos OAuth session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     },
                     "401": {
                         "description": "Unauthorized",
@@ -1539,6 +1633,14 @@ const docTemplate = `{
                 },
                 "tokenType": {
                     "type": "string"
+                }
+            }
+        },
+        "services.OpenCosmosSessionStatus": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "type": "boolean"
                 }
             }
         }

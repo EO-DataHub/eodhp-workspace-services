@@ -50,7 +50,7 @@ type AirbusSARContractsResponse struct {
 
 type LinkedAccountService struct {
 	Config         *appconfig.Config
-	DB             *db.WorkspaceDB
+	DB             db.WorkspaceDBInterface
 	SecretsManager *secretsmanager.Client
 	K8sClient      kubernetes.Interface
 	KC             KeycloakClientInterface
@@ -74,16 +74,25 @@ type OpenCosmosSessionPayload struct {
 
 const openCosmosSecretName = "oauth-open-cosmos"
 
+// OpenCosmosSessionStatus reports whether an Open Cosmos session is currently stored for a workspace.
+type OpenCosmosSessionStatus struct {
+	Connected bool `json:"connected"`
+}
+
 type LinkedAccountServiceInterface interface {
 	GetLinkedAccounts(w http.ResponseWriter, r *http.Request)
 	DeleteLinkedAccountService(w http.ResponseWriter, r *http.Request)
 	CreateLinkedAccountService(w http.ResponseWriter, r *http.Request)
 	CreateOpenCosmosSessionService(w http.ResponseWriter, r *http.Request)
+	GetOpenCosmosSessionService(w http.ResponseWriter, r *http.Request)
+	DeleteOpenCosmosSessionService(w http.ResponseWriter, r *http.Request)
 	storeOTPSecret(otpKey, secretName, namespace string) error
 	storeCiphertextInAWSSecrets(ciphertext, secretName, payloadName string) error
 	getSecretKeysFromAWS(secretName string) ([]string, error)
 	deleteOTPSecret(secretName, namespace string) error
 	deleteSecretKeyFromAWS(secretName, keyToRemove string) error
+	openCosmosSessionExists(secretName, namespace string) (bool, error)
+	deleteOpenCosmosSessionSecret(secretName, namespace string) error
 }
 
 // GetLinkedAccountsService handles the retrieval of linked accounts from AWS Secrets Manager.
@@ -353,6 +362,81 @@ func (svc *LinkedAccountService) CreateOpenCosmosSessionService(w http.ResponseW
 	}
 
 	WriteResponse(w, http.StatusCreated, nil)
+}
+
+// GetOpenCosmosSessionService reports whether an Open Cosmos session is already stored for the workspace.
+func (svc *LinkedAccountService) GetOpenCosmosSessionService(w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	workspaceID := mux.Vars(r)["workspace-id"]
+	namespace := "ws-" + workspaceID
+
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, false)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be a member of the workspace")
+		return
+	}
+
+	connected, err := svc.openCosmosSessionExists(openCosmosSecretName, namespace)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to check Open Cosmos session in Kubernetes")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	WriteResponse(w, http.StatusOK, OpenCosmosSessionStatus{Connected: connected})
+}
+
+// DeleteOpenCosmosSessionService revokes the stored Open Cosmos session for the workspace.
+func (svc *LinkedAccountService) DeleteOpenCosmosSessionService(w http.ResponseWriter, r *http.Request) {
+
+	logger := zerolog.Ctx(r.Context())
+
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(authn.Claims)
+	if !ok {
+		logger.Warn().Msg("Unauthorized request: missing claims")
+		WriteResponse(w, http.StatusUnauthorized, nil)
+		return
+	}
+
+	workspaceID := mux.Vars(r)["workspace-id"]
+	namespace := "ws-" + workspaceID
+
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	if !authorized {
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		return
+	}
+
+	if err := svc.deleteOpenCosmosSessionSecret(openCosmosSecretName, namespace); err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to delete Open Cosmos session from Kubernetes")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	logger.Info().Str("workspace_id", workspaceID).Msg("Successfully deleted Open Cosmos session")
+
+	WriteResponse(w, http.StatusNoContent, nil)
 }
 
 // ValidateAirbusLinkedAccountService validates the Airbus key and returns the associated contracts.
@@ -645,6 +729,30 @@ func (svc *LinkedAccountService) storeOpenCosmosSessionSecret(session OpenCosmos
 		} else {
 			return fmt.Errorf("failed to create Kubernetes secret: %v", err)
 		}
+	}
+
+	return nil
+}
+
+// openCosmosSessionExists reports whether the named Open Cosmos session secret exists in the namespace.
+func (svc *LinkedAccountService) openCosmosSessionExists(secretName, namespace string) (bool, error) {
+	_, err := svc.K8sClient.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			return false, nil
+		}
+
+		return false, fmt.Errorf("failed to get Kubernetes secret: %v", err)
+	}
+
+	return true, nil
+}
+
+// deleteOpenCosmosSessionSecret deletes the Open Cosmos session secret, treating an already-absent secret as success.
+func (svc *LinkedAccountService) deleteOpenCosmosSessionSecret(secretName, namespace string) error {
+	err := svc.K8sClient.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+	if err != nil && !k8sErrors.IsNotFound(err) {
+		return fmt.Errorf("failed to delete Kubernetes secret: %v", err)
 	}
 
 	return nil
