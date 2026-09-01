@@ -160,7 +160,7 @@ func (svc *LinkedAccountService) DeleteLinkedAccountService(w http.ResponseWrite
 	provider := mux.Vars(r)["provider"]
 	namespace := "ws-" + workspaceID
 
-	// Check if the user is the account owner
+	// Check if the user is the account owner or a workspace admin
 	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
@@ -216,7 +216,7 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 	workspaceID := mux.Vars(r)["workspace-id"]
 	namespace := "ws-" + workspaceID
 
-	// Check if the user is the account owner
+	// Check if the user is the account owner or a workspace admin
 	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
@@ -457,7 +457,7 @@ func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.Respo
 	// Extract the workspace ID from the request URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 
-	// Check if the user is the account owner
+	// Check if the user is the account owner or a workspace admin
 	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
@@ -548,7 +548,7 @@ func (svc *LinkedAccountService) ValidatePlanetLinkedAccountService(w http.Respo
 	// Extract the workspace ID from the request URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 
-	// Check if the user is the account owner
+	// Check if the user is the account owner or a workspace admin
 	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
 	if err != nil {
 		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")

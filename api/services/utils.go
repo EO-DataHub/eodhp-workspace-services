@@ -62,7 +62,7 @@ func IsDNSCompatible(name string) bool {
 }
 
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
-func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
+func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeWorkspaceAdmin bool) (bool, error) {
 
 	// hub_admin role is a superuser role
 	if HasRole(claims.RealmAccess.Roles, "hub_admin") {
@@ -79,11 +79,11 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 		return false, err
 	}
 
-	// Check if the user is an account owner
-	if mustBeAccountOwner {
+	// Check if the user is the account owner or a workspace admin
+	if mustBeWorkspaceAdmin {
 		if isMemberGroupAuthorized(workspace, memberGroups) {
 
-			// Do they own the workspace
+			// The account owner is an implicit admin on every workspace they own
 			isAccountOwner, err := db.IsUserAccountOwner(claims.Username, workspace)
 
 			// Check for errors
@@ -91,22 +91,28 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 				return false, err
 			}
 
-			// Return true if the user is the account owner
 			if isAccountOwner {
 				return true, nil
 			}
 
-			// Return false if the user is not the account owner
-			return false, nil
+			// Otherwise, they must have been explicitly granted admin status on this workspace
+			isWorkspaceAdmin, err := db.IsUserWorkspaceAdmin(claims.Username, workspace)
+
+			// Check for errors
+			if err != nil {
+				return false, err
+			}
+
+			return isWorkspaceAdmin, nil
 		}
 	}
 
-	// If the user is not an account owner, check if they are a member of the workspace
+	// If the user isn't required to be the owner or an admin, check if they are a member of the workspace
 	if isMemberGroupAuthorized(workspace, memberGroups) {
 		return true, nil
 	}
 
-	// Return false if the user is not a member of the workspace or an account owner
+	// Return false if the user is not a member of the workspace or an owner/admin
 	return false, nil
 }
 

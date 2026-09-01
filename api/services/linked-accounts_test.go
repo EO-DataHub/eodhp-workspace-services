@@ -388,8 +388,8 @@ func TestGetOpenCosmosSessionServiceMemberAllowed(t *testing.T) {
 	mockKC.AssertExpectations(t)
 }
 
-// TestDeleteOpenCosmosSessionServiceMemberForbidden confirms a workspace member who is not the
-// account owner cannot revoke the Open Cosmos session.
+// TestDeleteOpenCosmosSessionServiceMemberForbidden confirms a workspace member who is neither the
+// account owner nor a workspace admin cannot revoke the Open Cosmos session.
 func TestDeleteOpenCosmosSessionServiceMemberForbidden(t *testing.T) {
 	t.Parallel()
 
@@ -403,6 +403,7 @@ func TestDeleteOpenCosmosSessionServiceMemberForbidden(t *testing.T) {
 
 	mockDB := new(MockWorkspaceDB)
 	mockDB.On("IsUserAccountOwner", "member-user", workspaceID).Return(false, nil)
+	mockDB.On("IsUserWorkspaceAdmin", "member-user", workspaceID).Return(false, nil)
 
 	svc := &LinkedAccountService{
 		DB: mockDB,
