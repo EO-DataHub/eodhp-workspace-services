@@ -141,6 +141,144 @@ paths:
             application/json:
               schema:
                 type: string
+  "/workspaces/{workspace-id}/admins":
+    get:
+      description: Retrieve the usernames of every explicitly-granted admin on the
+        specified workspace. Does not include the account owner, who is an
+        implicit admin on every workspace they own.
+      tags:
+        - Workspace Management
+      summary: Get the admins of a workspace
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+  "/workspaces/{workspace-id}/admins/{username}":
+    put:
+      description: Grant an existing workspace member admin status by providing the
+        workspace ID and username. The user must already be a member of the
+        workspace.
+      tags:
+        - Workspace Management
+      summary: Grant a user admin status on a workspace
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Username
+          name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+          content:
+            application/json:
+              schema:
+                type: string
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+    delete:
+      description: Revoke a user's admin status on the specified workspace by
+        providing the workspace ID and username.
+      tags:
+        - Workspace Management
+      summary: Revoke a user's admin status on a workspace
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Username
+          name: username
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+          content:
+            application/json:
+              schema:
+                type: string
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
   "/workspaces/{workspace-id}/files":
     get:
       security:

@@ -215,3 +215,78 @@ func RemoveUser(svc *services.WorkspaceService) http.HandlerFunc {
 		svc.RemoveUserService(w, r)
 	}
 }
+
+// @Summary Get the admins of a workspace
+// @Description Retrieve the usernames of every explicitly-granted admin on the specified workspace. Does not include the account owner, who is an implicit admin on every workspace they own.
+// @Tags Workspace Management
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Success 200 {array} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/admins [get]
+func GetWorkspaceAdmins(svc *services.WorkspaceService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.GetWorkspaceAdminsService(w, r)
+	}
+}
+
+// @Summary Grant a user admin status on a workspace
+// @Description Grant an existing workspace member admin status by providing the workspace ID and username. The user must already be a member of the workspace.
+// @Tags Workspace Management
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param username path string true "Username"
+// @Success 204 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/admins/{username} [put]
+func AddWorkspaceAdmin(svc *services.WorkspaceService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.AddWorkspaceAdminService(w, r)
+	}
+}
+
+// @Summary Revoke a user's admin status on a workspace
+// @Description Revoke a user's admin status on the specified workspace by providing the workspace ID and username.
+// @Tags Workspace Management
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param username path string true "Username"
+// @Success 204 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 500 {object} string
+// @Router /workspaces/{workspace-id}/admins/{username} [delete]
+func RemoveWorkspaceAdmin(svc *services.WorkspaceService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// Get a token from keycloak so we can interact with it's API
+		if !ensureKeycloakToken(w, svc.KC) {
+			return
+		}
+
+		svc.RemoveWorkspaceAdminService(w, r)
+	}
+}

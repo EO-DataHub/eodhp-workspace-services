@@ -209,7 +209,7 @@ func (m *MockKeycloakClient) GetGroupMembers(groupID string) ([]ws_services.User
 }
 
 func (m *MockKeycloakClient) GetGroupMember(groupID, userID string) (*ws_services.User, error) {
-	args := m.Called(groupID)
+	args := m.Called(groupID, userID)
 	return args.Get(0).(*ws_services.User), args.Error(1)
 }
 

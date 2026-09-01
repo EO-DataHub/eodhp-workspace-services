@@ -421,6 +421,124 @@ paths:
       summary: Request workspace scoped session credentials
       tags:
       - Workspace Management
+  /workspaces/{workspace-id}/admins:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the usernames of every explicitly-granted admin on the
+        specified workspace. Does not include the account owner, who is an implicit
+        admin on every workspace they own.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: string
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Get the admins of a workspace
+      tags:
+      - Workspace Management
+  /workspaces/{workspace-id}/admins/{username}:
+    delete:
+      consumes:
+      - application/json
+      description: Revoke a user's admin status on the specified workspace by providing
+        the workspace ID and username.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Revoke a user's admin status on a workspace
+      tags:
+      - Workspace Management
+    put:
+      consumes:
+      - application/json
+      description: Grant an existing workspace member admin status by providing the
+        workspace ID and username. The user must already be a member of the workspace.
+      parameters:
+      - description: Workspace ID
+        in: path
+        name: workspace-id
+        required: true
+        type: string
+      - description: Username
+        in: path
+        name: username
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            type: string
+        "401":
+          description: Unauthorized
+          schema:
+            type: string
+        "404":
+          description: Not Found
+          schema:
+            type: string
+        "500":
+          description: Internal Server Error
+          schema:
+            type: string
+      summary: Grant a user admin status on a workspace
+      tags:
+      - Workspace Management
   /workspaces/{workspace-id}/files:
     get:
       consumes:
