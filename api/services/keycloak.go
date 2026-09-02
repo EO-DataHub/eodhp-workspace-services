@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,6 +11,9 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 )
+
+// ErrGroupMemberNotFound is returned by GetGroupMember when the user is not a member of the group.
+var ErrGroupMemberNotFound = errors.New("user not found in group")
 
 // KeycloakClient is a client for interacting with the Keycloak API.
 type KeycloakClient struct {
@@ -207,7 +211,7 @@ func (kc *KeycloakClient) GetGroupMember(groupID, userID string) (*models.User, 
 	}
 
 	// Return error if the user is not found
-	return nil, fmt.Errorf("user with ID %s not found in group %s", userID, groupID)
+	return nil, ErrGroupMemberNotFound
 }
 
 // AddMemberToGroup adds a user to a group in Keycloak.

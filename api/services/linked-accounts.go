@@ -225,7 +225,7 @@ func (svc *LinkedAccountService) CreateLinkedAccountService(w http.ResponseWrite
 	}
 
 	if !authorized {
-		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be the account owner or a workspace admin")
 		return
 	}
 
@@ -424,7 +424,7 @@ func (svc *LinkedAccountService) DeleteOpenCosmosSessionService(w http.ResponseW
 	}
 
 	if !authorized {
-		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be the account owner or a workspace admin")
 		return
 	}
 
@@ -466,7 +466,7 @@ func (svc *LinkedAccountService) ValidateAirbusLinkedAccountService(w http.Respo
 	}
 
 	if !authorized {
-		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be the account owner or a workspace admin")
 		return
 	}
 
@@ -557,7 +557,7 @@ func (svc *LinkedAccountService) ValidatePlanetLinkedAccountService(w http.Respo
 	}
 
 	if !authorized {
-		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be account owner of the workspace")
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be the account owner or a workspace admin")
 		return
 	}
 

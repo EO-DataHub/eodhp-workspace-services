@@ -90,7 +90,7 @@ func TestAddWorkspaceAdminServiceSuccess(t *testing.T) {
 	mockKC.On("GetUserGroups", "admin-subject").Return([]string{workspaceID}, nil)
 	mockKC.On("GetGroup", workspaceID).Return(group, nil)
 	mockKC.On("GetUser", targetUsername).Return(targetUser, nil)
-	mockKC.On("GetGroupMembers", "group-1").Return([]ws_services.User{*targetUser}, nil)
+	mockKC.On("GetGroupMember", "group-1", "target-id").Return(targetUser, nil)
 
 	mockDB := new(MockWorkspaceDB)
 	mockDB.On("IsUserAccountOwner", "admin-user", workspaceID).Return(false, nil)
@@ -149,7 +149,7 @@ func TestAddWorkspaceAdminServiceRequiresExistingMembership(t *testing.T) {
 	mockKC.On("GetUserGroups", "admin-subject").Return([]string{workspaceID}, nil)
 	mockKC.On("GetGroup", workspaceID).Return(group, nil)
 	mockKC.On("GetUser", targetUsername).Return(targetUser, nil)
-	mockKC.On("GetGroupMembers", "group-1").Return([]ws_services.User{}, nil)
+	mockKC.On("GetGroupMember", "group-1", "target-id").Return(&ws_services.User{}, ErrGroupMemberNotFound)
 
 	mockDB := new(MockWorkspaceDB)
 	mockDB.On("IsUserAccountOwner", "admin-user", workspaceID).Return(true, nil)
@@ -182,7 +182,7 @@ func TestAddWorkspaceAdminServiceKeycloakFailureIsServerError(t *testing.T) {
 	mockKC.On("GetUserGroups", "admin-subject").Return([]string{workspaceID}, nil)
 	mockKC.On("GetGroup", workspaceID).Return(group, nil)
 	mockKC.On("GetUser", targetUsername).Return(targetUser, nil)
-	mockKC.On("GetGroupMembers", "group-1").Return([]ws_services.User{}, errors.New("keycloak unreachable"))
+	mockKC.On("GetGroupMember", "group-1", "target-id").Return(&ws_services.User{}, errors.New("keycloak unreachable"))
 
 	mockDB := new(MockWorkspaceDB)
 	mockDB.On("IsUserAccountOwner", "admin-user", workspaceID).Return(true, nil)

@@ -55,6 +55,20 @@ func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.Workspac
 	return &workspacesWithStores[0], nil
 }
 
+// getWorkspaceID resolves a workspace's UUID from its name, without the overhead of
+// fetching its full settings and stores.
+func (db *WorkspaceDB) getWorkspaceID(workspaceName string) (uuid.UUID, error) {
+
+	var id uuid.UUID
+	query := `SELECT id FROM workspaces WHERE name = $1 AND status != 'Unavailable'`
+
+	if err := db.DB.QueryRow(query, workspaceName).Scan(&id); err != nil {
+		return uuid.UUID{}, fmt.Errorf("error retrieving workspace id: %w", err)
+	}
+
+	return id, nil
+}
+
 // GetUserWorkspaces retrieves workspaces accessible to the specified member groups.
 func (db *WorkspaceDB) GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
 

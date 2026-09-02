@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/api/middleware"
@@ -102,24 +103,15 @@ func (svc *WorkspaceService) AddWorkspaceAdminService(w http.ResponseWriter, r *
 	}
 
 	// Admin status can only be granted to an existing workspace member
-	members, err := svc.KC.GetGroupMembers(group.ID)
-	if err != nil {
-		logger.Error().Err(err).Str("group_id", group.ID).Msg("Failed to retrieve group members")
-		WriteResponse(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	isMember := false
-	for _, member := range members {
-		if member.ID == user.ID {
-			isMember = true
-			break
+	if _, err := svc.KC.GetGroupMember(group.ID, user.ID); err != nil {
+		if errors.Is(err, ErrGroupMemberNotFound) {
+			logger.Warn().Str("username", username).Str("workspace_id", workspaceID).Msg("User is not a member of the workspace")
+			WriteResponse(w, http.StatusBadRequest, "User must be a member of the workspace before being granted admin status")
+			return
 		}
-	}
 
-	if !isMember {
-		logger.Warn().Str("username", username).Str("workspace_id", workspaceID).Msg("User is not a member of the workspace")
-		WriteResponse(w, http.StatusBadRequest, "User must be a member of the workspace before being granted admin status")
+		logger.Error().Err(err).Str("group_id", group.ID).Str("user_id", user.ID).Msg("Failed to retrieve user membership")
+		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}
 

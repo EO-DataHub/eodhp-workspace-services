@@ -270,19 +270,21 @@ func (svc *WorkspaceService) RemoveUserService(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// A user's admin status can't outlive their workspace membership, so revoke it before
-	// removing the user from the group - if this fails, no Keycloak change has been made yet.
-	if err := svc.DB.RemoveWorkspaceAdmin(username, workspaceID); err != nil {
-		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to remove workspace admin status")
-		WriteResponse(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	// Remove the user from the group in Keycloak
+	// Remove the user from the group in Keycloak first - if this fails, no DB change has
+	// been made yet, so the request can be safely retried without leaving the user in a
+	// half-removed state (still a member but silently stripped of admin status).
 	err = svc.KC.RemoveMemberFromGroup(user.ID, group.ID)
 
 	if err != nil {
 		logger.Error().Err(err).Str("user_id", user.ID).Str("group_id", group.ID).Msg("Failed to remove user from group")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
+	// A user's admin status can't outlive their workspace membership, so revoke it now
+	// that they've been removed from the group.
+	if err := svc.DB.RemoveWorkspaceAdmin(username, workspaceID); err != nil {
+		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to remove workspace admin status")
 		WriteResponse(w, http.StatusInternalServerError, nil)
 		return
 	}

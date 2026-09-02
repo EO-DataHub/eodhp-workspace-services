@@ -9,15 +9,15 @@ import (
 // their account - see IsUserAccountOwner.
 func (db *WorkspaceDB) IsUserWorkspaceAdmin(username, workspaceID string) (bool, error) {
 
-	workspace, err := db.GetWorkspace(workspaceID)
+	id, err := db.getWorkspaceID(workspaceID)
 	if err != nil {
-		return false, fmt.Errorf("database error retrieving workspace: %w", err)
+		return false, err
 	}
 
 	query := `SELECT EXISTS(SELECT 1 FROM workspace_admins WHERE workspace_id = $1 AND username = $2)`
 
 	var exists bool
-	if err := db.DB.QueryRow(query, workspace.ID, username).Scan(&exists); err != nil {
+	if err := db.DB.QueryRow(query, id, username).Scan(&exists); err != nil {
 		return false, fmt.Errorf("error checking workspace admin status: %w", err)
 	}
 
@@ -28,9 +28,9 @@ func (db *WorkspaceDB) IsUserWorkspaceAdmin(username, workspaceID string) (bool,
 // admin to an existing admin is a no-op.
 func (db *WorkspaceDB) AddWorkspaceAdmin(username, workspaceID, addedBy string) error {
 
-	workspace, err := db.GetWorkspace(workspaceID)
+	id, err := db.getWorkspaceID(workspaceID)
 	if err != nil {
-		return fmt.Errorf("database error retrieving workspace: %w", err)
+		return err
 	}
 
 	query := `
@@ -38,7 +38,7 @@ func (db *WorkspaceDB) AddWorkspaceAdmin(username, workspaceID, addedBy string) 
 	VALUES ($1, $2, $3, NOW())
 	ON CONFLICT (workspace_id, username) DO NOTHING`
 
-	if _, err := db.DB.Exec(query, workspace.ID, username, addedBy); err != nil {
+	if _, err := db.DB.Exec(query, id, username, addedBy); err != nil {
 		return fmt.Errorf("error adding workspace admin: %w", err)
 	}
 
@@ -49,14 +49,14 @@ func (db *WorkspaceDB) AddWorkspaceAdmin(username, workspaceID, addedBy string) 
 // user is not currently an admin.
 func (db *WorkspaceDB) RemoveWorkspaceAdmin(username, workspaceID string) error {
 
-	workspace, err := db.GetWorkspace(workspaceID)
+	id, err := db.getWorkspaceID(workspaceID)
 	if err != nil {
-		return fmt.Errorf("database error retrieving workspace: %w", err)
+		return err
 	}
 
 	query := `DELETE FROM workspace_admins WHERE workspace_id = $1 AND username = $2`
 
-	if _, err := db.DB.Exec(query, workspace.ID, username); err != nil {
+	if _, err := db.DB.Exec(query, id, username); err != nil {
 		return fmt.Errorf("error removing workspace admin: %w", err)
 	}
 
@@ -68,14 +68,14 @@ func (db *WorkspaceDB) RemoveWorkspaceAdmin(username, workspaceID string) error 
 // their account - see IsUserAccountOwner.
 func (db *WorkspaceDB) GetWorkspaceAdmins(workspaceID string) ([]string, error) {
 
-	workspace, err := db.GetWorkspace(workspaceID)
+	id, err := db.getWorkspaceID(workspaceID)
 	if err != nil {
-		return nil, fmt.Errorf("database error retrieving workspace: %w", err)
+		return nil, err
 	}
 
 	query := `SELECT username FROM workspace_admins WHERE workspace_id = $1`
 
-	rows, err := db.DB.Query(query, workspace.ID)
+	rows, err := db.DB.Query(query, id)
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspace admins: %w", err)
 	}
