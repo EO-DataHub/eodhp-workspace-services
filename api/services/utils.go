@@ -10,6 +10,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/rs/zerolog"
 )
 
 var dnsNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -62,7 +63,7 @@ func IsDNSCompatible(name string) bool {
 }
 
 // isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
-func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeAccountOwner bool) (bool, error) {
+func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeWorkspaceAdmin bool) (bool, error) {
 
 	// hub_admin role is a superuser role
 	if HasRole(claims.RealmAccess.Roles, "hub_admin") {
@@ -79,11 +80,11 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 		return false, err
 	}
 
-	// Check if the user is an account owner
-	if mustBeAccountOwner {
+	// Check if the user is the account owner or a workspace admin
+	if mustBeWorkspaceAdmin {
 		if isMemberGroupAuthorized(workspace, memberGroups) {
 
-			// Do they own the workspace
+			// The account owner is an implicit admin on every workspace they own
 			isAccountOwner, err := db.IsUserAccountOwner(claims.Username, workspace)
 
 			// Check for errors
@@ -91,23 +92,51 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 				return false, err
 			}
 
-			// Return true if the user is the account owner
 			if isAccountOwner {
 				return true, nil
 			}
 
-			// Return false if the user is not the account owner
-			return false, nil
+			// Otherwise, they must have been explicitly granted admin status on this workspace
+			isWorkspaceAdmin, err := db.IsUserWorkspaceAdmin(claims.Username, workspace)
+
+			// Check for errors
+			if err != nil {
+				return false, err
+			}
+
+			return isWorkspaceAdmin, nil
 		}
 	}
 
-	// If the user is not an account owner, check if they are a member of the workspace
+	// If the user isn't required to be the owner or an admin, check if they are a member of the workspace
 	if isMemberGroupAuthorized(workspace, memberGroups) {
 		return true, nil
 	}
 
-	// Return false if the user is not a member of the workspace or an account owner
+	// Return false if the user is not a member of the workspace or an owner/admin
 	return false, nil
+}
+
+// rejectAccountOwner checks whether username is the account owner for the workspace, and if so
+// writes a 403 response with forbiddenMessage and returns true so the caller can stop handling
+// the request. It also handles the 500 response on DB error. Returns false if the request should
+// proceed.
+func rejectAccountOwner(db db.WorkspaceDBInterface, logger *zerolog.Logger, w http.ResponseWriter, username, workspaceID, forbiddenMessage string) bool {
+
+	isAccountOwner, err := db.IsUserAccountOwner(username, workspaceID)
+	if err != nil {
+		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to check if user is account owner")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return true
+	}
+
+	if isAccountOwner {
+		logger.Warn().Str("username", username).Str("workspace_id", workspaceID).Msg(forbiddenMessage)
+		WriteResponse(w, http.StatusForbidden, forbiddenMessage)
+		return true
+	}
+
+	return false
 }
 
 func makeHTTPRequest(method, url string, headers map[string]string, body []byte) ([]byte, error) {

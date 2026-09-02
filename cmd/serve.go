@@ -98,6 +98,9 @@ var serveCmd = &cobra.Command{
 		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.AddUser(workspaceService)).Methods(http.MethodPut)
 		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.GetUser(workspaceService)).Methods(http.MethodGet)
 		api.HandleFunc("/workspaces/{workspace-id}/users/{username}", handlers.RemoveUser(workspaceService)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/admins", handlers.GetWorkspaceAdmins(workspaceService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/admins/{username}", handlers.AddWorkspaceAdmin(workspaceService)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}/admins/{username}", handlers.RemoveWorkspaceAdmin(workspaceService)).Methods(http.MethodDelete)
 
 		// Account routes
 		billingAccountService := &services.BillingAccountService{

@@ -62,6 +62,26 @@ func (m *MockWorkspaceDB) IsUserAccountOwner(username, workspaceID string) (bool
 	return args.Bool(0), args.Error(1)
 }
 
+func (m *MockWorkspaceDB) IsUserWorkspaceAdmin(username, workspaceID string) (bool, error) {
+	args := m.Called(username, workspaceID)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockWorkspaceDB) AddWorkspaceAdmin(username, workspaceID, addedBy string) error {
+	args := m.Called(username, workspaceID, addedBy)
+	return args.Error(0)
+}
+
+func (m *MockWorkspaceDB) RemoveWorkspaceAdmin(username, workspaceID string) error {
+	args := m.Called(username, workspaceID)
+	return args.Error(0)
+}
+
+func (m *MockWorkspaceDB) GetWorkspaceAdmins(workspaceID string) ([]string, error) {
+	args := m.Called(workspaceID)
+	return args.Get(0).([]string), args.Error(1)
+}
+
 func (m *MockWorkspaceDB) CreateAccountApprovalToken(accountID uuid.UUID) (string, error) {
 	args := m.Called(accountID)
 	return args.String(0), args.Error(1)
@@ -189,7 +209,7 @@ func (m *MockKeycloakClient) GetGroupMembers(groupID string) ([]ws_services.User
 }
 
 func (m *MockKeycloakClient) GetGroupMember(groupID, userID string) (*ws_services.User, error) {
-	args := m.Called(groupID)
+	args := m.Called(groupID, userID)
 	return args.Get(0).(*ws_services.User), args.Error(1)
 }
 

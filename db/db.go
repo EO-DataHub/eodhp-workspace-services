@@ -29,6 +29,10 @@ type WorkspaceDBInterface interface {
 	DeleteAccount(accountID uuid.UUID) error
 	CheckAccountIsVerified(accountID uuid.UUID) (bool, error)
 	IsUserAccountOwner(username, workspaceID string) (bool, error)
+	IsUserWorkspaceAdmin(username, workspaceID string) (bool, error)
+	AddWorkspaceAdmin(username, workspaceID, addedBy string) error
+	RemoveWorkspaceAdmin(username, workspaceID string) error
+	GetWorkspaceAdmins(workspaceID string) ([]string, error)
 	CreateAccountApprovalToken(accountID uuid.UUID) (string, error)
 	ValidateApprovalToken(token string) (string, error)
 	UpdateAccountStatus(token, accountID, status string) error
