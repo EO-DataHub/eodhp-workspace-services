@@ -155,6 +155,11 @@ func (svc *WorkspaceService) RemoveWorkspaceAdminService(w http.ResponseWriter, 
 		return
 	}
 
+	// The account owner's admin status is implicit and can't be revoked - see IsUserAccountOwner.
+	if rejectAccountOwner(svc.DB, logger, w, username, workspaceID, "Cannot revoke admin status from the account owner") {
+		return
+	}
+
 	if err := svc.DB.RemoveWorkspaceAdmin(username, workspaceID); err != nil {
 		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to remove workspace admin")
 		WriteResponse(w, http.StatusInternalServerError, nil)

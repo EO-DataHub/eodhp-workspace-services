@@ -10,6 +10,7 @@ import (
 
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/rs/zerolog"
 )
 
 var dnsNameRegex = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
@@ -114,6 +115,28 @@ func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInte
 
 	// Return false if the user is not a member of the workspace or an owner/admin
 	return false, nil
+}
+
+// rejectAccountOwner checks whether username is the account owner for the workspace, and if so
+// writes a 403 response with forbiddenMessage and returns true so the caller can stop handling
+// the request. It also handles the 500 response on DB error. Returns false if the request should
+// proceed.
+func rejectAccountOwner(db db.WorkspaceDBInterface, logger *zerolog.Logger, w http.ResponseWriter, username, workspaceID, forbiddenMessage string) bool {
+
+	isAccountOwner, err := db.IsUserAccountOwner(username, workspaceID)
+	if err != nil {
+		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to check if user is account owner")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return true
+	}
+
+	if isAccountOwner {
+		logger.Warn().Str("username", username).Str("workspace_id", workspaceID).Msg(forbiddenMessage)
+		WriteResponse(w, http.StatusForbidden, forbiddenMessage)
+		return true
+	}
+
+	return false
 }
 
 func makeHTTPRequest(method, url string, headers map[string]string, body []byte) ([]byte, error) {

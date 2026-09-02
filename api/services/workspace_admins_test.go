@@ -212,6 +212,7 @@ func TestRemoveWorkspaceAdminServiceSuccess(t *testing.T) {
 
 	mockDB := new(MockWorkspaceDB)
 	mockDB.On("IsUserAccountOwner", "owner-user", workspaceID).Return(true, nil)
+	mockDB.On("IsUserAccountOwner", targetUsername, workspaceID).Return(false, nil)
 	mockDB.On("RemoveWorkspaceAdmin", targetUsername, workspaceID).Return(nil)
 
 	svc := &WorkspaceService{DB: mockDB, KC: mockKC}
@@ -221,6 +222,30 @@ func TestRemoveWorkspaceAdminServiceSuccess(t *testing.T) {
 
 	require.Equal(t, http.StatusNoContent, rec.Code)
 	mockDB.AssertExpectations(t)
+	mockKC.AssertExpectations(t)
+}
+
+func TestRemoveWorkspaceAdminServiceForbiddenForAccountOwner(t *testing.T) {
+	t.Parallel()
+
+	ownerClaims := authn.Claims{Username: "owner-user"}
+	ownerClaims.Subject = "owner-subject"
+	workspaceID := "ws-1"
+
+	mockKC := new(MockKeycloakClient)
+	mockKC.On("GetUserGroups", "owner-subject").Return([]string{workspaceID}, nil)
+
+	mockDB := new(MockWorkspaceDB)
+	mockDB.On("IsUserAccountOwner", "owner-user", workspaceID).Return(true, nil)
+
+	svc := &WorkspaceService{DB: mockDB, KC: mockKC}
+
+	rec := httptest.NewRecorder()
+	svc.RemoveWorkspaceAdminService(rec, newWorkspaceAdminRequest(http.MethodDelete, workspaceID, "owner-user", ownerClaims))
+
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	mockDB.AssertExpectations(t)
+	mockDB.AssertNotCalled(t, "RemoveWorkspaceAdmin")
 	mockKC.AssertExpectations(t)
 }
 

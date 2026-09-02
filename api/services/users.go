@@ -197,6 +197,16 @@ func (svc *WorkspaceService) AddUserService(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Clear any admin row left over from a previous membership - admin status must be
+	// explicitly re-granted, not silently inherited by a re-added member. The user has
+	// already been added to the Keycloak group at this point; AddMemberToGroup is
+	// idempotent, so retrying the whole request on failure here is safe.
+	if err := svc.DB.RemoveWorkspaceAdmin(username, workspaceID); err != nil {
+		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("User was added to the Keycloak group but failed to clear stale workspace admin status; safe to retry")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+
 	logger.Info().Str("username", username).Str("group", group.Name).Msg("User added to workspace group successfully")
 	WriteResponse(w, http.StatusNoContent, nil)
 }
@@ -232,17 +242,7 @@ func (svc *WorkspaceService) RemoveUserService(w http.ResponseWriter, r *http.Re
 	}
 
 	// Account owners cannot remove themselves from a group
-	isAccountOwner, err := svc.DB.IsUserAccountOwner(username, workspaceID)
-
-	if err != nil {
-		logger.Error().Err(err).Str("username", username).Str("workspace_id", workspaceID).Msg("Failed to check if user is account owner")
-		WriteResponse(w, http.StatusInternalServerError, nil)
-		return
-	}
-
-	if isAccountOwner {
-		logger.Warn().Str("username", username).Str("workspace_id", workspaceID).Msg("Account owners cannot remove themselves from a workspace")
-		WriteResponse(w, http.StatusForbidden, "Account owners cannot remove themselves from a workspace")
+	if rejectAccountOwner(svc.DB, logger, w, username, workspaceID, "Account owners cannot remove themselves from a workspace") {
 		return
 	}
 
