@@ -141,3 +141,74 @@ func TestCreateWorkspaceService(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, res.StatusCode, "Expected HTTP status 500 Internal Server Error for database error")
 }
+
+func TestGetWorkspacesService_Admin(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	svc := WorkspaceService{
+		DB: mockDB,
+		KC: mockKC,
+	}
+
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
+
+	adminWorkspaces := []ws_manager.WorkspaceSettings{
+		{Name: "owned-workspace"},
+		{Name: "explicit-admin-workspace"},
+	}
+
+	mockDB.On("GetAdminWorkspaces", mockClaims.Username).Return(adminWorkspaces, nil).Once()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces?admin", nil)
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	svc.GetWorkspacesService(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected HTTP status 200 OK")
+
+	var result []ws_manager.WorkspaceSettings
+	assert.NoError(t, json.NewDecoder(res.Body).Decode(&result))
+	assert.Equal(t, adminWorkspaces, result)
+
+	mockDB.AssertExpectations(t)
+	mockKC.AssertExpectations(t)
+}
+
+func TestGetWorkspacesService_AdminDatabaseError(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+
+	svc := WorkspaceService{
+		DB: mockDB,
+		KC: mockKC,
+	}
+
+	mockClaims := authn.Claims{
+		Username: "testuser",
+	}
+
+	mockDB.On("GetAdminWorkspaces", mockClaims.Username).Return([]ws_manager.WorkspaceSettings(nil), fmt.Errorf("database error")).Once()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/workspaces?admin", nil)
+	ctx := context.WithValue(req.Context(), middleware.ClaimsKey, mockClaims)
+	req = req.WithContext(ctx)
+
+	w := httptest.NewRecorder()
+	svc.GetWorkspacesService(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusInternalServerError, res.StatusCode, "Expected HTTP status 500 Internal Server Error for database error")
+
+	mockDB.AssertExpectations(t)
+	mockKC.AssertExpectations(t)
+}

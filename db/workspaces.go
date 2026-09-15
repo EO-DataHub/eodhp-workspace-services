@@ -105,6 +105,26 @@ func (db *WorkspaceDB) GetOwnedWorkspaces(username string) ([]ws_manager.Workspa
 	return workspaces, nil
 }
 
+// GetAdminWorkspaces retrieves workspaces the specified username administers - the union of
+// workspaces they own and workspaces they've been explicitly granted admin status on via
+// workspace_admins. This mirrors the owner-or-admin semantics of isUserWorkspaceAuthorized.
+func (db *WorkspaceDB) GetAdminWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error) {
+
+	// Get the workspaces the user owns or explicitly administers
+	workspaces, err := db.getWorkspacesByAdminOrOwnership(username)
+	if err != nil {
+		return nil, err
+	}
+
+	workspaces, err = db.getWorkspaceStores(workspaces)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return workspaces, nil
+}
+
 // GetAllWorkspaces retrieves all workspaces.
 func (db *WorkspaceDB) GetAllWorkspaces() ([]string, error) {
 	// Query to select all workspaces without filtering by member group
@@ -326,6 +346,46 @@ func (db *WorkspaceDB) getWorkspacesByOwnership(username string) ([]ws_manager.W
 		accounts ON accounts.id = workspaces.account
 	WHERE 
 		accounts.account_owner = $1 AND workspaces.status != 'Unavailable'
+	`
+
+	rows, err := db.DB.Query(query, username)
+	if err != nil {
+		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
+	}
+	defer rows.Close()
+
+	var workspaces []ws_manager.WorkspaceSettings
+	for rows.Next() {
+		var ws ws_manager.WorkspaceSettings
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
+			return nil, fmt.Errorf("error scanning workspace: %w", err)
+		}
+		workspaces = append(workspaces, ws)
+	}
+	return workspaces, nil
+}
+
+// getWorkspacesByAdminOrOwnership retrieves workspaces owned by the specified username, or on
+// which they've been explicitly granted admin status.
+func (db *WorkspaceDB) getWorkspacesByAdminOrOwnership(username string) ([]ws_manager.WorkspaceSettings, error) {
+
+	query := `
+	SELECT DISTINCT
+		workspaces.id,
+		workspaces.name,
+		workspaces.account,
+		accounts.account_owner as owner,
+		workspaces.status,
+		workspaces.last_updated
+	FROM
+		workspaces
+	INNER JOIN
+		accounts ON accounts.id = workspaces.account
+	LEFT JOIN
+		workspace_admins ON workspace_admins.workspace_id = workspaces.id AND workspace_admins.username = $1
+	WHERE
+		workspaces.status != 'Unavailable'
+		AND (accounts.account_owner = $1 OR workspace_admins.username IS NOT NULL)
 	`
 
 	rows, err := db.DB.Query(query, username)

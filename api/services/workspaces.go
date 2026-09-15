@@ -37,10 +37,19 @@ func (svc *WorkspaceService) GetWorkspacesService(w http.ResponseWriter, r *http
 	}
 
 	_, workspacesOwned := r.URL.Query()["owned"]
+	_, workspacesAdmin := r.URL.Query()["admin"]
 
 	var workspaces []ws_manager.WorkspaceSettings
 	var err error
-	if workspacesOwned {
+	if workspacesAdmin {
+		// Retrieve workspaces the user owns or explicitly administers
+		workspaces, err = svc.DB.GetAdminWorkspaces(claims.Username)
+		if err != nil {
+			logger.Error().Err(err).Msg("Database error retrieving workspaces")
+			WriteResponse(w, http.StatusInternalServerError, nil)
+			return
+		}
+	} else if workspacesOwned {
 		// Retrieve workspaces owned by the user
 		workspaces, err = svc.DB.GetOwnedWorkspaces(claims.Username)
 		if err != nil {
