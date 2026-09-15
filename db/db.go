@@ -39,6 +39,7 @@ type WorkspaceDBInterface interface {
 	GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error)
 	GetUserWorkspaces(memberGroups []string) ([]ws_manager.WorkspaceSettings, error)
 	GetOwnedWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error)
+	GetAdminWorkspaces(username string) ([]ws_manager.WorkspaceSettings, error)
 	CheckWorkspaceExists(name string) (bool, error)
 	UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) error
 	DisableWorkspace(workspaceName string) error
