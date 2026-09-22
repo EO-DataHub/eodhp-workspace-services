@@ -76,7 +76,7 @@ var serveCmd = &cobra.Command{
 
 		// Apply the middleware to the API routes
 		api.Use(middleware.WithLogger)
-		api.Use(middleware.JWTMiddleware)
+		api.Use(middleware.JWTMiddleware(jwtVerifier))
 
 		workspaceService := &services.WorkspaceService{
 			Config:    appCfg,
@@ -120,7 +120,7 @@ var serveCmd = &cobra.Command{
 
 		accountAdminRouter := accountRouter.PathPrefix("/admin").Subrouter()
 		accountAdminRouter.Use(middleware.WithLogger)
-		accountAdminRouter.Use(middleware.JWTMiddleware)
+		accountAdminRouter.Use(middleware.JWTMiddleware(jwtVerifier))
 		accountAdminRouter.HandleFunc("/approve/{token}", handlers.AccountStatusHandler(billingAccountService, services.AccountStatusApproved)).Methods(http.MethodGet)
 		accountAdminRouter.HandleFunc("/deny/{token}", handlers.AccountStatusHandler(billingAccountService, services.AccountStatusDenied)).Methods(http.MethodGet)
 

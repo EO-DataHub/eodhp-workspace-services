@@ -20,24 +20,6 @@ type Claims struct {
 	Workspace string `json:"workspace"`
 }
 
-func ParseClaims(tokenStr string) (Claims, error) {
-	claims := Claims{}
-
-	// Use ParseUnverified to parse the token without verifying the signature.
-	t, _, err := jwt.NewParser().ParseUnverified(tokenStr, &claims)
-	if err != nil {
-		return claims, ErrInvalidJWT
-	}
-
-	// If the token is malformed or the claims couldn't be parsed, return an error.
-	if t == nil || t.Claims == nil {
-		return claims, ErrInvalidClaims
-	}
-
-	// Return the claims if everything is good.
-	return claims, nil
-}
-
 // GenerateToken creates a secure one-time token for account verification
 func GenerateToken() (string, error) {
 	b := make([]byte, 32) // 32-byte random token

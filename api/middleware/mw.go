@@ -17,46 +17,49 @@ type tokenKey string
 const ClaimsKey contextKey = "claims"
 const TokenKey tokenKey = "token"
 
-// JWTMiddleware parses the JWT token and adds claims to the request context.
-func JWTMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
-			logger := zerolog.Ctx(r.Context()).With().
-				Str("handler", "JWTMiddleware").Logger()
+// JWTMiddleware builds a middleware that parses the JWT token, verifying its signature
+// against verifier before adding its claims to the request context.
+func JWTMiddleware(verifier *authn.Verifier) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				logger := zerolog.Ctx(r.Context()).With().
+					Str("handler", "JWTMiddleware").Logger()
 
-			// Get the Authorization header
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				logger.Debug().Msg("authorization header missing")
-				http.Error(w, "authorization header missing",
-					http.StatusUnauthorized)
-				return
-			}
+				// Get the Authorization header
+				authHeader := r.Header.Get("Authorization")
+				if authHeader == "" {
+					logger.Debug().Msg("authorization header missing")
+					http.Error(w, "authorization header missing",
+						http.StatusUnauthorized)
+					return
+				}
 
-			// Check the Authorization header format
-			token := strings.TrimPrefix(authHeader, "Bearer ")
-			if token == authHeader {
-				logger.Error().Msg("invalid token format")
-				http.Error(w, "invalid token format", http.StatusUnauthorized)
-				return
-			}
+				// Check the Authorization header format
+				token := strings.TrimPrefix(authHeader, "Bearer ")
+				if token == authHeader {
+					logger.Error().Msg("invalid token format")
+					http.Error(w, "invalid token format", http.StatusUnauthorized)
+					return
+				}
 
-			// Parse the token for JWT claims
-			claims, err := authn.ParseClaims(token)
+				// Parse the token for JWT claims, verifying its signature against Keycloak
+				claims, err := verifier.ParseClaims(token)
 
-			if err != nil {
-				logger.Error().Err(err).Msg("invalid bearer jwt token")
-				http.Error(w, "invalid bearer jwt token", http.StatusUnauthorized)
-				return
-			}
+				if err != nil {
+					logger.Error().Err(err).Msg("invalid bearer jwt token")
+					http.Error(w, "invalid bearer jwt token", http.StatusUnauthorized)
+					return
+				}
 
-			// Add the token and claims to the context
-			ctx := context.WithValue(r.Context(), TokenKey, token)
-			ctx = context.WithValue(ctx, ClaimsKey, claims)
+				// Add the token and claims to the context
+				ctx := context.WithValue(r.Context(), TokenKey, token)
+				ctx = context.WithValue(ctx, ClaimsKey, claims)
 
-			next.ServeHTTP(w, r.WithContext(ctx))
-		},
-	)
+				next.ServeHTTP(w, r.WithContext(ctx))
+			},
+		)
+	}
 }
 
 // DenyWorkspaceScopedTokens is a middleware that denies workspace-scoped tokens

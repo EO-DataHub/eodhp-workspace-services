@@ -9,6 +9,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
 	"github.com/EO-DataHub/eodhp-workspace-services/db"
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	awsclient "github.com/EO-DataHub/eodhp-workspace-services/internal/aws"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
@@ -25,6 +26,7 @@ var (
 	appCfg               *appconfig.Config
 	workspaceDB          *db.WorkspaceDB
 	keycloakClient       *services.KeycloakClient
+	jwtVerifier          *authn.Verifier
 	secretsManagerClient *secretsmanager.Client
 	awsCfg               aws.Config
 )
@@ -69,6 +71,13 @@ func commonSetUp() {
 	// Initialise KeyCloak client
 	keycloakClient = initializeKeycloakClient(appCfg.Keycloak)
 
+	// Verifies JWT signatures against Keycloak's own published key, rather than trusting
+	// claims that were never cryptographically checked.
+	jwtVerifier, err = initializeJWTVerifier(appCfg.Keycloak)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize JWT verifier")
+	}
+
 	// Load AWS Config Once
 	awsCfg, err = awsclient.LoadAWSConfig(appCfg.AWS.Region)
 	if err != nil {
@@ -104,6 +113,14 @@ func initializeKeycloakClient(kcCfg appconfig.KeycloakConfig) *services.Keycloak
 	keycloakClient := services.NewKeycloakClient(kcCfg.URL, kcCfg.ClientId, keycloakClientSecret, kcCfg.Realm)
 
 	return keycloakClient
+}
+
+// initializeJWTVerifier builds the verifier used to check a JWT's signature against
+// Keycloak's own published key before trusting any claim in it.
+func initializeJWTVerifier(kcCfg appconfig.KeycloakConfig) (*authn.Verifier, error) {
+	certsURL := kcCfg.URL + "/realms/" + kcCfg.Realm + "/protocol/openid-connect/certs"
+
+	return authn.NewVerifier(certsURL)
 }
 
 func setLogging(level string) {

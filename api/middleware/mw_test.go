@@ -7,8 +7,17 @@ import (
 	"testing"
 
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 )
+
+// testVerifier is a Verifier that never actually needs its key, since every test here
+// sends a token that fails to parse before signature verification would run.
+func testVerifier() *authn.Verifier {
+	return authn.NewVerifierWithKeyFunc(func(*jwt.Token) (any, error) {
+		return nil, jwt.ErrTokenUnverifiable
+	})
+}
 
 func TestProxyAuthRequest_InvalidBearerToken_ClaimsNotPopulated(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +40,7 @@ func TestProxyAuthRequest_InvalidBearerToken_ClaimsNotPopulated(t *testing.T) {
 	}
 	req.Header.Add("Authorization", "Bearer invalid-token")
 
-	mw := JWTMiddleware(next)
+	mw := JWTMiddleware(testVerifier())(next)
 	w := httptest.NewRecorder()
 	mw.ServeHTTP(w, req)
 }
@@ -45,7 +54,7 @@ func TestDenyWorkspaceScopedTokens_Middleware_WorkspaceScoped(t *testing.T) {
 
 	// Create a mock request with a workspace-scoped token
 	workspaceClaims := authn.Claims{
-		Workspace: "user-scoped", 
+		Workspace: "user-scoped",
 	}
 
 	// Mock the context with the workspace-scoped claims
@@ -60,7 +69,7 @@ func TestDenyWorkspaceScopedTokens_Middleware_WorkspaceScoped(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("Authorization", token)
-	req = req.WithContext(ctx) 
+	req = req.WithContext(ctx)
 
 	mw := DenyWorkspaceScopedTokens(next)
 	w := httptest.NewRecorder()
