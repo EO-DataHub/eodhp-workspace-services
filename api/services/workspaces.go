@@ -321,12 +321,25 @@ func (svc *WorkspaceService) DeleteWorkspaceService(w http.ResponseWriter, r *ht
 	// Parse the workspace ID from the URL path
 	workspaceID := mux.Vars(r)["workspace-id"]
 
+	// Only the account owner, a workspace admin or a hub_admin may delete a workspace
+	authorized, err := isUserWorkspaceAuthorized(svc.DB, svc.KC, claims, workspaceID, true)
+	if err != nil {
+		logger.Error().Err(err).Str("workspace_id", workspaceID).Msg("Failed to authorize workspace")
+		WriteResponse(w, http.StatusInternalServerError, nil)
+		return
+	}
+	if !authorized {
+		logger.Warn().Str("workspace_id", workspaceID).Msg("Access denied: workspace deletion")
+		WriteResponse(w, http.StatusForbidden, "Access Denied: Must be the account owner or a workspace admin")
+		return
+	}
+
 	var wsSettings ws_manager.WorkspaceSettings
 	wsSettings.Name = workspaceID
 	wsSettings.Status = "deleting"
 
-	// Publish a message for workspace creation
-	err := svc.Publisher.Publish(wsSettings)
+	// Publish a message for workspace deletion
+	err = svc.Publisher.Publish(wsSettings)
 	if err != nil {
 		logger.Error().Err(err).Msg("Failed to publish workspace deletion event")
 		WriteResponse(w, http.StatusInternalServerError, nil)
