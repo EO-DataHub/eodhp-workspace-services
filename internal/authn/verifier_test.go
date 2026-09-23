@@ -53,7 +53,7 @@ func TestParseClaims_GenuinelySignedToken_IsAccepted(t *testing.T) {
 	key := generateKey(t)
 	verifier := fixedKeyVerifier(key)
 
-	token := signToken(t, key, "account", map[string]any{
+	token := signToken(t, key, "eodh", map[string]any{
 		"preferred_username": "geodowd",
 		"workspace":          "ws-geodowd",
 	})
@@ -71,7 +71,7 @@ func TestParseClaims_ForgedSignature_IsRejected(t *testing.T) {
 
 	// A well-formed JWT (real header/payload) but with a signature that was never
 	// produced by the private key - exactly what ParseUnverified used to accept.
-	genuine := signToken(t, key, "account", nil)
+	genuine := signToken(t, key, "eodh", nil)
 	forged := genuine[:len(genuine)-4] + "AAAA"
 
 	_, err := verifier.ParseClaims(forged)
@@ -83,7 +83,7 @@ func TestParseClaims_SignedByADifferentKey_IsRejected(t *testing.T) {
 	verifier := fixedKeyVerifier(generateKey(t))
 	otherKey := generateKey(t)
 
-	token := signToken(t, otherKey, "account", nil)
+	token := signToken(t, otherKey, "eodh", nil)
 
 	_, err := verifier.ParseClaims(token)
 
