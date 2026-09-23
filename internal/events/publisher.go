@@ -8,6 +8,7 @@ import (
 	"time"
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/apache/pulsar-client-go/pulsar"
 	"github.com/rs/zerolog/log"
 )
@@ -26,16 +27,14 @@ type Publisher interface {
 const maxRetries = 3 // Hardcoded and slightly random for now - can be made configurable
 
 // Initializes the Pulsar client and producer
-func NewEventPublisher(pulsarURL, topic string) (*EventPublisher, error) {
-	client, err := pulsar.NewClient(pulsar.ClientOptions{
-		URL: pulsarURL,
-	})
+func NewEventPublisher(cfg appconfig.PulsarConfig) (*EventPublisher, error) {
+	client, err := newClient(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("could not create Pulsar client: %w", err)
+		return nil, err
 	}
 
 	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: topic,
+		Topic: cfg.TopicProducer,
 	})
 	if err != nil {
 		client.Close()

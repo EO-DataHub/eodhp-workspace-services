@@ -34,6 +34,7 @@ pulsar:
   topicProducer: persistent://public/default/workspace-settings
   topicConsumer: persistent://public/default/workspace-status
   subscription: workspace-status-sub
+  tokenFile: "{{ .PULSAR_TOKEN_FILE }}"
 keycloak:
   url: "https://{{ENV}}.eodatahub.org.uk/keycloak"
   realm: eodhp
@@ -60,6 +61,10 @@ providers:
 ```
 The config map is defined in `eodhp-argocd-deployment` `app/workspace-services/base/config.yaml`
 
+Pulsar configuration:
+- `pulsar.topicConsumer`: Topic read by `consume`. This can be a comma-separated list, e.g. `persistent://public/default/workspace-status,persistent://public/workspaces/workspace-status`, to read old and new topics with the same subscription while topics move. Failed messages go to a single dead letter topic named after the first topic in the list (`<first topic>-dlq`).
+- `pulsar.tokenFile`: Path to a Pulsar JWT. When set, the client authenticates with the token and re-reads the file on every connection, so a rotated token is picked up without a restart. The service fails to start if the file does not exist. When empty or omitted the client connects anonymously; with the template above an unset `PULSAR_TOKEN_FILE` renders as empty.
+
 Files configuration:
 - `files.maxUploadFormMemoryMB`: Maximum multipart form memory (in MB) used when parsing upload requests.
 - `files.responseTimeFormat`: Go time layout used to format file timestamps in API responses.
@@ -82,7 +87,7 @@ Run this with:
 
 
 ### Workspace Status Updater
-This listens for workspace status updates from pulsar topic `persistent://public/default/workspace-status`. It will update the database accordingly.
+This listens for workspace status updates from the pulsar topic(s) in `pulsar.topicConsumer` (currently `persistent://public/default/workspace-status`). It will update the database accordingly.
 
 Run this with:
 

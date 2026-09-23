@@ -16,7 +16,7 @@ var reconcileCmd = &cobra.Command{
 		commonSetUp()
 
 		// Initialize event publisher
-		publisher, err := events.NewEventPublisher(appCfg.Pulsar.URL, appCfg.Pulsar.TopicProducer)
+		publisher, err := events.NewEventPublisher(appCfg.Pulsar)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize event publisher")
 		}

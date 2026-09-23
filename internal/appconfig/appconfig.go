@@ -41,8 +41,24 @@ type DatabaseConfig struct {
 type PulsarConfig struct {
 	URL           string `yaml:"url"`
 	TopicProducer string `yaml:"topicProducer"`
+	// TopicConsumer is a topic, or a comma-separated list of topics that are
+	// all consumed with the same subscription.
 	TopicConsumer string `yaml:"topicConsumer"`
 	Subscription  string `yaml:"subscription"`
+	// TokenFile is the path to a Pulsar JWT. When empty the client connects
+	// anonymously.
+	TokenFile string `yaml:"tokenFile"`
+}
+
+// ConsumerTopics returns the topics listed in TopicConsumer.
+func (p PulsarConfig) ConsumerTopics() []string {
+	var topics []string
+	for _, topic := range strings.Split(p.TopicConsumer, ",") {
+		if topic = strings.TrimSpace(topic); topic != "" {
+			topics = append(topics, topic)
+		}
+	}
+	return topics
 }
 
 // KeycloakConfig defines authentication configuration

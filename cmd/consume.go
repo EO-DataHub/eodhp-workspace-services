@@ -22,7 +22,7 @@ var consumeCmd = &cobra.Command{
 		commonSetUp()
 
 		// Initialize event consumer
-		consumer, err := events.NewEventConsumer(appCfg.Pulsar.URL, appCfg.Pulsar.TopicConsumer, appCfg.Pulsar.Subscription)
+		consumer, err := events.NewEventConsumer(appCfg.Pulsar)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Failed to initialize event consumer")
 		}
@@ -58,6 +58,7 @@ var consumeCmd = &cobra.Command{
 					continue
 				}
 				consumer.Ack(msg)
+				continue
 			}
 
 			// Get the workspace from the database and check if the incoming status is newer

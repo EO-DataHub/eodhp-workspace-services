@@ -2,9 +2,12 @@ package events
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/EO-DataHub/eodhp-workspace-services/internal/appconfig"
 	"github.com/apache/pulsar-client-go/pulsar"
+	"github.com/rs/zerolog/log"
 )
 
 type EventConsumer struct {
@@ -12,28 +15,43 @@ type EventConsumer struct {
 	consumer pulsar.Consumer
 }
 
-// NewEventConsumer initializes the Pulsar client and consumer.
-func NewEventConsumer(pulsarURL, topic, subscription string) (*EventConsumer, error) {
-	client, err := pulsar.NewClient(pulsar.ClientOptions{URL: pulsarURL})
-	if err != nil {
-		return nil, fmt.Errorf("could not create Pulsar client: %w", err)
+// NewEventConsumer initializes the Pulsar client and a consumer on every
+// topic in cfg.TopicConsumer.
+func NewEventConsumer(cfg appconfig.PulsarConfig) (*EventConsumer, error) {
+	topics := cfg.ConsumerTopics()
+	if len(topics) == 0 {
+		return nil, errors.New("no Pulsar consumer topic configured")
 	}
 
-	consumer, err := client.Subscribe(pulsar.ConsumerOptions{
-		Topic:            topic,
-		SubscriptionName: subscription,
-		Type:             pulsar.Shared,
-		DLQ: &pulsar.DLQPolicy{
-			MaxDeliveries:   3,
-			DeadLetterTopic: topic + "-dlq",
-		},
-	})
+	client, err := newClient(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := consumerOptions(topics, cfg.Subscription)
+	consumer, err := client.Subscribe(opts)
 	if err != nil {
 		client.Close()
 		return nil, fmt.Errorf("could not create Pulsar consumer: %w", err)
 	}
 
+	log.Info().Strs("topics", topics).Str("dlq", opts.DLQ.DeadLetterTopic).Msg("Pulsar consumer subscribed")
 	return &EventConsumer{client: client, consumer: consumer}, nil
+}
+
+// consumerOptions subscribes to all topics with one Shared subscription. The
+// dead letter topic is derived from the first topic, so there is a single DLQ
+// however many topics are listed.
+func consumerOptions(topics []string, subscription string) pulsar.ConsumerOptions {
+	return pulsar.ConsumerOptions{
+		Topics:           topics,
+		SubscriptionName: subscription,
+		Type:             pulsar.Shared,
+		DLQ: &pulsar.DLQPolicy{
+			MaxDeliveries:   3,
+			DeadLetterTopic: topics[0] + "-dlq",
+		},
+	}
 }
 
 // ReceiveMessage retrieves a message from Pulsar.
