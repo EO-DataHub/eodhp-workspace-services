@@ -4,6 +4,7 @@ go 1.24.0
 
 require (
 	github.com/EO-DataHub/eodhp-workspace-manager v0.2.0
+	github.com/MicahParks/keyfunc/v3 v3.7.0
 	github.com/apache/pulsar-client-go v0.14.0
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.41.5
@@ -37,6 +38,7 @@ require (
 	github.com/DataDog/zstd v1.5.6 // indirect
 	github.com/EO-DataHub/eodhp-workspace-controller v0.0.0-20250129163210-6dc81f5c1b3c // indirect
 	github.com/KyleBanks/depth v1.2.1 // indirect
+	github.com/MicahParks/jwkset v0.11.0 // indirect
 	github.com/ardielle/ardielle-go v1.5.2 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.24 // indirect

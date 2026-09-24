@@ -15,6 +15,7 @@ import (
 	"github.com/EO-DataHub/eodhp-workspace-services/internal/authn"
 	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -211,4 +212,94 @@ func TestGetWorkspacesService_AdminDatabaseError(t *testing.T) {
 
 	mockDB.AssertExpectations(t)
 	mockKC.AssertExpectations(t)
+}
+
+func deleteWorkspaceRequest(workspaceID string, claims authn.Claims) *http.Request {
+	req := httptest.NewRequest(http.MethodDelete, "/workspaces/"+workspaceID, nil)
+	req = mux.SetURLVars(req, map[string]string{"workspace-id": workspaceID})
+	return req.WithContext(context.WithValue(req.Context(), middleware.ClaimsKey, claims))
+}
+
+// TestDeleteWorkspaceService_Owner confirms the account owner can delete their workspace.
+func TestDeleteWorkspaceService_Owner(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+	mockPublisher := new(MockEventPublisher)
+	svc := &WorkspaceService{DB: mockDB, KC: mockKC, Publisher: mockPublisher}
+
+	claims := authn.Claims{Username: "owner-user"}
+	claims.Subject = "owner-subject"
+
+	mockKC.On("GetUserGroups", "owner-subject").Return([]string{"ws-owned"}, nil).Once()
+	mockDB.On("IsUserAccountOwner", "owner-user", "ws-owned").Return(true, nil).Once()
+	mockPublisher.On("Publish", mock.MatchedBy(func(ws ws_manager.WorkspaceSettings) bool {
+		return ws.Name == "ws-owned" && ws.Status == "deleting"
+	})).Return(nil).Once()
+
+	rec := httptest.NewRecorder()
+	svc.DeleteWorkspaceService(rec, deleteWorkspaceRequest("ws-owned", claims))
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	mockDB.AssertExpectations(t)
+	mockKC.AssertExpectations(t)
+	mockPublisher.AssertExpectations(t)
+}
+
+// TestDeleteWorkspaceService_NonMemberForbidden confirms a user cannot delete a workspace
+// they have nothing to do with - previously any authenticated user could.
+func TestDeleteWorkspaceService_NonMemberForbidden(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+	mockPublisher := new(MockEventPublisher)
+	svc := &WorkspaceService{DB: mockDB, KC: mockKC, Publisher: mockPublisher}
+
+	claims := authn.Claims{Username: "other-user"}
+	claims.Subject = "other-subject"
+
+	mockKC.On("GetUserGroups", "other-subject").Return([]string{"ws-mine"}, nil).Once()
+
+	rec := httptest.NewRecorder()
+	svc.DeleteWorkspaceService(rec, deleteWorkspaceRequest("ws-someone-elses", claims))
+
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	mockPublisher.AssertNotCalled(t, "Publish", mock.Anything)
+}
+
+// TestDeleteWorkspaceService_MemberForbidden confirms a plain member (neither the account
+// owner nor a workspace admin) cannot delete the workspace.
+func TestDeleteWorkspaceService_MemberForbidden(t *testing.T) {
+	mockDB := new(MockWorkspaceDB)
+	mockKC := new(MockKeycloakClient)
+	mockPublisher := new(MockEventPublisher)
+	svc := &WorkspaceService{DB: mockDB, KC: mockKC, Publisher: mockPublisher}
+
+	claims := authn.Claims{Username: "member-user"}
+	claims.Subject = "member-subject"
+
+	mockKC.On("GetUserGroups", "member-subject").Return([]string{"ws-shared"}, nil).Once()
+	mockDB.On("IsUserAccountOwner", "member-user", "ws-shared").Return(false, nil).Once()
+	mockDB.On("IsUserWorkspaceAdmin", "member-user", "ws-shared").Return(false, nil).Once()
+
+	rec := httptest.NewRecorder()
+	svc.DeleteWorkspaceService(rec, deleteWorkspaceRequest("ws-shared", claims))
+
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	mockPublisher.AssertNotCalled(t, "Publish", mock.Anything)
+}
+
+// TestDeleteWorkspaceService_HubAdmin confirms a hub_admin can delete any workspace.
+func TestDeleteWorkspaceService_HubAdmin(t *testing.T) {
+	mockPublisher := new(MockEventPublisher)
+	svc := &WorkspaceService{Publisher: mockPublisher}
+
+	claims := authn.Claims{Username: "admin-user"}
+	claims.RealmAccess.Roles = []string{"hub_admin"}
+
+	mockPublisher.On("Publish", mock.Anything).Return(nil).Once()
+
+	rec := httptest.NewRecorder()
+	svc.DeleteWorkspaceService(rec, deleteWorkspaceRequest("ws-any", claims))
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	mockPublisher.AssertExpectations(t)
 }
