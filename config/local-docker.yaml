@@ -4,6 +4,11 @@ docsPath: /api/docs/workspace-services
 accounts:
   serviceAccountEmail: platform@account-verification.local.eodatahub.org.uk
   helpdeskEmail: enquiries@eodatahub.org.uk
+workspaces:
+  categories:
+    - standard
+    - academic
+    - commercial
 database:
   driver: pgx
   source: postgres://{{.SQL_USER}}:{{.SQL_PASSWORD}}@{{.SQL_HOST}}:{{.SQL_PORT}}/{{.SQL_DATABASE}}?search_path={{.SQL_SCHEMA}}&sslmode=disable

@@ -279,6 +279,72 @@ paths:
             application/json:
               schema:
                 type: string
+  "/workspaces/{workspace-id}/category":
+    put:
+      description: Set the pricing category of the specified workspace. The category
+        sets the rate accounting-service charges the workspace at, so only a hub
+        admin can set it. Allowed categories are set in the service config. Send
+        a null category to clear it, so the workspace pays the default rate.
+      tags:
+        - Workspace Management
+      summary: Set a workspace's pricing category
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/models.WorkspaceCategoryRequest"
+        description: Workspace category
+        required: true
+      responses:
+        "204":
+          description: No Content
+          content:
+            application/json:
+              schema:
+                type: string
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+        "503":
+          description: No workspace categories are configured
+          content:
+            application/json:
+              schema:
+                type: string
   "/workspaces/{workspace-id}/files":
     get:
       security:
@@ -1293,10 +1359,23 @@ components:
           type: string
         username:
           type: string
+    models.WorkspaceCategoryRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          nullable: true
     models.WorkspaceSettings:
       type: object
       properties:
         account:
+          type: string
+        category:
+          description: >-
+            Category is the workspace's pricing category, used by
+            accounting-service.
+
+            Nil means no category has been set and the default rate applies.
           type: string
         id:
           type: string

@@ -40,10 +40,12 @@ func TestCreateWorkspaceService(t *testing.T) {
 		Username: "testuser",
 	}
 
-	// Valid workspace payload
+	// Valid workspace payload. The category must be ignored: only a hub admin can set one.
+	requestedCategory := "academic"
 	workspacePayload := ws_manager.WorkspaceSettings{
-		Name:    "test-workspace",
-		Account: uuid.New(),
+		Name:     "test-workspace",
+		Account:  uuid.New(),
+		Category: &requestedCategory,
 	}
 
 	expectedWorkspace := workspacePayload
@@ -56,7 +58,9 @@ func TestCreateWorkspaceService(t *testing.T) {
 	mockKC.On("CreateGroup", workspacePayload.Name).Return(http.StatusCreated, nil).Once()
 	mockKC.On("GetGroup", workspacePayload.Name).Return(&models.Group{ID: "group-123"}, nil).Once()
 	mockKC.On("AddMemberToGroup", mockClaims.Subject, "group-123").Return(nil).Once()
-	mockDB.On("CreateWorkspace", mock.Anything).Return(&sql.Tx{}, nil).Once()
+	mockDB.On("CreateWorkspace", mock.MatchedBy(func(ws *ws_manager.WorkspaceSettings) bool {
+		return ws.Category == nil
+	})).Return(&sql.Tx{}, nil).Once()
 	mockDB.On("CommitTransaction", mock.Anything).Return(nil).Once()
 	mockPublisher.On("Publish", mock.Anything).Return(nil).Once()
 

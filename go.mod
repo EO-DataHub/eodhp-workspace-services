@@ -3,7 +3,9 @@ module github.com/EO-DataHub/eodhp-workspace-services
 go 1.24.0
 
 require (
-	github.com/EO-DataHub/eodhp-workspace-manager v0.2.0
+	// TODO: pinned to an unreleased commit on feat/add-workspace-category (adds WorkspaceSettings.Category).
+	// Replace with the release tag once that branch is reviewed, merged and tagged.
+	github.com/EO-DataHub/eodhp-workspace-manager v0.2.1-0.20261001133358-a5af2fac94d8
 	github.com/MicahParks/keyfunc/v3 v3.7.0
 	github.com/apache/pulsar-client-go v0.14.0
 	github.com/aws/aws-sdk-go v1.55.5

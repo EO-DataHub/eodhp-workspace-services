@@ -43,8 +43,11 @@ type WorkspaceDBInterface interface {
 	CheckWorkspaceExists(name string) (bool, error)
 	UpdateWorkspaceStatus(status ws_manager.WorkspaceStatus) error
 	DisableWorkspace(workspaceName string) error
+	GetAllWorkspaces() ([]ws_manager.WorkspaceSettings, error)
+	SetWorkspaceCategory(workspaceName string, category *string) (*ws_manager.WorkspaceSettings, *sql.Tx, error)
 	CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.Tx, error)
 	CommitTransaction(tx *sql.Tx) error
+	RollbackTransaction(tx *sql.Tx) error
 }
 
 // WorkspaceDB wraps database, events, and logging functionalities.
@@ -130,6 +133,14 @@ func (w *WorkspaceDB) execQuery(tx *sql.Tx, query string, args ...interface{}) e
 func (w *WorkspaceDB) CommitTransaction(tx *sql.Tx) error {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("error committing transaction: %w", err)
+	}
+	return nil
+}
+
+// RollbackTransaction rolls back a given transaction
+func (w *WorkspaceDB) RollbackTransaction(tx *sql.Tx) error {
+	if err := tx.Rollback(); err != nil {
+		return fmt.Errorf("error rolling back transaction: %w", err)
 	}
 	return nil
 }

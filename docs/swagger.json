@@ -360,6 +360,83 @@
                 }
             }
         },
+        "/workspaces/{workspace-id}/category": {
+            "put": {
+                "description": "Set the pricing category of the specified workspace. The category sets the rate accounting-service charges the workspace at, so only a hub admin can set it. Allowed categories are set in the service config. Send a null category to clear it, so the workspace pays the default rate.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Workspace Management"
+                ],
+                "summary": "Set a workspace's pricing category",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Workspace ID",
+                        "name": "workspace-id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Workspace category",
+                        "name": "category",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.WorkspaceCategoryRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "503": {
+                        "description": "No workspace categories are configured",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/workspaces/{workspace-id}/files": {
             "get": {
                 "security": [
@@ -1643,10 +1720,23 @@
                 }
             }
         },
+        "models.WorkspaceCategoryRequest": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "string",
+                    "x-nullable": true
+                }
+            }
+        },
         "models.WorkspaceSettings": {
             "type": "object",
             "properties": {
                 "account": {
+                    "type": "string"
+                },
+                "category": {
+                    "description": "Category is the workspace's pricing category, used by accounting-service.\nNil means no category has been set and the default rate applies.",
                     "type": "string"
                 },
                 "id": {

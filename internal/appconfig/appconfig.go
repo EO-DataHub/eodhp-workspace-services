@@ -13,22 +13,30 @@ import (
 
 // Config holds all configuration details
 type Config struct {
-	Host      string          `yaml:"host"`
-	BasePath  string          `yaml:"basePath"`
-	DocsPath  string          `yaml:"docsPath"`
-	Accounts  AccountsConfig  `yaml:"accounts"`
-	Database  DatabaseConfig  `yaml:"database"`
-	Pulsar    PulsarConfig    `yaml:"pulsar"`
-	Keycloak  KeycloakConfig  `yaml:"keycloak"`
-	AWS       AWSConfig       `yaml:"aws"`
-	Files     FilesConfig     `yaml:"files"`
-	Providers ProvidersConfig `yaml:"providers"`
+	Host       string           `yaml:"host"`
+	BasePath   string           `yaml:"basePath"`
+	DocsPath   string           `yaml:"docsPath"`
+	Accounts   AccountsConfig   `yaml:"accounts"`
+	Workspaces WorkspacesConfig `yaml:"workspaces"`
+	Database   DatabaseConfig   `yaml:"database"`
+	Pulsar     PulsarConfig     `yaml:"pulsar"`
+	Keycloak   KeycloakConfig   `yaml:"keycloak"`
+	AWS        AWSConfig        `yaml:"aws"`
+	Files      FilesConfig      `yaml:"files"`
+	Providers  ProvidersConfig  `yaml:"providers"`
 }
 
 // AccountsConfig defines the email chain for account approval requests
 type AccountsConfig struct {
 	ServiceAccountEmail string `yaml:"serviceAccountEmail"`
 	HelpdeskEmail       string `yaml:"helpdeskEmail"`
+}
+
+// WorkspacesConfig defines workspace-level settings
+type WorkspacesConfig struct {
+	// Categories are the pricing categories a hub admin may assign to a workspace. They must
+	// match the category_multipliers in accounting-service's pricing config.
+	Categories []string `yaml:"categories"`
 }
 
 // DatabaseConfig defines the database connection details
@@ -122,6 +130,11 @@ func LoadConfig(path string) (*Config, error) {
 	if err := yaml.Unmarshal(buf.Bytes(), &config); err != nil {
 		log.Fatal().Err(err).Msg("failed to unmarshal config YAML")
 		return nil, err
+	}
+
+	// Not fatal: only setting a workspace category needs this, so the rest of the service can run
+	if len(config.Workspaces.Categories) == 0 {
+		log.Warn().Msg("no workspaces.categories configured: hub admins will not be able to set workspace categories")
 	}
 
 	return &config, nil

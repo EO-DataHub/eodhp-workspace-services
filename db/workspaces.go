@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -11,43 +12,70 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// getWorkspace retrieves a workspace by name.
-func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error) {
+// ErrWorkspaceNotFound is returned when no available workspace has the given name.
+var ErrWorkspaceNotFound = errors.New("workspace not found")
 
-	// Check that the workspace exists
-	query := `
-	SELECT 
-		workspaces.id, 
-		workspaces.name, 
-		workspaces.account, 
-		accounts.account_owner as owner, 
-		workspaces.status, 
-		workspaces.last_updated
-	FROM 
-		workspaces
-	INNER JOIN 
-		accounts ON accounts.id = workspaces.account
-	WHERE 
-		workspaces.name = $1 AND workspaces.status != 'Unavailable'
-	`
-	rows, err := db.DB.Query(query, workspace_name)
+// workspaceColumns are the workspace settings columns, in the order scanWorkspace reads them.
+// Queries using them must join accounts, as workspaceFrom does, for the owner.
+const workspaceColumns = `
+	workspaces.id,
+	workspaces.name,
+	workspaces.account,
+	accounts.account_owner AS owner,
+	workspaces.status,
+	workspaces.last_updated,
+	workspaces.category`
+
+const workspaceFrom = `
+FROM workspaces
+INNER JOIN accounts ON accounts.id = workspaces.account`
+
+// scanWorkspace reads one row selected with workspaceColumns.
+func scanWorkspace(row interface{ Scan(dest ...any) error }) (ws_manager.WorkspaceSettings, error) {
+	var ws ws_manager.WorkspaceSettings
+	err := row.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated, &ws.Category)
+	return ws, err
+}
+
+// queryWorkspaces runs a query that selects workspaceColumns and returns the workspaces,
+// without their stores.
+func (db *WorkspaceDB) queryWorkspaces(query string, args ...any) ([]ws_manager.WorkspaceSettings, error) {
+	rows, err := db.DB.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspace: %w", err)
+		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
 	}
 	defer rows.Close()
 
-	var ws ws_manager.WorkspaceSettings
-	if rows.Next() {
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
+	var workspaces []ws_manager.WorkspaceSettings
+	for rows.Next() {
+		ws, err := scanWorkspace(rows)
+		if err != nil {
 			return nil, fmt.Errorf("error scanning workspace: %w", err)
 		}
-	} else {
-		return nil, fmt.Errorf("workspace not found")
+		workspaces = append(workspaces, ws)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
+	}
+	return workspaces, nil
+}
+
+// getWorkspace retrieves a workspace by name.
+func (db *WorkspaceDB) GetWorkspace(workspace_name string) (*ws_manager.WorkspaceSettings, error) {
+
+	workspaces, err := db.queryWorkspaces(
+		`SELECT`+workspaceColumns+workspaceFrom+`
+		WHERE workspaces.name = $1 AND workspaces.status != 'Unavailable'`,
+		workspace_name)
+	if err != nil {
+		return nil, err
+	}
+	if len(workspaces) == 0 {
+		return nil, ErrWorkspaceNotFound
 	}
 
 	// Attach the stores to this workspace
-	workspaces := []ws_manager.WorkspaceSettings{ws}
-	workspacesWithStores, err := db.getWorkspaceStores(workspaces)
+	workspacesWithStores, err := db.getWorkspaceStores(workspaces[:1])
 	if err != nil {
 		return nil, fmt.Errorf("error retrieving workspace stores: %w", err)
 	}
@@ -125,30 +153,50 @@ func (db *WorkspaceDB) GetAdminWorkspaces(username string) ([]ws_manager.Workspa
 	return workspaces, nil
 }
 
-// GetAllWorkspaces retrieves all workspaces.
-func (db *WorkspaceDB) GetAllWorkspaces() ([]string, error) {
-	// Query to select all workspaces without filtering by member group
-	query := `SELECT name FROM workspaces WHERE status != 'Unavailable'`
+// GetAllWorkspaces retrieves every available workspace with the fields needed to republish its
+// settings: name, account, owner and category. Stores are not attached.
+func (db *WorkspaceDB) GetAllWorkspaces() ([]ws_manager.WorkspaceSettings, error) {
 
-	// Execute the query
-	rows, err := db.DB.Query(query)
+	return db.queryWorkspaces(
+		`SELECT` + workspaceColumns + workspaceFrom + `
+		WHERE workspaces.status != 'Unavailable'`)
+}
+
+// SetWorkspaceCategory starts a transaction that sets the pricing category of an available
+// workspace (nil clears it), and returns the updated workspace with its stores. The caller commits the
+// transaction once the change is published, or rolls it back.
+// last_updated is left alone: the status consumer uses it to discard stale k8s status updates,
+// and a category change is not a status change.
+func (db *WorkspaceDB) SetWorkspaceCategory(workspaceName string, category *string) (*ws_manager.WorkspaceSettings, *sql.Tx, error) {
+	tx, err := db.DB.Begin()
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
+		return nil, nil, fmt.Errorf("error starting transaction: %w", err)
 	}
-	defer rows.Close()
 
-	// Prepare the slice to store workspace data
-
-	var workspaceNames []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("error scanning workspace name: %w", err)
+	ws, err := scanWorkspace(tx.QueryRow(`
+		UPDATE workspaces
+		SET category = $1
+		FROM accounts
+		WHERE accounts.id = workspaces.account
+			AND workspaces.name = $2 AND workspaces.status != 'Unavailable'
+		RETURNING`+workspaceColumns,
+		category, workspaceName))
+	if err != nil {
+		tx.Rollback()
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, ErrWorkspaceNotFound
 		}
-		workspaceNames = append(workspaceNames, name)
+		return nil, nil, fmt.Errorf("error updating workspace category: %w", err)
 	}
 
-	return workspaceNames, nil
+	// Stores are not changed by this update, so they are read outside the transaction
+	workspacesWithStores, err := db.getWorkspaceStores([]ws_manager.WorkspaceSettings{ws})
+	if err != nil {
+		tx.Rollback()
+		return nil, nil, fmt.Errorf("error retrieving workspace stores: %w", err)
+	}
+
+	return &workspacesWithStores[0], tx, nil
 }
 
 // CreateWorkspace starts a transaction to insert a new workspace record.
@@ -161,6 +209,7 @@ func (w *WorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.T
 	// Generate a new workspace ID
 	workspaceID := uuid.New()
 
+	// category is left NULL: new workspaces pay the default rate until a hub admin sets one
 	err = w.execQuery(tx, `
 		INSERT INTO workspaces (id, name, account, status, last_updated)
 		VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)`,
@@ -260,149 +309,41 @@ func (db *WorkspaceDB) getWorkspaceStores(workspaces []ws_manager.WorkspaceSetti
 // getWorkspacesByGroup retrieves workspaces for the provided keycloak groups.
 func (db *WorkspaceDB) getWorkspacesByGroup(memberGroups []string) ([]ws_manager.WorkspaceSettings, error) {
 
-	query := `
-	SELECT 
-		workspaces.id, 
-		workspaces.name, 
-		workspaces.account, 
-		accounts.account_owner as owner, 
-		workspaces.status, 
-		workspaces.last_updated
-	FROM 
-		workspaces
-	INNER JOIN 
-		accounts ON accounts.id = workspaces.account
-	WHERE 
-		workspaces.name = ANY($1) AND workspaces.status != 'Unavailable'
-	`
-
-	rows, err := db.DB.Query(query, pq.Array(memberGroups))
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
-	}
-	defer rows.Close()
-
-	var workspaces []ws_manager.WorkspaceSettings
-	for rows.Next() {
-		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
-			return nil, fmt.Errorf("error scanning workspace: %w", err)
-		}
-		workspaces = append(workspaces, ws)
-	}
-	return workspaces, nil
+	return db.queryWorkspaces(
+		`SELECT`+workspaceColumns+workspaceFrom+`
+		WHERE workspaces.name = ANY($1) AND workspaces.status != 'Unavailable'`,
+		pq.Array(memberGroups))
 }
 
 // getWorkspacesByAccount retrieves workspaces linked to a specific account ID.
 func (db *WorkspaceDB) getWorkspacesByAccount(accountID uuid.UUID) ([]ws_manager.WorkspaceSettings, error) {
 
-	query := `
-	SELECT 
-		workspaces.id, 
-		workspaces.name, 
-		workspaces.account, 
-		accounts.account_owner as owner, 
-		workspaces.status, 
-		workspaces.last_updated
-	FROM 
-		workspaces
-	INNER JOIN 
-		accounts ON accounts.id = workspaces.account
-	WHERE 
-		workspaces.account = $1 AND workspaces.status != 'Unavailable'
-	`
-
-	rows, err := db.DB.Query(query, accountID)
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
-	}
-	defer rows.Close()
-
-	var workspaces []ws_manager.WorkspaceSettings
-	for rows.Next() {
-		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
-			return nil, fmt.Errorf("error scanning workspace: %w", err)
-		}
-		workspaces = append(workspaces, ws)
-	}
-	return workspaces, nil
+	return db.queryWorkspaces(
+		`SELECT`+workspaceColumns+workspaceFrom+`
+		WHERE workspaces.account = $1 AND workspaces.status != 'Unavailable'`,
+		accountID)
 }
 
 // getWorkspacesByOwnership retrieves workspaces owned by the specified username.
 func (db *WorkspaceDB) getWorkspacesByOwnership(username string) ([]ws_manager.WorkspaceSettings, error) {
 
-	query := `
-	SELECT 
-		workspaces.id, 
-		workspaces.name, 
-		workspaces.account, 
-		accounts.account_owner as owner, 
-		workspaces.status, 
-		workspaces.last_updated
-	FROM 
-		workspaces
-	INNER JOIN 
-		accounts ON accounts.id = workspaces.account
-	WHERE 
-		accounts.account_owner = $1 AND workspaces.status != 'Unavailable'
-	`
-
-	rows, err := db.DB.Query(query, username)
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
-	}
-	defer rows.Close()
-
-	var workspaces []ws_manager.WorkspaceSettings
-	for rows.Next() {
-		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
-			return nil, fmt.Errorf("error scanning workspace: %w", err)
-		}
-		workspaces = append(workspaces, ws)
-	}
-	return workspaces, nil
+	return db.queryWorkspaces(
+		`SELECT`+workspaceColumns+workspaceFrom+`
+		WHERE accounts.account_owner = $1 AND workspaces.status != 'Unavailable'`,
+		username)
 }
 
 // getWorkspacesByAdminOrOwnership retrieves workspaces owned by the specified username, or on
 // which they've been explicitly granted admin status.
 func (db *WorkspaceDB) getWorkspacesByAdminOrOwnership(username string) ([]ws_manager.WorkspaceSettings, error) {
 
-	query := `
-	SELECT DISTINCT
-		workspaces.id,
-		workspaces.name,
-		workspaces.account,
-		accounts.account_owner as owner,
-		workspaces.status,
-		workspaces.last_updated
-	FROM
-		workspaces
-	INNER JOIN
-		accounts ON accounts.id = workspaces.account
-	LEFT JOIN
-		workspace_admins ON workspace_admins.workspace_id = workspaces.id AND workspace_admins.username = $1
-	WHERE
-		workspaces.status != 'Unavailable'
-		AND (accounts.account_owner = $1 OR workspace_admins.username IS NOT NULL)
-	`
-
-	rows, err := db.DB.Query(query, username)
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving workspaces: %w", err)
-	}
-	defer rows.Close()
-
-	var workspaces []ws_manager.WorkspaceSettings
-	for rows.Next() {
-		var ws ws_manager.WorkspaceSettings
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Account, &ws.Owner, &ws.Status, &ws.LastUpdated); err != nil {
-			return nil, fmt.Errorf("error scanning workspace: %w", err)
-		}
-		workspaces = append(workspaces, ws)
-	}
-	return workspaces, nil
+	return db.queryWorkspaces(
+		`SELECT DISTINCT`+workspaceColumns+workspaceFrom+`
+		LEFT JOIN workspace_admins
+			ON workspace_admins.workspace_id = workspaces.id AND workspace_admins.username = $1
+		WHERE workspaces.status != 'Unavailable'
+			AND (accounts.account_owner = $1 OR workspace_admins.username IS NOT NULL)`,
+		username)
 }
 
 // getBlockStores fetches block stores associated with the specified workspaces.
