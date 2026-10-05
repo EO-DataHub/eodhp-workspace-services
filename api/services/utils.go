@@ -62,59 +62,68 @@ func IsDNSCompatible(name string) bool {
 	return dnsNameRegex.MatchString(name)
 }
 
-// isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
-func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeWorkspaceAdmin bool) (bool, error) {
+// workspaceMembership is who the caller is in a workspace, before any admin check.
+type workspaceMembership struct {
+	username string
+	member   bool
+	// superuser is true for hub_admin and the workspaces service account, who can do anything
+	superuser bool
+}
+
+// getWorkspaceMembership checks whether the caller is a member of the workspace. It does not
+// check admin status, because that needs extra DB lookups - see isUserWorkspaceAdmin.
+func getWorkspaceMembership(kc KeycloakClientInterface, claims authn.Claims, workspace string) (workspaceMembership, error) {
+
+	membership := workspaceMembership{username: claims.Username}
 
 	// hub_admin role is a superuser role
-	if HasRole(claims.RealmAccess.Roles, "hub_admin") {
-		return true, nil
-	}
-
-	if claims.Username == "service-account-eodh-workspaces" {
-		return true, nil
+	if HasRole(claims.RealmAccess.Roles, "hub_admin") || claims.Username == "service-account-eodh-workspaces" {
+		membership.member = true
+		membership.superuser = true
+		return membership, nil
 	}
 
 	// Get the groups from keycloak associated with the user
 	memberGroups, err := kc.GetUserGroups(claims.Subject)
 	if err != nil {
+		return membership, err
+	}
+
+	membership.member = isMemberGroupAuthorized(workspace, memberGroups)
+	return membership, nil
+}
+
+// isUserWorkspaceAdmin checks if a workspace member is the account owner or a workspace admin.
+// It does not check membership or superuser roles - see getWorkspaceMembership.
+func isUserWorkspaceAdmin(db db.WorkspaceDBInterface, username, workspace string) (bool, error) {
+
+	// The account owner is an implicit admin on every workspace they own
+	isAccountOwner, err := db.IsUserAccountOwner(username, workspace)
+	if err != nil {
 		return false, err
 	}
 
-	// Check if the user is the account owner or a workspace admin
-	if mustBeWorkspaceAdmin {
-		if isMemberGroupAuthorized(workspace, memberGroups) {
-
-			// The account owner is an implicit admin on every workspace they own
-			isAccountOwner, err := db.IsUserAccountOwner(claims.Username, workspace)
-
-			// Check for errors
-			if err != nil {
-				return false, err
-			}
-
-			if isAccountOwner {
-				return true, nil
-			}
-
-			// Otherwise, they must have been explicitly granted admin status on this workspace
-			isWorkspaceAdmin, err := db.IsUserWorkspaceAdmin(claims.Username, workspace)
-
-			// Check for errors
-			if err != nil {
-				return false, err
-			}
-
-			return isWorkspaceAdmin, nil
-		}
-	}
-
-	// If the user isn't required to be the owner or an admin, check if they are a member of the workspace
-	if isMemberGroupAuthorized(workspace, memberGroups) {
+	if isAccountOwner {
 		return true, nil
 	}
 
-	// Return false if the user is not a member of the workspace or an owner/admin
-	return false, nil
+	// Otherwise, they must have been explicitly granted admin status on this workspace
+	return db.IsUserWorkspaceAdmin(username, workspace)
+}
+
+// isUserWorkspaceAuthorized checks if a user is authorized to access information in a workspace
+func isUserWorkspaceAuthorized(db db.WorkspaceDBInterface, kc KeycloakClientInterface, claims authn.Claims, workspace string, mustBeWorkspaceAdmin bool) (bool, error) {
+
+	membership, err := getWorkspaceMembership(kc, claims, workspace)
+	if err != nil || !membership.member {
+		return false, err
+	}
+
+	if !mustBeWorkspaceAdmin || membership.superuser {
+		return true, nil
+	}
+
+	return isUserWorkspaceAdmin(db, claims.Username, workspace)
 }
 
 // rejectAccountOwner checks whether username is the account owner for the workspace, and if so

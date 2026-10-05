@@ -162,6 +162,26 @@ var serveCmd = &cobra.Command{
 			log.Warn().Msg("Skipping linked-accounts routes (Kubernetes client unavailable)")
 		}
 
+		// Pin set routes
+		pinSetHrefHosts := appCfg.PinSets.AllowedHrefHosts
+		if len(pinSetHrefHosts) == 0 {
+			pinSetHrefHosts = []string{appCfg.Host}
+		}
+		pinSetService := &services.PinSetService{
+			DB:               workspaceDB,
+			PinSets:          workspaceDB,
+			KC:               keycloakClient,
+			AllowedHrefHosts: pinSetHrefHosts,
+		}
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets", handlers.ListPinSets(pinSetService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets", handlers.CreatePinSet(pinSetService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets/{set-id}", handlers.GetPinSet(pinSetService)).Methods(http.MethodGet)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets/{set-id}", handlers.UpdatePinSet(pinSetService)).Methods(http.MethodPatch)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets/{set-id}", handlers.DeletePinSet(pinSetService)).Methods(http.MethodDelete)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets/{set-id}/items", handlers.ReplacePinSetItems(pinSetService)).Methods(http.MethodPut)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets/{set-id}/items", handlers.AddPinSetItems(pinSetService)).Methods(http.MethodPost)
+		api.HandleFunc("/workspaces/{workspace-id}/pin-sets/{set-id}/items/{entry-id}", handlers.DeletePinSetItem(pinSetService)).Methods(http.MethodDelete)
+
 		// Data Loader routes
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.AddFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodPost)
 		api.HandleFunc("/workspaces/{workspace-id}/data-loader", handlers.DeleteFileDataLoader(appCfg, sts_client, *keycloakClient)).Methods(http.MethodDelete)

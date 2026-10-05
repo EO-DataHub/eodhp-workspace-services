@@ -557,6 +557,14 @@ func (w *WorkspaceDB) DisableWorkspace(workspaceName string) error {
 		return fmt.Errorf("error deleting from workspace_stores: %w", err)
 	}
 
+	// The workspace row is kept, so ON DELETE CASCADE does not remove its pin sets. Their
+	// items are removed by the cascade from pin_sets.
+	_, err = tx.Exec(`DELETE FROM pin_sets WHERE workspace_id = $1`, workspaceID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("error deleting from pin_sets: %w", err)
+	}
+
 	// Set workspace status to 'Unavailable'
 	_, err = tx.Exec(`UPDATE workspaces SET status = 'Unavailable', role_name = NULL, role_arn = NULL, last_updated = CURRENT_TIMESTAMP WHERE id = $1`, workspaceID)
 	if err != nil {
