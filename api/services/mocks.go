@@ -142,12 +142,29 @@ func (m *MockWorkspaceDB) DisableWorkspace(workspaceName string) error {
 	return args.Error(0)
 }
 
+func (m *MockWorkspaceDB) GetAllWorkspaces() ([]ws_manager.WorkspaceSettings, error) {
+	args := m.Called()
+	return args.Get(0).([]ws_manager.WorkspaceSettings), args.Error(1)
+}
+
+func (m *MockWorkspaceDB) SetWorkspaceCategory(workspaceName string, category *string) (*ws_manager.WorkspaceSettings, *sql.Tx, error) {
+	args := m.Called(workspaceName, category)
+	ws, _ := args.Get(0).(*ws_manager.WorkspaceSettings)
+	tx, _ := args.Get(1).(*sql.Tx)
+	return ws, tx, args.Error(2)
+}
+
 func (m *MockWorkspaceDB) CreateWorkspace(req *ws_manager.WorkspaceSettings) (*sql.Tx, error) {
 	args := m.Called(req)
 	return args.Get(0).(*sql.Tx), args.Error(1)
 }
 
 func (m *MockWorkspaceDB) CommitTransaction(tx *sql.Tx) error {
+	args := m.Called(tx)
+	return args.Error(0)
+}
+
+func (m *MockWorkspaceDB) RollbackTransaction(tx *sql.Tx) error {
 	args := m.Called(tx)
 	return args.Error(0)
 }

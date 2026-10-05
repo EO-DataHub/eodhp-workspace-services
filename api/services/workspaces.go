@@ -256,6 +256,10 @@ func (svc *WorkspaceService) CreateWorkspaceService(w http.ResponseWriter, r *ht
 	// Begin the workspace creation transaction
 	wsSettings.Status = "creating"
 
+	// New workspaces have no category and pay the default rate. Only a hub admin can set one,
+	// via the category endpoint, so ignore any category in the request.
+	wsSettings.Category = nil
+
 	// Define default object and block stores
 	wsSettings.Stores = &[]ws_manager.Stores{
 		{

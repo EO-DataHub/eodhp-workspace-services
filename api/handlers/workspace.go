@@ -5,12 +5,14 @@ import (
 
 	ws_manager "github.com/EO-DataHub/eodhp-workspace-manager/models"
 	"github.com/EO-DataHub/eodhp-workspace-services/api/services"
+	"github.com/EO-DataHub/eodhp-workspace-services/models"
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
 // Trick compiler to keep import for swag annotation
 var _ = ws_manager.WorkspaceSettings{}
+var _ = models.WorkspaceCategoryRequest{}
 
 // CreateWorkspace handles HTTP requests for creating a new workspace.
 func CreateWorkspace(svc *services.WorkspaceService) http.HandlerFunc {
@@ -288,5 +290,27 @@ func RemoveWorkspaceAdmin(svc *services.WorkspaceService) http.HandlerFunc {
 		}
 
 		svc.RemoveWorkspaceAdminService(w, r)
+	}
+}
+
+// @Summary Set a workspace's pricing category
+// @Description Set the pricing category of the specified workspace. The category sets the rate accounting-service charges the workspace at, so only a hub admin can set it. Allowed categories are set in the service config. Send a null category to clear it, so the workspace pays the default rate.
+// @Tags Workspace Management
+// @Accept json
+// @Produce json
+// @Param workspace-id path string true "Workspace ID"
+// @Param category body models.WorkspaceCategoryRequest true "Workspace category"
+// @Success 204 {string} string
+// @Failure 400 {object} string
+// @Failure 401 {object} string
+// @Failure 403 {object} string
+// @Failure 404 {object} string
+// @Failure 500 {object} string
+// @Failure 503 {object} string "No workspace categories are configured"
+// @Router /workspaces/{workspace-id}/category [put]
+func SetWorkspaceCategory(svc *services.WorkspaceService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		svc.SetWorkspaceCategoryService(w, r)
 	}
 }

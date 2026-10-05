@@ -31,13 +31,18 @@ var reconcileCmd = &cobra.Command{
 		log.Info().Msg("Starting reconciliation process...")
 
 		// Iterate through each workspace and send its settings
-		for _, workspaceName := range workspaces {
+		for _, workspace := range workspaces {
+			workspaceName := workspace.Name
 			log.Info().Msgf("Publishing workspace settings for: %s", workspaceName)
 
-			// Construct minimal workspace settings
+			// Construct minimal workspace settings. Account, owner and category are included so
+			// accounting-service can re-sync its account mapping and pricing category.
 			wsSettings := ws_manager.WorkspaceSettings{
-				Name:   workspaceName,
-				Status: "creating",
+				Name:     workspaceName,
+				Account:  workspace.Account,
+				Owner:    workspace.Owner,
+				Category: workspace.Category,
+				Status:   "creating",
 				Stores: &[]ws_manager.Stores{
 					{
 						Object: []ws_manager.ObjectStore{
