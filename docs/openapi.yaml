@@ -878,6 +878,492 @@ paths:
             "*/*":
               schema:
                 type: string
+  "/workspaces/{workspace-id}/pin-sets":
+    get:
+      security:
+        - BearerAuth: []
+      description: "List the pin sets in a workspace that you can see: every
+        workspace-wide set, plus private sets you created. Workspace admins see
+        every private set."
+      tags:
+        - Pin Sets
+      summary: List pin sets
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/models.PinSetSummary"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+    post:
+      security:
+        - BearerAuth: []
+      description: Create a named pin set, optionally with items. Any workspace member
+        can create a set. Visibility defaults to "workspace". Each item's
+        selfHref must be on the platform STAC API. Repeated items (same
+        selfHref) are kept once.
+      tags:
+        - Pin Sets
+      summary: Create a pin set
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/models.CreatePinSetRequest"
+        description: Pin set
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/models.PinSet"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+  "/workspaces/{workspace-id}/pin-sets/{set-id}":
+    get:
+      security:
+        - BearerAuth: []
+      description: Get a pin set with its item references. Load each item from its selfHref.
+      tags:
+        - Pin Sets
+      summary: Get a pin set
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set ID
+          name: set-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/models.PinSet"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+    delete:
+      security:
+        - BearerAuth: []
+      description: Delete a pin set and its items. Only the set's creator or a
+        workspace admin can do this.
+      tags:
+        - Pin Sets
+      summary: Delete a pin set
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set ID
+          name: set-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+          content:
+            "*/*":
+              schema:
+                type: string
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            "*/*":
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            "*/*":
+              schema:
+                type: string
+    patch:
+      security:
+        - BearerAuth: []
+      description: Change a pin set's name, description or visibility. Omitted fields
+        are unchanged. Only the set's creator or a workspace admin can do this.
+      tags:
+        - Pin Sets
+      summary: Update a pin set
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set ID
+          name: set-id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/models.UpdatePinSetRequest"
+        description: Fields to change
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/models.PinSet"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "409":
+          description: Conflict
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+  "/workspaces/{workspace-id}/pin-sets/{set-id}/items":
+    put:
+      security:
+        - BearerAuth: []
+      description: Replace every item in a pin set. Send an empty list to clear it.
+        Only the set's creator or a workspace admin can do this.
+      tags:
+        - Pin Sets
+      summary: Replace a pin set's items
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set ID
+          name: set-id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: "#/components/requestBodies/models.PinSetItemsRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/models.PinSet"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+    post:
+      security:
+        - BearerAuth: []
+      description: Add items to the end of a pin set. Items already in the set (same
+        selfHref) are skipped. Only the set's creator or a workspace admin can
+        do this.
+      tags:
+        - Pin Sets
+      summary: Add items to a pin set
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set ID
+          name: set-id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        $ref: "#/components/requestBodies/models.PinSetItemsRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/models.PinSet"
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: string
+  "/workspaces/{workspace-id}/pin-sets/{set-id}/items/{entry-id}":
+    delete:
+      security:
+        - BearerAuth: []
+      description: Remove one item from a pin set by its entry ID (the item's "id"
+        field in the set). Only the set's creator or a workspace admin can do
+        this.
+      tags:
+        - Pin Sets
+      summary: Remove an item from a pin set
+      parameters:
+        - description: Workspace ID
+          name: workspace-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set ID
+          name: set-id
+          in: path
+          required: true
+          schema:
+            type: string
+        - description: Pin set item entry ID
+          name: entry-id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: No Content
+          content:
+            "*/*":
+              schema:
+                type: string
+        "400":
+          description: Bad Request
+          content:
+            "*/*":
+              schema:
+                type: string
+        "401":
+          description: Unauthorized
+          content:
+            "*/*":
+              schema:
+                type: string
+        "403":
+          description: Forbidden
+          content:
+            "*/*":
+              schema:
+                type: string
+        "404":
+          description: Not Found
+          content:
+            "*/*":
+              schema:
+                type: string
+        "500":
+          description: Internal Server Error
+          content:
+            "*/*":
+              schema:
+                type: string
   "/workspaces/{workspace-id}/users":
     get:
       description: Retrieve a list of users who are members of the specified workspace.
@@ -1186,6 +1672,13 @@ components:
             required:
               - files
       required: true
+    models.PinSetItemsRequest:
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/models.PinSetItemsRequest"
+      description: Items
+      required: true
   securitySchemes:
     BearerAuth:
       type: apiKey
@@ -1250,6 +1743,19 @@ components:
           type: string
         store_id:
           type: string
+    models.CreatePinSetRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/models.PinSetItemInput"
+        name:
+          type: string
+        visibility:
+          type: string
     models.ObjectStore:
       type: object
       properties:
@@ -1269,6 +1775,89 @@ components:
           type: string
         store_id:
           type: string
+    models.PinSet:
+      type: object
+      properties:
+        createdAt:
+          type: string
+        createdBy:
+          type: string
+        description:
+          type: string
+        id:
+          type: string
+        itemCount:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/models.PinSetItem"
+        name:
+          type: string
+        updatedAt:
+          type: string
+        visibility:
+          type: string
+        workspace:
+          type: string
+    models.PinSetItem:
+      type: object
+      properties:
+        addedAt:
+          type: string
+        collectionId:
+          type: string
+        display:
+          description: Display holds UI-only state (render, visibility, opacity). Other
+            clients can ignore it.
+          type: object
+        id:
+          type: string
+        itemId:
+          type: string
+        position:
+          type: integer
+        selfHref:
+          type: string
+    models.PinSetItemInput:
+      type: object
+      properties:
+        collectionId:
+          type: string
+        display:
+          type: object
+        itemId:
+          type: string
+        selfHref:
+          type: string
+    models.PinSetItemsRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/models.PinSetItemInput"
+    models.PinSetSummary:
+      type: object
+      properties:
+        createdAt:
+          type: string
+        createdBy:
+          type: string
+        description:
+          type: string
+        id:
+          type: string
+        itemCount:
+          type: integer
+        name:
+          type: string
+        updatedAt:
+          type: string
+        visibility:
+          type: string
+        workspace:
+          type: string
     models.Stores:
       type: object
       properties:
@@ -1280,6 +1869,15 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/models.ObjectStore"
+    models.UpdatePinSetRequest:
+      type: object
+      properties:
+        description:
+          type: string
+        name:
+          type: string
+        visibility:
+          type: string
     models.User:
       type: object
       properties:

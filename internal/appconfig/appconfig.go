@@ -23,6 +23,13 @@ type Config struct {
 	AWS       AWSConfig       `yaml:"aws"`
 	Files     FilesConfig     `yaml:"files"`
 	Providers ProvidersConfig `yaml:"providers"`
+	PinSets   PinSetsConfig   `yaml:"pinSets"`
+}
+
+// PinSetsConfig defines pin set settings
+type PinSetsConfig struct {
+	// AllowedHrefHosts are the hosts that pin set item selfHrefs can point to. Defaults to Host.
+	AllowedHrefHosts []string `yaml:"allowedHrefHosts"`
 }
 
 // AccountsConfig defines the email chain for account approval requests
