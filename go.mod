@@ -2,7 +2,6 @@ module github.com/EO-DataHub/eodhp-workspace-services
 
 go 1.24.0
 
-
 require (
 	// TODO: pinned to an unreleased commit on feat/add-workspace-category (adds WorkspaceSettings.Category).
 	// Replace with the release tag once that branch is reviewed, merged and tagged.
