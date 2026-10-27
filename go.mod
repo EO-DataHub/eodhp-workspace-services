@@ -1,6 +1,6 @@
 module github.com/EO-DataHub/eodhp-workspace-services
 
-go 1.25.0
+go 1.26.0
 
 require (
 	// TODO: pinned to an unreleased commit on feat/add-workspace-category (adds WorkspaceSettings.Category).
@@ -108,16 +108,15 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.52.0 // indirect
-	golang.org/x/mod v0.35.0 // indirect
-	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
-	golang.org/x/term v0.43.0 // indirect
-	golang.org/x/text v0.37.0 // indirect
-	golang.org/x/time v0.9.0 // indirect
-	golang.org/x/tools v0.44.0 // indirect
+	golang.org/x/mod v0.42.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/oauth2 v0.37.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/term v0.47.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
+	golang.org/x/time v0.16.0 // indirect
+	golang.org/x/tools v0.52.0 // indirect
 	google.golang.org/protobuf v1.36.4 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
